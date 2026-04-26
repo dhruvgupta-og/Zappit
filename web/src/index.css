@@ -124,6 +124,12 @@ p {
   background: var(--bg-color);
 }
 
+.banner-nav-btn {
+  background: rgba(0,0,0,0.3) !important;
+  color: white !important;
+  border-radius: 50% !important;
+}
+
 /* Cards */
 .card {
   background: var(--card-bg);

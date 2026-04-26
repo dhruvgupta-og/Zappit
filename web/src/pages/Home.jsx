@@ -199,29 +199,33 @@ const HomePage = () => {
               ))}
             </div>
 
-            {/* Navigation Arrows (Refined) */}
+            {/* Navigation Arrows (Forced UI Fix) */}
             {banners.length > 1 && (
               <>
                 <button 
                   onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(prev => (prev === 0 ? banners.length - 1 : prev - 1)); }} 
+                  className="banner-nav-btn"
                   style={{ 
                     position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', 
-                    background: 'rgba(255,255,255,0.5)', backdropFilter: 'blur(8px)', 
-                    border: 'none', width: 32, height: 32, borderRadius: '50%', 
-                    color: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                    cursor: 'pointer', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' 
+                    background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', 
+                    border: '1px solid rgba(255,255,255,0.2)', width: 34, height: 34, borderRadius: '50%', 
+                    color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                    cursor: 'pointer', zIndex: 100, boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
+                    padding: 0
                   }}
                 >
                    <ChevronLeft size={20} strokeWidth={3} />
                 </button>
                 <button 
                   onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(prev => (prev === banners.length - 1 ? 0 : prev + 1)); }} 
+                  className="banner-nav-btn"
                   style={{ 
                     position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', 
-                    background: 'rgba(255,255,255,0.5)', backdropFilter: 'blur(8px)', 
-                    border: 'none', width: 32, height: 32, borderRadius: '50%', 
-                    color: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                    cursor: 'pointer', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' 
+                    background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', 
+                    border: '1px solid rgba(255,255,255,0.2)', width: 34, height: 34, borderRadius: '50%', 
+                    color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                    cursor: 'pointer', zIndex: 100, boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
+                    padding: 0
                   }}
                 >
                    <ChevronRight size={20} strokeWidth={3} />
