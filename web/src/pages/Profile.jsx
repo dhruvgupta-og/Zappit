@@ -262,8 +262,8 @@ const ProfilePage = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                         <div>
                           <h4 style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem' }}>#{order.id.slice(-6).toUpperCase()}</h4>
-                          <p style={{ margin: '2px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                            {order.store_name || 'Store'} · {new Date(order.created_at).toLocaleDateString()}
+                          <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            {order.store_name || 'Store'} · 📅 {new Date(order.created_at).toLocaleDateString()} · 🕒 {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

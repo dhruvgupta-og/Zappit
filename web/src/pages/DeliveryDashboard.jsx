@@ -174,9 +174,9 @@ const DeliveryDashboard = () => {
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>ORDER ID</div>
                         <div style={{ fontWeight: 800, fontSize: '1rem' }}>#{order.id.slice(-6).toUpperCase()}</div>
                       </div>
-                      <div style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                        <Clock size={12} style={{ display: 'inline', verticalAlign: 'middle' }} />
-                        {' '}{order.created_at ? new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                      <div style={{ textAlign: 'right', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        <div>📅 {order.created_at ? new Date(order.created_at).toLocaleDateString() : ''}</div>
+                        <div>🕒 {order.created_at ? new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</div>
                       </div>
                     </div>
 

@@ -275,8 +275,9 @@ const StoreDashboard = () => {
                       <div>
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>ORDER</div>
                         <h4 style={{ margin: '2px 0 0', fontWeight: 800 }}>#{order.id.slice(-6).toUpperCase()}</h4>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                          {order.created_at ? new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 6 }}>
+                          <span>📅 {order.created_at ? new Date(order.created_at).toLocaleDateString() : ''}</span>
+                          <span>🕒 {order.created_at ? new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                         </div>
                       </div>
                       <span style={{ background: sc.bg, color: sc.text, padding: '4px 10px', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>{sc.label}</span>

@@ -448,6 +448,9 @@ const AdminDashboard = () => {
                     <div>
                       <div style={{ fontWeight: 700 }}>#{o.id.slice(-6).toUpperCase()}</div>
                       <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{o.store_name} · {o.address}</div>
+                      <div style={{ fontSize: '0.65rem', color: '#64748B', marginTop: 2 }}>
+                        📅 {o.created_at ? new Date(o.created_at).toLocaleDateString() : ''} · 🕒 {o.created_at ? new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                      </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontWeight: 700, color: '#0F172A' }}>₹{o.total_amount}</div>
@@ -471,6 +474,9 @@ const AdminDashboard = () => {
                   <div>
                     <div style={{ fontWeight: 700 }}>#{o.id.slice(-6).toUpperCase()}</div>
                     <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{o.store_name} · {o.address}</div>
+                    <div style={{ fontSize: '0.65rem', color: '#64748B', marginTop: 2 }}>
+                      📅 {o.created_at ? new Date(o.created_at).toLocaleDateString() : ''} · 🕒 {o.created_at ? new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </div>
                   </div>
                   <div style={{ fontWeight: 700, color: '#0F172A' }}>₹{o.total_amount}</div>
                 </div>
