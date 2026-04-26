@@ -55,11 +55,11 @@ const StorePage = () => {
           alt="Store Cover" 
           style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
         />
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 100%)' }}>
-          <Link to="/" className="btn-icon">
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0) 100%)' }}>
+          <Link to="/" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)', border: 'none', width: 36, height: 36, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
             <ArrowLeft size={20} />
           </Link>
-          <div className="btn-icon">
+          <div style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)', border: 'none', width: 36, height: 36, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
             <Info size={20} />
           </div>
         </div>
