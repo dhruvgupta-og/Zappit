@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MapPin, Clock, Star, Zap } from 'lucide-react';
+import { MapPin, Clock, Star, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
 import { collection, getDocs, collectionGroup, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
