@@ -9,6 +9,10 @@ const rateLimit = require('express-rate-limit');
 // require('./cache/redis');
 
 const app = express();
+
+// Health Check for Hosting Providers
+app.get('/health', (req, res) => res.status(200).json({ status: 'healthy', timestamp: new Date() }));
+
 app.use(cors());
 app.use(express.json());
 
