@@ -216,7 +216,7 @@ const AdminDashboard = () => {
   // ── COLLEGE MANAGEMENT ──
   const [showCouponForm, setShowCouponForm] = useState(false);
   const [editingCouponId, setEditingCouponId] = useState(null);
-  const [couponForm, setCouponForm] = useState({ code: '', discount: '', college_id: 'all' });
+  const [couponForm, setCouponForm] = useState({ code: '', discount: '', college_id: 'all', once_per_user: true });
 
   const saveCoupon = async () => {
     if (!couponForm.code || !couponForm.discount) return;
@@ -224,6 +224,7 @@ const AdminDashboard = () => {
       code: couponForm.code.toUpperCase().trim(),
       discount_percent: Number(couponForm.discount),
       college_id: couponForm.college_id,
+      once_per_user: couponForm.once_per_user,
       active: true,
       created_at: new Date().toISOString()
     };
@@ -234,7 +235,7 @@ const AdminDashboard = () => {
       await addDoc(collection(db, 'coupons'), data);
     }
 
-    setCouponForm({ code: '', discount: '', college_id: 'all' });
+    setCouponForm({ code: '', discount: '', college_id: 'all', once_per_user: true });
     setShowCouponForm(false);
     setEditingCouponId(null);
   };
@@ -769,6 +770,19 @@ const AdminDashboard = () => {
                   ))}
                 </select>
 
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, padding: '0 4px' }}>
+                  <input 
+                    type="checkbox" 
+                    id="once_per_user" 
+                    checked={couponForm.once_per_user} 
+                    onChange={e => setCouponForm(p => ({ ...p, once_per_user: e.target.checked }))}
+                    style={{ width: 18, height: 18, cursor: 'pointer' }}
+                  />
+                  <label htmlFor="once_per_user" style={{ fontSize: '0.9rem', fontWeight: 600, color: '#065F46', cursor: 'pointer' }}>
+                    Single use per user (One time only)
+                  </label>
+                </div>
+
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button onClick={saveCoupon} style={{ flex: 2, padding: 12, borderRadius: 10, border: 'none', background: '#0F172A', color: 'white', fontWeight: 700, cursor: 'pointer' }}>Save Coupon</button>
                   <button onClick={() => { setShowCouponForm(false); setEditingCouponId(null); }} style={{ flex: 1, padding: 12, borderRadius: 10, border: '1px solid #E2E8F0', background: 'white', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
@@ -791,7 +805,7 @@ const AdminDashboard = () => {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button onClick={() => { setEditingCouponId(c.id); setCouponForm({ code: c.code, discount: String(c.discount_percent), college_id: c.college_id }); setShowCouponForm(true); }} style={{ background: '#EFF6FF', color: '#2563EB', border: 'none', borderRadius: 8, padding: '7px 10px', cursor: 'pointer' }}>
+                    <button onClick={() => { setEditingCouponId(c.id); setCouponForm({ code: c.code, discount: String(c.discount_percent), college_id: c.college_id, once_per_user: c.once_per_user !== false }); setShowCouponForm(true); }} style={{ background: '#EFF6FF', color: '#2563EB', border: 'none', borderRadius: 8, padding: '7px 10px', cursor: 'pointer' }}>
                       <Edit2 size={15} />
                     </button>
                     <button onClick={() => deleteDoc(doc(db, 'coupons', c.id))} style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, padding: '7px 10px', cursor: 'pointer' }}>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, MapPin, CreditCard, CheckCircle, Trash2, Plus, Minus, ShoppingBag, Tag } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, addDoc, serverTimestamp, doc, getDoc, query, where, getDocs } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc, query, where, getDocs, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useCart } from '../CartContext';
 
 const CheckoutPage = () => {
@@ -39,6 +39,19 @@ const CheckoutPage = () => {
           setCouponError('Not valid for your college');
           setAppliedCoupon(null);
         } else {
+          // Check if single use
+          if (coupon.once_per_user !== false && auth.currentUser) {
+            const userSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
+            if (userSnap.exists()) {
+              const usedCoupons = userSnap.data().used_coupons || [];
+              if (usedCoupons.includes(coupon.code)) {
+                setCouponError('You have already used this coupon');
+                setAppliedCoupon(null);
+                setApplying(false);
+                return;
+              }
+            }
+          }
           setAppliedCoupon(coupon);
           setCouponCode('');
         }
@@ -134,6 +147,13 @@ const CheckoutPage = () => {
           created_at: serverTimestamp()
         });
         orderIds.push(docRef.id);
+      }
+
+      // Track coupon usage if single-use
+      if (appliedCoupon && appliedCoupon.once_per_user !== false && auth.currentUser) {
+        await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+          used_coupons: arrayUnion(appliedCoupon.code)
+        });
       }
       
       const combinedStoreNames = storeNames.join(', ');
