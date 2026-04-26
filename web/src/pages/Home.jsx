@@ -199,7 +199,7 @@ const HomePage = () => {
               ))}
             </div>
 
-            {/* Navigation Arrows (Forced UI Fix) */}
+            {/* Navigation Arrows (DEBUG COLOR) */}
             {banners.length > 1 && (
               <>
                 <button 
@@ -207,10 +207,10 @@ const HomePage = () => {
                   className="banner-nav-btn"
                   style={{ 
                     position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', 
-                    background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', 
-                    border: '1px solid rgba(255,255,255,0.2)', width: 34, height: 34, borderRadius: '50%', 
+                    background: 'red !important', 
+                    border: 'none', width: 34, height: 34, borderRadius: '50%', 
                     color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                    cursor: 'pointer', zIndex: 100, boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
+                    cursor: 'pointer', zIndex: 9999, boxShadow: '0 8px 16px rgba(0,0,0,0.5)',
                     padding: 0
                   }}
                 >
@@ -221,10 +221,10 @@ const HomePage = () => {
                   className="banner-nav-btn"
                   style={{ 
                     position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', 
-                    background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(8px)', 
-                    border: '1px solid rgba(255,255,255,0.2)', width: 34, height: 34, borderRadius: '50%', 
+                    background: 'red !important', 
+                    border: 'none', width: 34, height: 34, borderRadius: '50%', 
                     color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                    cursor: 'pointer', zIndex: 100, boxShadow: '0 8px 16px rgba(0,0,0,0.3)',
+                    cursor: 'pointer', zIndex: 9999, boxShadow: '0 8px 16px rgba(0,0,0,0.5)',
                     padding: 0
                   }}
                 >
