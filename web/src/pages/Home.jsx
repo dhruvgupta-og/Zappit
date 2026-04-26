@@ -183,20 +183,33 @@ const HomePage = () => {
               ))}
             </div>
             {/* Pagination Dots */}
-            <div style={{ position: 'absolute', bottom: 12, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 6 }}>
+            <div style={{ position: 'absolute', bottom: 10, left: 0, right: 0, display: 'flex', justifyContent: 'center', gap: 5 }}>
               {banners.map((_, i) => (
                 <div 
                   key={i} 
                   style={{ 
-                    width: currentBannerIndex === i ? 20 : 6, 
-                    height: 6, 
-                    borderRadius: 3, 
-                    background: currentBannerIndex === i ? 'white' : 'rgba(255,255,255,0.5)', 
-                    transition: 'all 0.3s ease' 
+                    width: currentBannerIndex === i ? 18 : 5, 
+                    height: 5, 
+                    borderRadius: 10, 
+                    background: currentBannerIndex === i ? 'white' : 'rgba(255,255,255,0.4)', 
+                    transition: 'all 0.4s ease',
+                    boxShadow: '0 1px 2px rgba(0,0,0,0.2)'
                   }} 
                 />
               ))}
             </div>
+
+            {/* Navigation Arrows (Optional, subtle) */}
+            {banners.length > 1 && (
+              <>
+                <button onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(prev => (prev === 0 ? banners.length - 1 : prev - 1)); }} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', border: 'none', width: 30, height: 30, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
+                   <ChevronLeft size={18} />
+                </button>
+                <button onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(prev => (prev === banners.length - 1 ? 0 : prev + 1)); }} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', border: 'none', width: 30, height: 30, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
+                   <ChevronRight size={18} />
+                </button>
+              </>
+            )}
           </div>
         )}
 
