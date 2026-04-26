@@ -199,14 +199,32 @@ const HomePage = () => {
               ))}
             </div>
 
-            {/* Navigation Arrows (Optional, subtle) */}
+            {/* Navigation Arrows (Refined) */}
             {banners.length > 1 && (
               <>
-                <button onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(prev => (prev === 0 ? banners.length - 1 : prev - 1)); }} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', border: 'none', width: 30, height: 30, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
-                   <ChevronLeft size={18} />
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(prev => (prev === 0 ? banners.length - 1 : prev - 1)); }} 
+                  style={{ 
+                    position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', 
+                    background: 'rgba(255,255,255,0.5)', backdropFilter: 'blur(8px)', 
+                    border: 'none', width: 32, height: 32, borderRadius: '50%', 
+                    color: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                    cursor: 'pointer', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' 
+                  }}
+                >
+                   <ChevronLeft size={20} strokeWidth={3} />
                 </button>
-                <button onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(prev => (prev === banners.length - 1 ? 0 : prev + 1)); }} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', border: 'none', width: 30, height: 30, borderRadius: '50%', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', zIndex: 2 }}>
-                   <ChevronRight size={18} />
+                <button 
+                  onClick={(e) => { e.stopPropagation(); setCurrentBannerIndex(prev => (prev === banners.length - 1 ? 0 : prev + 1)); }} 
+                  style={{ 
+                    position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', 
+                    background: 'rgba(255,255,255,0.5)', backdropFilter: 'blur(8px)', 
+                    border: 'none', width: 32, height: 32, borderRadius: '50%', 
+                    color: '#0F172A', display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                    cursor: 'pointer', zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' 
+                  }}
+                >
+                   <ChevronRight size={20} strokeWidth={3} />
                 </button>
               </>
             )}
