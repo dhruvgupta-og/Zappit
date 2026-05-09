@@ -17,8 +17,9 @@ import OrderTracker from './pages/OrderTracker';
 import AdminDashboard from './pages/AdminDashboard';
 import OnboardingPage from './pages/Onboarding';
 import StaffLogin from './pages/StaffLogin';
+import PaymentCallback from './pages/PaymentCallback';
 
-const DASHBOARD_PATHS = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin', '/onboarding', '/staff-login'];
+const DASHBOARD_PATHS = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin', '/onboarding', '/staff-login', '/payment-callback'];
 
 // ── Auth Guard: redirects to login if not authenticated, onboarding if profile incomplete
 const AuthGuard = ({ children, user, profileComplete, checkingAuth }) => {
@@ -139,6 +140,7 @@ function App() {
                 <Route path="/delivery-dashboard" element={<DeliveryDashboard />} />
                 <Route path="/staff-login" element={<StaffLogin />} />
                 <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/payment-callback" element={<PaymentCallback />} />
               </Routes>
             </AuthGuard>
           </div>

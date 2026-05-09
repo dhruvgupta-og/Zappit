@@ -52,6 +52,7 @@ const OnboardingPage = () => {
         phone: phone.trim(),
         college_id: college,
         college_name: collegeName,
+        address: 'Engineering Block A',
         profile_complete: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -60,6 +61,7 @@ const OnboardingPage = () => {
       localStorage.setItem('userName', name.trim());
       localStorage.setItem('userCollegeId', college);
       localStorage.setItem('userCollegeName', collegeName);
+      localStorage.setItem('userAddress', 'Engineering Block A');
       navigate('/');
     } catch (err) {
       setError(err.message);

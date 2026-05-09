@@ -9,6 +9,30 @@ const TAB_ANALYTICS = 'analytics';
 
 const StoreDashboard = () => {
   const [isOpen, setIsOpen] = useState(true);
+
+  // ── AUTH-BASED STORE IDP ──
+  const storeId   = sessionStorage.getItem('staff_store_id');
+  const storeName = sessionStorage.getItem('staff_store_name') || 'My Store';
+  const isLoggedIn = sessionStorage.getItem('staff_role') === 'store_owner' && !!storeId;
+  const selectedStore = isLoggedIn ? { id: storeId, name: storeName } : null;
+
+  // ── REAL-TIME STORE STATUS ──
+  useEffect(() => {
+    if (!selectedStore) return;
+    const unsubscribe = onSnapshot(doc(db, 'stores', selectedStore.id), (docSnap) => {
+      if (docSnap.exists()) {
+        setIsOpen(docSnap.data().is_open !== false);
+      }
+    });
+    return () => unsubscribe();
+  }, [selectedStore]);
+
+  const toggleStoreStatus = async () => {
+    if (!selectedStore) return;
+    const newStatus = !isOpen;
+    await updateDoc(doc(db, 'stores', selectedStore.id), { is_open: newStatus });
+  };
+
   const [orders, setOrders] = useState([]);
   const [menuItems, setMenuItems] = useState([]);
   const [activeTab, setActiveTab] = useState(TAB_ORDERS);
@@ -16,15 +40,6 @@ const StoreDashboard = () => {
   const [notification, setNotification] = useState(null);
   const [timeFilter, setTimeFilter] = useState('all'); // day, week, month, all
   const prevOrderCount = useRef(0);
-
-  // ── AUTH-BASED STORE IDP ──
-  // Store identity comes from sessionStorage set by /staff-login
-  const storeId   = sessionStorage.getItem('staff_store_id');
-  const storeName = sessionStorage.getItem('staff_store_name') || 'My Store';
-  const isLoggedIn = sessionStorage.getItem('staff_role') === 'store_owner' && !!storeId;
-
-  // Build a fake "selectedStore" object for compatibility with rest of the component
-  const selectedStore = isLoggedIn ? { id: storeId, name: storeName } : null;
 
   // ── REAL-TIME ORDERS ──
   useEffect(() => {
@@ -198,7 +213,7 @@ const StoreDashboard = () => {
             <p style={{ margin: 0, fontSize: '0.7rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Store Dashboard</p>
             <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>{selectedStore.name}</h1>
           </div>
-          <button onClick={() => setIsOpen(v => !v)} style={{ background: isOpen ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.3)', border: 'none', borderRadius: 20, padding: '8px 16px', color: 'white', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <button onClick={toggleStoreStatus} style={{ background: isOpen ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.3)', border: 'none', borderRadius: 20, padding: '8px 16px', color: 'white', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 10, height: 10, borderRadius: '50%', background: isOpen ? '#86EFAC' : '#FCA5A5', display: 'inline-block' }} />
             {isOpen ? 'OPEN' : 'CLOSED'}
           </button>

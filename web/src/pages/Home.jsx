@@ -1,19 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MapPin, Clock, Star, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
-import { collection, getDocs, collectionGroup, onSnapshot } from 'firebase/firestore';
+import { collection, getDocs, collectionGroup, onSnapshot, doc } from 'firebase/firestore';
 import { db, auth } from '../firebase';
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const [stores, setStores] = useState([]);
+  const [allStores, setAllStores] = useState([]);
   const [banners, setBanners] = useState([]);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showToast, setShowToast] = useState(null); // { message, type }
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All');
 
-  const [address, setAddress] = useState(localStorage.getItem('userAddress') || 'Engineering Block A');
+  const getCleanLS = (key) => {
+    const val = localStorage.getItem(key);
+    return (val === 'null' || val === 'undefined' || !val) ? null : val;
+  };
+
+  const [address, setAddress] = useState(getCleanLS('userAddress') || 'Engineering Block A');
   const [isEditingAddress, setIsEditingAddress] = useState(false);
+  const [userCollege, setUserCollege] = useState({ 
+    id: getCleanLS('userCollegeId'), 
+    name: getCleanLS('userCollegeName') || getCleanLS('userCollege') 
+  });
 
   const handleAddressSave = (e) => {
     setAddress(e.target.value);
@@ -21,10 +32,9 @@ const HomePage = () => {
   };
 
   useEffect(() => {
-    const fetchStores = async () => {
+    const unsubStores = onSnapshot(collection(db, 'stores'), async (snapshot) => {
       try {
-        const querySnapshot = await getDocs(collection(db, 'stores'));
-        const storesData = querySnapshot.docs.map(doc => ({
+        const storesData = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data()
         }));
@@ -45,43 +55,74 @@ const HomePage = () => {
           menuItemsForSearch: menuDataByStore[store.id] || []
         }));
 
-        const userCollegeId = localStorage.getItem('userCollegeId');
-        const userCollegeName = localStorage.getItem('userCollegeName') || localStorage.getItem('userCollege');
-        if (userCollegeId || userCollegeName) {
-          setStores(storesWithMenu.filter(store => store.college_id === userCollegeId || store.college_name === userCollegeName));
-        } else {
-          setStores(storesWithMenu);
-        }
+        setAllStores(storesWithMenu);
       } catch (err) {
         console.error("Error fetching stores:", err);
       } finally {
         setLoading(false);
       }
-    };
+    });
 
     const unsubBanners = onSnapshot(collection(db, 'banners'), (snapshot) => {
       setBanners(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => b.active !== false));
     });
 
-    // ── SYNC COLLEGE ID ──
-    const syncCollege = async () => {
+    // ── SYNC USER PROFILE & COLLEGE ──
+    let unsubUser = () => {};
+    const setupUserListener = () => {
       const user = auth.currentUser;
       if (user) {
-        const { getDoc, doc } = await import('firebase/firestore');
-        const snap = await getDoc(doc(db, 'users', user.uid));
-        if (snap.exists()) {
-          const data = snap.data();
-          if (data.college_id) localStorage.setItem('userCollegeId', data.college_id);
-          if (data.college_name) localStorage.setItem('userCollegeName', data.college_name);
-          if (data.name) localStorage.setItem('userName', data.name);
-        }
+        unsubUser = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            const collegeId = data.college_id || null;
+            const collegeName = data.college_name || data.college || null;
+            
+            setUserCollege({ id: collegeId, name: collegeName });
+            if (collegeId) localStorage.setItem('userCollegeId', collegeId);
+            if (collegeName) localStorage.setItem('userCollegeName', collegeName);
+            if (data.name) localStorage.setItem('userName', data.name);
+          }
+        });
       }
     };
+    setupUserListener();
+    const unsubAuth = auth.onAuthStateChanged(() => setupUserListener());
 
-    fetchStores();
-    syncCollege();
-    return () => unsubBanners();
+    return () => {
+      unsubStores();
+      unsubBanners();
+      unsubUser();
+      unsubAuth();
+    };
   }, []);
+
+  // ── FILTER STORES ──
+  const filteredByCollege = React.useMemo(() => {
+    if (!userCollege.id && !userCollege.name) return allStores;
+    return allStores.filter(store => {
+      // 1. If store is global (no college assigned), show to everyone
+      if (!store.college_id && !store.college_name) return true;
+      
+      // 2. If both have names, use name as the primary filter (more reliable for the user)
+      if (userCollege.name && store.college_name) {
+        return userCollege.name.trim().toLowerCase() === store.college_name.trim().toLowerCase();
+      }
+      
+      // 3. Fallback to ID match if names are not both available
+      const idMatch = userCollege.id && store.college_id === userCollege.id;
+      return idMatch;
+    });
+  }, [allStores, userCollege]);
+
+  const filteredStores = React.useMemo(() => {
+    return filteredByCollege.filter(store => {
+      const matchesSearch = store.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                            (store.menuItemsForSearch && store.menuItemsForSearch.some(item => item.includes(searchQuery.toLowerCase())));
+      const matchesCategory = activeCategory === 'All' || (store.tags && store.tags.includes(activeCategory));
+      return matchesSearch && matchesCategory;
+    });
+  }, [filteredByCollege, searchQuery, activeCategory]);
 
   // ── BANNER CAROUSEL LOGIC ──
   useEffect(() => {
@@ -112,18 +153,7 @@ const HomePage = () => {
     }
   };
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState('All');
 
-  const filteredStores = stores.filter(store => {
-    const matchesCategory = activeCategory === 'All' || (store.tags && store.tags.includes(activeCategory));
-    const query = searchQuery.toLowerCase();
-    const matchesSearch = 
-      store.name.toLowerCase().includes(query) || 
-      (store.tags && store.tags.some(tag => tag.toLowerCase().includes(query))) ||
-      (store.menuItemsForSearch && store.menuItemsForSearch.some(item => item.includes(query)));
-    return matchesCategory && matchesSearch;
-  });
 
   return (
     <div className="animate-fade-in" style={{ paddingBottom: '80px' }}>
@@ -301,9 +331,14 @@ const HomePage = () => {
                   <div style={{ padding: '16px' }}>
                     <div className="flex justify-between items-center" style={{ marginBottom: '8px' }}>
                       <h4 style={{ fontSize: '1.125rem', margin: 0, color: 'var(--text-main)' }}>{store.name}</h4>
-                      <span className="flex items-center gap-1" style={{ color: 'var(--text-muted)', fontSize: '0.875rem', fontWeight: 500 }}>
-                        <Clock size={14} /> {store.delivery_time_mins} mins
-                      </span>
+                      <div style={{ textAlign: 'right' }}>
+                        <span className="flex items-center gap-1" style={{ color: 'var(--text-muted)', fontSize: '0.875rem', fontWeight: 500, justifyContent: 'flex-end' }}>
+                          <Clock size={14} /> {store.delivery_time_mins} mins
+                        </span>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 700, marginTop: 2 }}>
+                          📍 {store.college_name || 'All Campuses'}
+                        </div>
+                      </div>
                     </div>
                     <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
                       {store.tags && store.tags.map(tag => (

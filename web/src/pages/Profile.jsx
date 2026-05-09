@@ -59,7 +59,11 @@ const ProfilePage = () => {
   }, [currentUser]);
 
   const handleSaveProfile = async () => {
-    if (!editForm.name.trim() || !editForm.phone.trim() || !editForm.college) return;
+    if (!editForm.name.trim() || !editForm.college) return;
+    if (editForm.phone.trim().length !== 10) {
+      alert("Please enter a valid 10-digit phone number.");
+      return;
+    }
     setSaving(true);
     try {
       await setDoc(doc(db, 'users', currentUser.uid), {

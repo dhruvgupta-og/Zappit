@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
+import axios from 'axios';
 import { ArrowLeft, MapPin, CreditCard, CheckCircle, Trash2, Plus, Minus, ShoppingBag, Tag } from 'lucide-react';
 import { auth, db } from '../firebase';
 import { collection, addDoc, serverTimestamp, doc, getDoc, query, where, getDocs, updateDoc, arrayUnion } from 'firebase/firestore';
@@ -77,20 +78,47 @@ const CheckoutPage = () => {
   const platformFee = 5;
   const total = subtotal + deliveryFee + platformFee;
 
-  const loadRazorpayScript = () => {
-    return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  };
+  // Removed Razorpay script loader as PhonePe uses server-side redirect
 
   const handlePayment = async () => {
-    // START TESTING OVERRIDE: Bypass actual payment to test animation
     setPaymentProcessing(true);
     
+    try {
+      // 1. Create order and get PhonePe redirect URL
+      const discount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount_percent) / 100) : 0;
+      const amountToPay = Math.max(1, Math.round(subtotal + deliveryFee + platformFee - discount));
+
+      const { data } = await axios.post('http://localhost:5000/api/payments/checkout', {
+        amount: amountToPay,
+        receipt: `order_${Date.now()}`
+      });
+
+      if (data.success && data.redirectUrl) {
+        // Save order details to temporary storage before redirecting
+        // In a real app, you'd create the order in 'pending' status in the backend/DB first
+        localStorage.setItem('pendingOrderData', JSON.stringify({
+          cartItems,
+          address,
+          appliedCoupon,
+          subtotal,
+          deliveryFee,
+          platformFee
+        }));
+
+        // Redirect to PhonePe
+        window.location.href = data.redirectUrl;
+      } else {
+        throw new Error(data.error || 'Failed to initiate PhonePe payment');
+      }
+
+    } catch (err) {
+      console.error(err);
+      alert('Payment initialization failed: ' + err.message);
+      setPaymentProcessing(false);
+    }
+  };
+
+  const finalizeOrder = async (paymentTransactionId) => {
     try {
       // Generate a 6-digit delivery OTP
       const deliveryOtp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -142,6 +170,7 @@ const CheckoutPage = () => {
           coupon_applied: appliedCoupon ? appliedCoupon.code : null,
           address: address,
           payment_status: 'completed',
+          payment_transaction_id: paymentTransactionId,
           order_status: 'confirmed',
           delivery_otp: deliveryOtp,
           created_at: serverTimestamp()
@@ -173,10 +202,9 @@ const CheckoutPage = () => {
       
     } catch (err) {
       console.error(err);
-      alert('Failed to place testing order');
+      alert('Failed to finalize order');
       setPaymentProcessing(false);
     }
-    // END TESTING OVERRIDE
   };
 
   if (cartItems.length === 0 && !paymentSuccess) {
