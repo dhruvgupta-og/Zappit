@@ -8,6 +8,13 @@ router.post('/checkout', async (req, res) => {
   try {
     const { amount, receipt } = req.body;
     
+    if (!razorpay) {
+      return res.status(503).json({ 
+        success: false, 
+        error: 'Payment service is currently unavailable (Razorpay keys missing)' 
+      });
+    }
+
     // Amount in paise
     const amountInPaise = Math.round(amount * 100);
     
@@ -18,6 +25,7 @@ router.post('/checkout', async (req, res) => {
     };
 
     const order = await razorpay.orders.create(options);
+
     
     res.json({ 
       success: true, 
