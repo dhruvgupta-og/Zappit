@@ -1,16 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { StandardCheckoutClient, Env, StandardCheckoutPayRequest } = require('@phonepe-pg/pg-sdk-node');
-const { randomUUID } = require('crypto');
+const razorpay = require('./razorpay');
+const crypto = require('crypto');
 
-const clientId = process.env.PHONEPE_CLIENT_ID;
-const clientSecret = process.env.PHONEPE_CLIENT_SECRET;
-const clientVersion = parseInt(process.env.PHONEPE_CLIENT_VERSION) || 1;
-const env = Env.SANDBOX; // Using SANDBOX as per standard test environment
-
-const phonepeClient = StandardCheckoutClient.getInstance(clientId, clientSecret, clientVersion, env);
-
-// Initiate PhonePe Payment
+// Initiate Razorpay Payment
 router.post('/checkout', async (req, res) => {
   try {
     const { amount, receipt } = req.body;
@@ -18,39 +11,47 @@ router.post('/checkout', async (req, res) => {
     // Amount in paise
     const amountInPaise = Math.round(amount * 100);
     
-    const request = StandardCheckoutPayRequest.builder()
-      .merchantOrderId(receipt || `order_${Date.now()}`)
-      .amount(amountInPaise)
-      .redirectUrl(`http://localhost:5173/payment-callback`) // Frontend callback
-      .build();
+    const options = {
+      amount: amountInPaise,
+      currency: "INR",
+      receipt: receipt || `order_${Date.now()}`,
+    };
 
-    const response = await phonepeClient.pay(request);
+    const order = await razorpay.orders.create(options);
     
     res.json({ 
       success: true, 
-      redirectUrl: response.redirectUrl,
-      merchantOrderId: request.merchantOrderId
+      order_id: order.id,
+      amount: order.amount,
+      currency: order.currency
     });
   } catch (err) {
-    console.error('PhonePe Checkout Error:', err);
+    console.error('Razorpay Checkout Error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Verify PhonePe Payment (Usually via Callback/Webhook)
+// Verify Razorpay Payment Signature
 router.post('/verify', async (req, res) => {
   try {
-    // In PhonePe, you usually get a callback or you can poll the status
-    // For simplicity in this demo, we'll assume the frontend calls this with the orderId to check status
-    const { merchantOrderId } = req.body;
-    
-    // In a real implementation, you'd use phonepeClient.getStatus(merchantOrderId)
-    // For now, we'll mock the verification or implement status check if SDK supports it easily
-    // response = await phonepeClient.getStatus(merchantOrderId);
-    
-    res.json({ success: true, verified: true }); // Mocking success for flow testing
+    const { 
+      razorpay_order_id, 
+      razorpay_payment_id, 
+      razorpay_signature 
+    } = req.body;
+
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
+    const generated_signature = hmac.digest('hex');
+
+    if (generated_signature === razorpay_signature) {
+      res.json({ success: true, verified: true });
+    } else {
+      res.status(400).json({ success: false, verified: false, message: 'Invalid signature' });
+    }
   } catch (err) {
-    console.error('PhonePe Verification Error:', err);
+    console.error('Razorpay Verification Error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });

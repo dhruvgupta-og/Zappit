@@ -78,13 +78,29 @@ const CheckoutPage = () => {
   const platformFee = 5;
   const total = subtotal + deliveryFee + platformFee;
 
-  // Removed Razorpay script loader as PhonePe uses server-side redirect
+  // ── RAZORPAY SCRIPT LOADER ──
+  const loadRazorpay = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+  };
 
   const handlePayment = async () => {
     setPaymentProcessing(true);
     
     try {
-      // 1. Create order and get PhonePe redirect URL
+      const res = await loadRazorpay();
+      if (!res) {
+        alert('Razorpay SDK failed to load. Are you online?');
+        setPaymentProcessing(false);
+        return;
+      }
+
+      // 1. Create order on backend
       const discount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount_percent) / 100) : 0;
       const amountToPay = Math.max(1, Math.round(subtotal + deliveryFee + platformFee - discount));
 
@@ -93,23 +109,74 @@ const CheckoutPage = () => {
         receipt: `order_${Date.now()}`
       });
 
-      if (data.success && data.redirectUrl) {
-        // Save order details to temporary storage before redirecting
-        // In a real app, you'd create the order in 'pending' status in the backend/DB first
-        localStorage.setItem('pendingOrderData', JSON.stringify({
-          cartItems,
-          address,
-          appliedCoupon,
-          subtotal,
-          deliveryFee,
-          platformFee
-        }));
-
-        // Redirect to PhonePe
-        window.location.href = data.redirectUrl;
-      } else {
-        throw new Error(data.error || 'Failed to initiate PhonePe payment');
+      if (!data.success) {
+        throw new Error(data.error || 'Failed to initiate payment');
       }
+
+      // 2. Open Razorpay Checkout
+      const options = {
+        key: 'rzp_test_SoXpJa8UzBBORy',
+        amount: data.amount,
+        currency: data.currency,
+        name: 'Zappit',
+        description: 'Campus Delivery',
+        order_id: data.order_id,
+        handler: async function (response) {
+          try {
+            // 3. Verify Payment Signature
+            const verifyRes = await axios.post('http://localhost:5000/api/payments/verify', {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature
+            });
+
+            if (verifyRes.data.success) {
+              await finalizeOrder(response.razorpay_payment_id);
+            } else {
+              alert('Payment verification failed');
+              setPaymentProcessing(false);
+            }
+          } catch (err) {
+            console.error('Verification error:', err);
+            alert('Error verifying payment');
+            setPaymentProcessing(false);
+          }
+        },
+        prefill: {
+          name: auth.currentUser?.displayName || '',
+          email: auth.currentUser?.email || '',
+          contact: '' // Could get from user profile
+        },
+        theme: {
+          color: '#FFC107'
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: 'UPI / QR',
+                instruments: [
+                  {
+                    method: 'upi'
+                  }
+                ]
+              }
+            },
+            sequence: ['block.upi', 'block.cards', 'block.netbanking'],
+            preferences: {
+              show_default_blocks: true
+            }
+          }
+        },
+        modal: {
+          ondismiss: function() {
+            setPaymentProcessing(false);
+          }
+        }
+      };
+
+      const paymentObject = new window.Razorpay(options);
+      paymentObject.open();
 
     } catch (err) {
       console.error(err);
