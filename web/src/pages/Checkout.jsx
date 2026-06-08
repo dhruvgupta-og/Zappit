@@ -115,7 +115,7 @@ const CheckoutPage = () => {
 
       // 2. Open Razorpay Checkout
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_SzDEnrukvzc7JY', // fallback for dev
+        key: data.key_id, // Use key from backend — guarantees order key and checkout key always match
         amount: data.amount,
         currency: data.currency,
         name: 'Zappit',
