@@ -104,21 +104,13 @@ const CheckoutPage = () => {
       const discount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount_percent) / 100) : 0;
       const amountToPay = Math.max(1, Math.round(subtotal + deliveryFee + platformFee - discount));
 
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      const { data } = await axios.post(`${API_URL}/api/payments/checkout`, {
+      const { data } = await axios.post('/api/create-order', {
         amount: amountToPay,
         receipt: `order_${Date.now()}`
       });
 
       if (!data.success) {
         throw new Error(data.error || 'Failed to initiate payment');
-      }
-
-      // If backend falls back to mock mode due to invalid keys
-      if (data.isMock) {
-        // alert('Running in Dev Mode: Invalid Razorpay Keys. Simulating payment success.');
-        await finalizeOrder(`mock_payment_${Date.now()}`);
-        return;
       }
 
       // 2. Open Razorpay Checkout
@@ -132,7 +124,7 @@ const CheckoutPage = () => {
         handler: async function (response) {
           try {
             // 3. Verify Payment Signature
-            const verifyRes = await axios.post(`${API_URL}/api/payments/verify`, {
+            const verifyRes = await axios.post('/api/verify-payment', {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature
