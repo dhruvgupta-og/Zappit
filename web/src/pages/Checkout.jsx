@@ -113,9 +113,11 @@ const CheckoutPage = () => {
         throw new Error(data.error || 'Failed to initiate payment');
       }
 
+      console.log('[Zappit] Order API response:', data);
+
       // 2. Open Razorpay Checkout
       const options = {
-        key: data.key_id, // Use key from backend — guarantees order key and checkout key always match
+        key: data.key_id || 'rzp_test_SzDEnrukvzc7JY', // fallback if env var not set on Vercel
         amount: data.amount,
         currency: data.currency,
         name: 'Zappit',
