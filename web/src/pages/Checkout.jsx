@@ -114,6 +114,13 @@ const CheckoutPage = () => {
         throw new Error(data.error || 'Failed to initiate payment');
       }
 
+      // If backend falls back to mock mode due to invalid keys
+      if (data.isMock) {
+        // alert('Running in Dev Mode: Invalid Razorpay Keys. Simulating payment success.');
+        await finalizeOrder(`mock_payment_${Date.now()}`);
+        return;
+      }
+
       // 2. Open Razorpay Checkout
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_SzAS6l9hIUyZJl', // fallback for dev
