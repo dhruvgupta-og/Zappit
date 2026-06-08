@@ -14,8 +14,8 @@ rzp.orders.create({ amount: 1000, currency: 'INR', receipt: 'test' })
   });
 
 const rzpNew = new Razorpay({
-  key_id: 'rzp_test_SzAS6l9hIUyZJl',
-  key_secret: 'JfAcknbMYGdlqPuugxLvjsvx'
+  key_id: 'rzp_test_SzDEnrukvzc7JY',
+  key_secret: '6E0i2R051QMfCwwoB5tBf82y'
 });
 
 rzpNew.orders.create({ amount: 1000, currency: 'INR', receipt: 'test' })

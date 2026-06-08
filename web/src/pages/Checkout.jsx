@@ -123,7 +123,7 @@ const CheckoutPage = () => {
 
       // 2. Open Razorpay Checkout
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_SzAS6l9hIUyZJl', // fallback for dev
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_SzDEnrukvzc7JY', // fallback for dev
         amount: data.amount,
         currency: data.currency,
         name: 'Zappit',
