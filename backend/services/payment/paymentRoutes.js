@@ -18,6 +18,13 @@ router.post('/checkout', async (req, res) => {
     // Amount in paise
     const amountInPaise = Math.round(amount * 100);
     
+    if (amountInPaise < 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Minimum payment amount is 1 INR'
+      });
+    }
+
     const options = {
       amount: amountInPaise,
       currency: "INR",
@@ -47,6 +54,10 @@ router.post('/verify', async (req, res) => {
       razorpay_payment_id, 
       razorpay_signature 
     } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, verified: false, message: 'Missing required payment verification fields' });
+    }
 
     const secret = process.env.RAZORPAY_KEY_SECRET;
     const hmac = crypto.createHmac('sha256', secret);

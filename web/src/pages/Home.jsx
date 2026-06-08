@@ -329,6 +329,12 @@ const HomePage = () => {
                 <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔍</div>
                 <h3 style={{ margin: '0 0 8px', color: 'var(--text-main)' }}>No matches found</h3>
                 <p style={{ margin: 0, fontSize: '0.9rem' }}>Try searching for a different keyword or category.</p>
+                <div style={{ marginTop: '20px', padding: '10px', background: 'rgba(255,0,0,0.1)', color: '#ff6b6b', fontSize: '0.8rem', borderRadius: '8px', textAlign: 'left' }}>
+                  <strong>Debug Info:</strong><br/>
+                  Total Stores fetched: {allStores.length}<br/>
+                  User College: {userCollege.name} (ID: {userCollege.id || 'none'})<br/>
+                  LocalStorage ID: {localStorage.getItem('userCollegeId') || 'none'}
+                </div>
               </div>
             ) : filteredStores.map(store => (
               <Link to={`/store/${store.id}`} key={store.id} style={{ textDecoration: 'none' }}>
