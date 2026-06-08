@@ -145,28 +145,10 @@ const CheckoutPage = () => {
         prefill: {
           name: auth.currentUser?.displayName || '',
           email: auth.currentUser?.email || '',
-          contact: '' // Could get from user profile
+          contact: ''
         },
         theme: {
           color: '#FFC107'
-        },
-        config: {
-          display: {
-            blocks: {
-              upi: {
-                name: 'UPI / QR',
-                instruments: [
-                  {
-                    method: 'upi'
-                  }
-                ]
-              }
-            },
-            sequence: ['block.upi', 'block.cards', 'block.netbanking'],
-            preferences: {
-              show_default_blocks: true
-            }
-          }
         },
         modal: {
           ondismiss: function() {
@@ -176,6 +158,13 @@ const CheckoutPage = () => {
       };
 
       const paymentObject = new window.Razorpay(options);
+
+      paymentObject.on('payment.failed', function(response) {
+        console.error('Razorpay payment.failed:', response.error);
+        alert('Payment failed: ' + (response.error.description || response.error.reason || 'Unknown error'));
+        setPaymentProcessing(false);
+      });
+
       paymentObject.open();
 
     } catch (err) {
