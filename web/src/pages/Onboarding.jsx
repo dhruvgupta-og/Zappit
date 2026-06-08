@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, db } from '../firebase';
-import { doc, setDoc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { User, Phone, School, ChevronDown, ArrowRight } from 'lucide-react';
 
 const OnboardingPage = () => {
@@ -47,20 +47,21 @@ const OnboardingPage = () => {
 
       await setDoc(doc(db, 'users', user.uid), {
         uid: user.uid,
-        email: user.email,
+        email: user.email || '',
         name: name.trim(),
         phone: phone.trim(),
         college_id: college,
+        college: collegeName,
         college_name: collegeName,
         address: 'Engineering Block A',
         profile_complete: true,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        role: 'student'
-      });
+        updated_at: new Date().toISOString()
+      }, { merge: true });
       localStorage.setItem('userName', name.trim());
       localStorage.setItem('userCollegeId', college);
       localStorage.setItem('userCollegeName', collegeName);
+      localStorage.setItem('userCollege', collegeName);
       localStorage.setItem('userAddress', 'Engineering Block A');
       navigate('/');
     } catch (err) {
@@ -168,20 +169,9 @@ const OnboardingPage = () => {
                 style={{ ...inputStyle, appearance: 'none', cursor: 'pointer', color: college ? 'var(--text-main)' : '#9CA3AF' }}
               >
                 <option value="">-- Select your college --</option>
-                {colleges.length > 0
-                  ? colleges.map(c => (
-                      <option key={c.id} value={c.id}>{c.name}{c.city ? `, ${c.city}` : ''}</option>
-                    ))
-                  : (
-                    <>
-                      <option value="iit_delhi">IIT Delhi</option>
-                      <option value="nit_trichy">NIT Trichy</option>
-                      <option value="bits_pilani">BITS Pilani</option>
-                      <option value="vit_vellore">VIT Vellore</option>
-                      <option value="other">Other</option>
-                    </>
-                  )
-                }
+                {colleges.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}{c.city ? `, ${c.city}` : ''}</option>
+                ))}
               </select>
             </div>
           </div>

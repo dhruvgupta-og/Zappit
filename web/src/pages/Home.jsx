@@ -33,34 +33,38 @@ const HomePage = () => {
 
   useEffect(() => {
     const unsubStores = onSnapshot(collection(db, 'stores'), async (snapshot) => {
-      try {
-        const storesData = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+      const storesData = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
 
-        // Fetch all menus to allow dish searching
+      // Fetch menus for dish search — wrapped separately so stores always load
+      // even if collectionGroup query fails due to Firestore rules
+      let menuDataByStore = {};
+      try {
         const menuSnapshot = await getDocs(collectionGroup(db, 'menu'));
-        const menuDataByStore = {};
         menuSnapshot.docs.forEach(doc => {
           const storeId = doc.ref.parent.parent?.id;
           if (storeId) {
             if (!menuDataByStore[storeId]) menuDataByStore[storeId] = [];
-            menuDataByStore[storeId].push(doc.data().name.toLowerCase());
+            if (doc.data().name) menuDataByStore[storeId].push(doc.data().name.toLowerCase());
           }
         });
-
-        const storesWithMenu = storesData.map(store => ({
-          ...store,
-          menuItemsForSearch: menuDataByStore[store.id] || []
-        }));
-
-        setAllStores(storesWithMenu);
-      } catch (err) {
-        console.error("Error fetching stores:", err);
-      } finally {
-        setLoading(false);
+      } catch (menuErr) {
+        // Menu search unavailable — stores will still load fine
+        console.warn('Menu search unavailable:', menuErr.message);
       }
+
+      const storesWithMenu = storesData.map(store => ({
+        ...store,
+        menuItemsForSearch: menuDataByStore[store.id] || []
+      }));
+
+      setAllStores(storesWithMenu);
+      setLoading(false);
+    }, (err) => {
+      console.error('Stores listener error:', err.message);
+      setLoading(false);
     });
 
     const unsubBanners = onSnapshot(collection(db, 'banners'), (snapshot) => {
@@ -79,8 +83,12 @@ const HomePage = () => {
             const collegeName = data.college_name || data.college || null;
             
             setUserCollege({ id: collegeId, name: collegeName });
+            // Persist both so page works on next load without waiting for Firestore
             if (collegeId) localStorage.setItem('userCollegeId', collegeId);
-            if (collegeName) localStorage.setItem('userCollegeName', collegeName);
+            if (collegeName) {
+              localStorage.setItem('userCollegeName', collegeName);
+              localStorage.setItem('userCollege', collegeName);
+            }
             if (data.name) localStorage.setItem('userName', data.name);
           }
         });
@@ -103,15 +111,23 @@ const HomePage = () => {
     return allStores.filter(store => {
       // 1. If store is global (no college assigned), show to everyone
       if (!store.college_id && !store.college_name) return true;
-      
-      // 2. If both have names, use name as the primary filter (more reliable for the user)
-      if (userCollege.name && store.college_name) {
-        return userCollege.name.trim().toLowerCase() === store.college_name.trim().toLowerCase();
+
+      // 2. Match by Firestore document ID (most reliable)
+      if (userCollege.id && store.college_id && store.college_id === userCollege.id) return true;
+
+      // 3. Match by college name (case-insensitive fallback)
+      if (userCollege.name && store.college_name &&
+          userCollege.name.trim().toLowerCase() === store.college_name.trim().toLowerCase()) return true;
+
+      // 4. Match store's college_id against user's college_name via direct comparison
+      //    (handles case where store was saved with id but user only has name)
+      if (userCollege.name && store.college_id) {
+        // check if the store's college_id produces a matching name via localStorage/state
+        const storedCollegeId = localStorage.getItem('userCollegeId');
+        if (storedCollegeId && store.college_id === storedCollegeId) return true;
       }
-      
-      // 3. Fallback to ID match if names are not both available
-      const idMatch = userCollege.id && store.college_id === userCollege.id;
-      return idMatch;
+
+      return false;
     });
   }, [allStores, userCollege]);
 

@@ -83,10 +83,16 @@ const StoreDashboard = () => {
     return () => unsubscribe();
   }, [selectedStore]);
 
+  const getDateObj = (val) => {
+    if (!val) return new Date(0);
+    if (val.toDate) return val.toDate();
+    return new Date(val);
+  };
+
   // ── ANALYTICS LOGIC ──
   const getFilteredOrders = () => {
     return orders.filter(o => {
-      const orderDate = new Date(o.created_at);
+      const orderDate = getDateObj(o.created_at);
       const now = new Date();
       if (timeFilter === 'day') return orderDate.toDateString() === now.toDateString();
       if (timeFilter === 'week') {
@@ -99,18 +105,30 @@ const StoreDashboard = () => {
   };
 
   const filteredOrders = getFilteredOrders();
-  const totalRevenue = filteredOrders.filter(o => o.order_status === 'delivered').reduce((s, o) => s + (o.total_amount || 0), 0);
+  // Include all orders that are paid/active (exclude only cancelled and pending)
+  const totalRevenue = filteredOrders.filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending').reduce((s, o) => s + (o.total_amount || 0), 0);
+
+  const getItems = (items) => {
+    if (!items) return [];
+    if (Array.isArray(items)) return items;
+    return Object.entries(items).map(([id, qty]) => ({ id, name: id, qty, price: 0 }));
+  };
+
   
   const dishStats = filteredOrders.reduce((acc, o) => {
-    if (o.items && Array.isArray(o.items)) {
-      o.items.forEach(item => {
-        if (item && item.name) {
-          if (!acc[item.name]) acc[item.name] = { count: 0, revenue: 0 };
-          acc[item.name].count += (item.quantity || 1);
-          acc[item.name].revenue += (item.price || 0) * (item.quantity || 1);
-        }
-      });
-    }
+    // Only count dishes from non-cancelled orders
+    if (o.order_status === 'cancelled') return acc;
+    
+    const itemsList = getItems(o.items);
+    itemsList.forEach(item => {
+      if (item && item.name) {
+        if (!acc[item.name]) acc[item.name] = { count: 0, revenue: 0 };
+        const quantity = item.qty || item.quantity || 1;
+        const price = item.price || 0;
+        acc[item.name].count += quantity;
+        acc[item.name].revenue += price * quantity;
+      }
+    });
     return acc;
   }, {});
 
@@ -120,20 +138,18 @@ const StoreDashboard = () => {
   const newOrders       = orders.filter(o => o.order_status === 'pending' || o.order_status === 'confirmed');
   const preparingOrders = orders.filter(o => o.order_status === 'preparing');
   const readyOrders     = orders.filter(o => o.order_status === 'ready' || o.order_status === 'out_for_delivery');
-  const completedOrders = orders.filter(o => o.order_status === 'delivered');
+  const completedOrders = orders.filter(o => o.order_status === 'delivered' || o.order_status === 'completed');
   const cancelledOrders = orders.filter(o => o.order_status === 'cancelled');
   
-  const todayRevenue = completedOrders.filter(o => new Date(o.created_at).toDateString() === new Date().toDateString()).reduce((s, o) => s + (o.total_amount || 0), 0);
+  // Today's revenue should include any active/completed order, not just 'delivered' ones
+  const activeAndCompletedOrders = orders.filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending');
+  const todayRevenue = activeAndCompletedOrders.filter(o => getDateObj(o.created_at).toDateString() === new Date().toDateString()).reduce((s, o) => s + (o.total_amount || 0), 0);
 
   const updateOrderStatus = async (orderId, status) => {
     await updateDoc(doc(db, 'orders', orderId), { order_status: status });
   };
 
-  const getItems = (items) => {
-    if (!items) return [];
-    if (Array.isArray(items)) return items;
-    return Object.entries(items).map(([id, qty]) => ({ id, name: id, qty, price: 0 }));
-  };
+
 
   const statusColors = {
     pending:          { bg: '#FEF3C7', text: '#92400E', label: 'Pending' },
@@ -291,8 +307,8 @@ const StoreDashboard = () => {
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>ORDER</div>
                         <h4 style={{ margin: '2px 0 0', fontWeight: 800 }}>#{order.id.slice(-6).toUpperCase()}</h4>
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 6 }}>
-                          <span>📅 {order.created_at ? new Date(order.created_at).toLocaleDateString() : ''}</span>
-                          <span>🕒 {order.created_at ? new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                          <span>📅 {order.created_at ? getDateObj(order.created_at).toLocaleDateString() : ''}</span>
+                          <span>🕒 {order.created_at ? getDateObj(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                         </div>
                       </div>
                       <span style={{ background: sc.bg, color: sc.text, padding: '4px 10px', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>{sc.label}</span>
@@ -330,8 +346,18 @@ const StoreDashboard = () => {
                         </button>
                       )}
                       {order.order_status === 'ready' && (
-                        <button onClick={() => updateOrderStatus(order.id, 'out_for_delivery')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#EDE9FE', color: '#5B21B6', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
-                          🛵 Handed to Delivery
+                        <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+                          <button onClick={() => updateOrderStatus(order.id, 'out_for_delivery')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#EDE9FE', color: '#5B21B6', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
+                            🛵 Handed to Delivery
+                          </button>
+                          <button onClick={() => updateOrderStatus(order.id, 'delivered')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#D1FAE5', color: '#065F46', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
+                            ✅ Picked by Customer
+                          </button>
+                        </div>
+                      )}
+                      {order.order_status === 'out_for_delivery' && (
+                        <button onClick={() => updateOrderStatus(order.id, 'delivered')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#D1FAE5', color: '#065F46', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
+                          ✅ Mark Delivered (Manual)
                         </button>
                       )}
                     </div>

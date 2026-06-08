@@ -12,7 +12,7 @@ const ProfilePage = () => {
   // Profile state
   const [profile, setProfile] = useState(null);
   const [editMode, setEditMode] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', phone: '', college: '' });
+  const [editForm, setEditForm] = useState({ name: '', phone: '', college: '', college_id: '' });
   const [colleges, setColleges] = useState([]);
   const [saving, setSaving] = useState(false);
 
@@ -39,7 +39,12 @@ const ProfilePage = () => {
       if (snap.exists()) {
         const data = snap.data();
         setProfile(data);
-        setEditForm({ name: data.name || '', phone: data.phone || '', college: data.college_name || data.college || '' });
+        setEditForm({ 
+          name: data.name || '', 
+          phone: data.phone || '', 
+          college: data.college_name || data.college || '',
+          college_id: data.college_id || ''
+        });
       }
     };
     fetchProfile();
@@ -70,14 +75,16 @@ const ProfilePage = () => {
         ...profile,
         name: editForm.name.trim(),
         phone: editForm.phone.trim(),
+        college_id: editForm.college_id || profile?.college_id || '',
         college: editForm.college,
         college_name: editForm.college,
         updated_at: new Date().toISOString(),
         profile_complete: true
       });
-      setProfile(p => ({ ...p, name: editForm.name.trim(), phone: editForm.phone.trim(), college: editForm.college, college_name: editForm.college }));
+      setProfile(p => ({ ...p, name: editForm.name.trim(), phone: editForm.phone.trim(), college: editForm.college, college_name: editForm.college, college_id: editForm.college_id }));
       localStorage.setItem('userCollegeName', editForm.college);
       localStorage.setItem('userCollege', editForm.college);
+      if (editForm.college_id) localStorage.setItem('userCollegeId', editForm.college_id);
       setEditMode(false);
     } catch (err) {
       console.error(err);
@@ -183,12 +190,17 @@ const ProfilePage = () => {
                 <label style={{ fontSize: '0.8rem', fontWeight: 700, display: 'block', marginBottom: 5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>College</label>
                 <div style={{ position: 'relative' }}>
                   <School size={16} style={{ position: 'absolute', top: '50%', left: 10, transform: 'translateY(-50%)', color: 'var(--text-muted)', zIndex: 1 }} />
-                  <select value={editForm.college} onChange={e => setEditForm(p => ({ ...p, college: e.target.value }))} style={{ ...inputStyle, paddingLeft: 34, appearance: 'none', cursor: 'pointer' }}>
+                  <select value={editForm.college} onChange={e => {
+                    const selectedName = e.target.value;
+                    const selectedCollege = colleges.find(c => c.name === selectedName);
+                    setEditForm(p => ({ 
+                      ...p, 
+                      college: selectedName,
+                      college_id: selectedCollege?.id || p.college_id 
+                    }));
+                  }} style={{ ...inputStyle, paddingLeft: 34, appearance: 'none', cursor: 'pointer' }}>
                     <option value="">-- Select college --</option>
-                    {colleges.length > 0
-                      ? colleges.map(c => <option key={c.id} value={c.name}>{c.name}{c.city ? `, ${c.city}` : ''}</option>)
-                      : ['IIT Delhi', 'NIT Trichy', 'BITS Pilani', 'VIT Vellore', 'Other'].map(n => <option key={n} value={n}>{n}</option>)
-                    }
+                    {colleges.map(c => <option key={c.id} value={c.name}>{c.name}{c.city ? `, ${c.city}` : ''}</option>)}
                   </select>
                 </div>
               </div>

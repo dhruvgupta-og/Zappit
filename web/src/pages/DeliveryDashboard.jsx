@@ -42,23 +42,57 @@ const DeliveryDashboard = () => {
 
   useEffect(() => {
     if (!collegeId) return;
-    const q = query(collection(db, 'orders'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const raw = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    
+    // Fetch stores to provide robust mapping in case of ID vs Name mismatches
+    const unsubStores = onSnapshot(collection(db, 'stores'), (storeSnap) => {
+      const stores = storeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
       
-      const ordersData = raw.filter(o => {
-        const orderId = (o.college_id || '').trim();
-        const staffId = (collegeId || '').trim();
-        return orderId === staffId;
+      const q = query(collection(db, 'orders'));
+      const unsubOrders = onSnapshot(q, (snapshot) => {
+        const raw = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        
+        const ordersData = raw.filter(o => {
+          const oColId = (o.college_id || '').trim();
+          const sColId = (collegeId || '').trim();
+          const sColName = (collegeName || '').trim();
+          
+          // 1. Direct match on order's college_id
+          if (oColId === sColId && sColId !== '') return true;
+          if (oColId === sColName && sColName !== '') return true;
+          
+          // 2. Fallback via store mapping
+          const store = stores.find(s => s.id === o.store_id);
+          if (store) {
+            const storeColId = (store.college_id || '').trim();
+            const storeColName = (store.college_name || '').trim();
+            if (storeColId === sColId && sColId !== '') return true;
+            if (storeColId === sColName && sColName !== '') return true;
+            if (storeColName === sColId && sColId !== '') return true;
+            if (storeColName === sColName && sColName !== '') return true;
+          }
+          
+          return false;
+        });
+        
+        setOrders(ordersData);
+        setMyActiveCount(ordersData.filter(o => o.order_status === 'picked_up').length);
       });
-      setOrders(ordersData);
-      setMyActiveCount(ordersData.filter(o => o.order_status === 'picked_up').length);
+      
+      return () => unsubOrders();
     });
-    return () => unsubscribe();
-  }, [collegeId]);
+    
+    return () => unsubStores();
+  }, [collegeId, collegeName]);
+
+  // Helper to safely get Date object from Firestore Timestamp or string
+  const getDateObj = (val) => {
+    if (!val) return new Date(0);
+    if (val.toDate) return val.toDate(); // Firestore Timestamp
+    return new Date(val); // String or number
+  };
 
   // FIFO: sort by created_at ascending
-  const sortedByTime = (list) => [...list].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  const sortedByTime = (list) => [...list].sort((a, b) => getDateObj(a.created_at) - getDateObj(b.created_at));
 
   const newOrders     = sortedByTime(orders.filter(o => o.order_status === 'ready' || o.order_status === 'out_for_delivery'));
   const activeOrders  = sortedByTime(orders.filter(o => o.order_status === 'picked_up'));
@@ -175,8 +209,8 @@ const DeliveryDashboard = () => {
                         <div style={{ fontWeight: 800, fontSize: '1rem' }}>#{order.id.slice(-6).toUpperCase()}</div>
                       </div>
                       <div style={{ textAlign: 'right', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                        <div>📅 {order.created_at ? new Date(order.created_at).toLocaleDateString() : ''}</div>
-                        <div>🕒 {order.created_at ? new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</div>
+                        <div>📅 {order.created_at ? getDateObj(order.created_at).toLocaleDateString() : ''}</div>
+                        <div>🕒 {order.created_at ? getDateObj(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}</div>
                       </div>
                     </div>
 

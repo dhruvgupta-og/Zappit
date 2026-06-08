@@ -85,15 +85,25 @@ function App() {
 
   useEffect(() => {
     let profileUnsub = null;
+    let failsafeTimer = null;
 
     const authUnsub = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       
       // Clear old profile listener if user changes
       if (profileUnsub) profileUnsub();
+      if (failsafeTimer) clearTimeout(failsafeTimer);
+
+      // ── FAILSAFE TIMEOUT ──
+      // If Firestore takes too long to respond (slow network), force the app to load
+      failsafeTimer = setTimeout(() => {
+        setCheckingAuth(false);
+      }, 1500);
 
       if (firebaseUser) {
         profileUnsub = onSnapshot(doc(db, 'users', firebaseUser.uid), (snap) => {
+          if (failsafeTimer) clearTimeout(failsafeTimer);
+          
           const data = snap.data();
           console.log("DEBUG: Auth User:", firebaseUser.uid);
           console.log("DEBUG: User Profile Exists:", snap.exists());
@@ -105,6 +115,7 @@ function App() {
           setProfileComplete(isComplete);
           setCheckingAuth(false);
         }, (err) => {
+          if (failsafeTimer) clearTimeout(failsafeTimer);
           console.error("Profile fetch error:", err);
           setProfileComplete(false);
           setCheckingAuth(false);
@@ -118,6 +129,7 @@ function App() {
     return () => {
       authUnsub();
       if (profileUnsub) profileUnsub();
+      if (failsafeTimer) clearTimeout(failsafeTimer);
     };
   }, []);
 

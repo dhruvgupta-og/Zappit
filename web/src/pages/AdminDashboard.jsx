@@ -4,12 +4,14 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import {
   BarChart3, Users, Store, ShoppingBag, IndianRupee,
-  Plus, Trash2, Edit2, School, Package, TrendingUp, Menu as MenuIcon, Tag, Image as ImageIcon
+  Plus, Trash2, Edit2, School, Package, TrendingUp, Menu as MenuIcon, Tag, Image as ImageIcon, Download
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [orders, setOrders] = useState([]);
+  const [isExporting, setIsExporting] = useState(false);
   const [stores, setStores] = useState([]);
   const [colleges, setColleges] = useState([]);
   const [coupons, setCoupons] = useState([]);
@@ -164,15 +166,19 @@ const AdminDashboard = () => {
       college_name: collegeName
     };
 
-    if (editingStoreId) {
-      await updateDoc(doc(db, 'stores', editingStoreId), storeData);
-    } else {
-      await addDoc(collection(db, 'stores'), storeData);
-    }
+    try {
+      if (editingStoreId) {
+        await updateDoc(doc(db, 'stores', editingStoreId), storeData);
+      } else {
+        await addDoc(collection(db, 'stores'), storeData);
+      }
 
-    setStoreForm({ name: '', image: '', rating: '4.5', delivery_time_mins: '15-20', tags: '', college_id: '' });
-    setShowStoreForm(false);
-    setEditingStoreId(null);
+      setStoreForm({ name: '', image: '', rating: '4.5', delivery_time_mins: '15-20', tags: '', college_id: '' });
+      setShowStoreForm(false);
+      setEditingStoreId(null);
+    } catch (err) {
+      alert('Error saving store: ' + err.message);
+    }
   };
 
   const editStore = (store) => {
@@ -196,15 +202,20 @@ const AdminDashboard = () => {
   const saveCollege = async () => {
     if (!collegeForm.name) return;
     
-    if (editingCollegeId) {
-      await updateDoc(doc(db, 'colleges', editingCollegeId), collegeForm);
-    } else {
-      await addDoc(collection(db, 'colleges'), collegeForm);
-    }
+    try {
+      const data = { ...collegeForm, created_at: new Date().toISOString() };
+      if (editingCollegeId) {
+        await updateDoc(doc(db, 'colleges', editingCollegeId), data);
+      } else {
+        await addDoc(collection(db, 'colleges'), data);
+      }
 
-    setCollegeForm({ name: '', city: '' });
-    setShowCollegeForm(false);
-    setEditingStoreId(null);
+      setCollegeForm({ name: '', city: '' });
+      setShowCollegeForm(false);
+      setEditingCollegeId(null);
+    } catch (err) {
+      alert('Error saving college: ' + err.message);
+    }
   };
 
   const toggleStoreStatus = async (store) => {
@@ -229,15 +240,19 @@ const AdminDashboard = () => {
       created_at: new Date().toISOString()
     };
 
-    if (editingCouponId) {
-      await updateDoc(doc(db, 'coupons', editingCouponId), data);
-    } else {
-      await addDoc(collection(db, 'coupons'), data);
-    }
+    try {
+      if (editingCouponId) {
+        await updateDoc(doc(db, 'coupons', editingCouponId), data);
+      } else {
+        await addDoc(collection(db, 'coupons'), data);
+      }
 
-    setCouponForm({ code: '', discount: '', college_id: 'all', once_per_user: true });
-    setShowCouponForm(false);
-    setEditingCouponId(null);
+      setCouponForm({ code: '', discount: '', college_id: 'all', once_per_user: true });
+      setShowCouponForm(false);
+      setEditingCouponId(null);
+    } catch (err) {
+      alert('Error saving coupon: ' + err.message);
+    }
   };
 
   // ── BANNER MANAGEMENT ──
@@ -258,15 +273,19 @@ const AdminDashboard = () => {
       created_at: new Date().toISOString()
     };
 
-    if (editingBannerId) {
-      await updateDoc(doc(db, 'banners', editingBannerId), data);
-    } else {
-      await addDoc(collection(db, 'banners'), data);
-    }
+    try {
+      if (editingBannerId) {
+        await updateDoc(doc(db, 'banners', editingBannerId), data);
+      } else {
+        await addDoc(collection(db, 'banners'), data);
+      }
 
-    setBannerForm({ image: '', link: '' });
-    setShowBannerForm(false);
-    setEditingBannerId(null);
+      setBannerForm({ image: '', link: '' });
+      setShowBannerForm(false);
+      setEditingBannerId(null);
+    } catch (err) {
+      alert('Error saving banner: ' + err.message);
+    }
   };
 
   const editCollege = (college) => {
@@ -289,15 +308,19 @@ const AdminDashboard = () => {
       is_available: true 
     };
 
-    if (editingMenuId) {
-      await updateDoc(doc(db, `stores/${selectedStoreId}/menu`, editingMenuId), menuData);
-    } else {
-      await addDoc(collection(db, `stores/${selectedStoreId}/menu`), menuData);
-    }
+    try {
+      if (editingMenuId) {
+        await updateDoc(doc(db, `stores/${selectedStoreId}/menu`, editingMenuId), menuData);
+      } else {
+        await addDoc(collection(db, `stores/${selectedStoreId}/menu`), menuData);
+      }
 
-    setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true, image: '' });
-    setShowMenuForm(false);
-    setEditingMenuId(null);
+      setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true, image: '' });
+      setShowMenuForm(false);
+      setEditingMenuId(null);
+    } catch (err) {
+      alert('Error saving menu item: ' + err.message);
+    }
   };
 
   const editMenuItem = (item) => {
@@ -352,6 +375,59 @@ const AdminDashboard = () => {
     { key: 'banners',   label: '🖼️ Banners' },
   ];
 
+  const handleExportData = async () => {
+    try {
+      setIsExporting(true);
+      const ordersSnap = await getDocs(collection(db, 'orders'));
+      const storesSnap = await getDocs(collection(db, 'stores'));
+      const collegesSnap = await getDocs(collection(db, 'colleges'));
+      
+      const storesDict = {};
+      storesSnap.forEach(d => { storesDict[d.id] = { id: d.id, ...d.data() }; });
+      const collegesDict = {};
+      collegesSnap.forEach(d => { collegesDict[d.id] = { id: d.id, ...d.data() }; });
+
+      const exportData = [];
+      ordersSnap.forEach(docSnap => {
+        const order = docSnap.data();
+        // Fallback for timestamps
+        let dateObj = new Date();
+        if (order.created_at) {
+          dateObj = new Date(order.created_at);
+        } else if (order.createdAt && order.createdAt.toDate) {
+          dateObj = order.createdAt.toDate();
+        }
+
+        const store = storesDict[order.store_id || order.storeId] || {};
+        const collegeId = store.college_id || store.collegeId || order.college_id;
+        const college = collegeId ? (collegesDict[collegeId] || {}) : {};
+        
+        exportData.push({
+          'Order ID': docSnap.id,
+          'Date': dateObj.toLocaleDateString(),
+          'Time': dateObj.toLocaleTimeString(),
+          'College': college.name || order.college_name || 'Unknown',
+          'Store Name': store.name || order.store_name || order.storeName || 'Unknown',
+          'Amount': order.total_amount || order.totalAmount || 0,
+          'Status': order.order_status || order.status || 'Unknown',
+          'Customer ID': order.user_id || order.userId || 'Unknown',
+          'Items': Array.isArray(order.items) ? order.items.map(i => `${i.quantity || i.qty || 1}x ${i.name}`).join(', ') : '',
+        });
+      });
+      
+      exportData.sort((a, b) => new Date(`${b.Date} ${b.Time}`) - new Date(`${a.Date} ${a.Time}`));
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Orders Data");
+      XLSX.writeFile(wb, `Zappit_Data_Export_${new Date().toLocaleDateString().replace(/[\/\\]/g, '-')}.xlsx`);
+    } catch (err) {
+      console.error('Export failed', err);
+      alert('Failed to export data');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div style={{ minHeight: '100vh', background: '#F1F5F9', paddingBottom: 40 }}>
       {/* ── HEADER ── */}
@@ -359,7 +435,12 @@ const AdminDashboard = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
             <div style={{ fontSize: '0.72rem', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Admin Panel</div>
-            <h1 style={{ margin: '4px 0 0', fontSize: '1.75rem', fontWeight: 900 }}>Zappit Admin</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <h1 style={{ margin: '4px 0 0', fontSize: '1.75rem', fontWeight: 900 }}>Zappit Admin</h1>
+              <button onClick={handleExportData} disabled={isExporting} style={{ marginTop: '8px', padding: '6px 12px', borderRadius: '8px', border: 'none', background: '#10B981', color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px', cursor: isExporting ? 'not-allowed' : 'pointer', fontSize: '0.8rem' }}>
+                <Download size={14} /> {isExporting ? 'Exporting...' : 'Export All Data'}
+              </button>
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'flex', gap: 8 }}>
