@@ -103,9 +103,10 @@ const CheckoutPage = () => {
       // 1. Create order on backend
       const discount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount_percent) / 100) : 0;
       const amountToPay = Math.max(1, Math.round(subtotal + deliveryFee + platformFee - discount));
+      const amountInPaise = amountToPay * 100;
 
       const { data } = await axios.post('/api/create-order', {
-        amount: amountToPay,
+        amount: amountInPaise,
         receipt: `order_${Date.now()}`
       });
 
@@ -117,7 +118,7 @@ const CheckoutPage = () => {
 
       // 2. Open Razorpay Checkout
       const options = {
-        key: data.key_id || 'rzp_test_SzDEnrukvzc7JY', // fallback if env var not set on Vercel
+        key: data.key_id || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_T0gdDL6JAF6MCI',
         amount: data.amount,
         currency: data.currency,
         name: 'Zappit',
@@ -140,7 +141,8 @@ const CheckoutPage = () => {
             }
           } catch (err) {
             console.error('Verification error:', err);
-            alert('Error verifying payment');
+            const errMsg = err.response?.data?.error || err.message || 'Error verifying payment';
+            alert('Verification error: ' + errMsg);
             setPaymentProcessing(false);
           }
         },
@@ -154,6 +156,7 @@ const CheckoutPage = () => {
         },
         modal: {
           ondismiss: function() {
+            alert('Payment cancelled by user');
             setPaymentProcessing(false);
           }
         }
@@ -171,7 +174,8 @@ const CheckoutPage = () => {
 
     } catch (err) {
       console.error(err);
-      alert('Payment initialization failed: ' + err.message);
+      const errMsg = err.response?.data?.error || err.message || 'Unknown error';
+      alert('Payment initialization failed: ' + errMsg);
       setPaymentProcessing(false);
     }
   };

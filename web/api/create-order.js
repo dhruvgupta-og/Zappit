@@ -18,10 +18,15 @@ module.exports = async function handler(req, res) {
   try {
     const razorpay = new Razorpay({ key_id: KEY_ID, key_secret: KEY_SECRET });
     const { amount, receipt } = req.body;
-    const amountInPaise = Math.round(Number(amount) * 100);
+    
+    if (amount === undefined) {
+      return res.status(400).json({ success: false, error: 'Amount is required' });
+    }
+
+    const amountInPaise = Math.round(Number(amount));
 
     if (amountInPaise < 100) {
-      return res.status(400).json({ success: false, error: 'Minimum payment amount is ₹1' });
+      return res.status(400).json({ success: false, error: 'Minimum payment amount is 100 paise (₹1)' });
     }
 
     const order = await razorpay.orders.create({
@@ -35,10 +40,13 @@ module.exports = async function handler(req, res) {
       order_id: order.id,
       amount: order.amount,
       currency: order.currency,
-      key_id: KEY_ID, // Return key so frontend always uses the SAME key
+      key_id: KEY_ID,
     });
   } catch (err) {
     console.error('Create Order Error:', err);
-    return res.status(500).json({ success: false, error: err.message });
+    if (err.statusCode === 401 || err.status === 401) {
+      return res.status(401).json({ success: false, error: 'Razorpay authentication failed' });
+    }
+    return res.status(500).json({ success: false, error: err.message || 'Razorpay API Error' });
   }
 };
