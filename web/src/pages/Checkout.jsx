@@ -261,6 +261,30 @@ const CheckoutPage = () => {
           used_coupons: arrayUnion(appliedCoupon.code)
         });
       }
+
+      // Send Order Confirmation Email via Resend
+      try {
+        const discountAmount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount_percent) / 100) : 0;
+        const totalAmount = Math.max(1, Math.round(subtotal + totalFees - discountAmount));
+
+        await axios.post('/api/send-order-email', {
+          email: auth.currentUser?.email || '',
+          orderIds,
+          storeNames,
+          items: cartItems,
+          totalAmount,
+          deliveryOtp,
+          address,
+          fees,
+          appliedCoupon: appliedCoupon ? {
+            code: appliedCoupon.code,
+            discount_percent: appliedCoupon.discount_percent
+          } : null
+        });
+        console.log('[Zappit] Order confirmation email requested successfully.');
+      } catch (emailErr) {
+        console.error('[Zappit] Failed to send order confirmation email:', emailErr);
+      }
       
       const combinedStoreNames = storeNames.join(', ');
 
