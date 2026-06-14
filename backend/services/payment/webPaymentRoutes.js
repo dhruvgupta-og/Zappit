@@ -206,14 +206,15 @@ router.post('/send-order-email', async (req, res) => {
     `;
 
     if (resend) {
+      const targetEmail = process.env.RESEND_TEST_RECIPIENT || email;
       const emailResponse = await resend.emails.send({
         from: 'Zappit <onboarding@resend.dev>',
-        to: email,
+        to: targetEmail,
         subject: `⚡ Zappit Order Confirmed - OTP: ${deliveryOtp}`,
         html: htmlContent
       });
-      console.log('[Zappit] Resend Email sent successfully:', emailResponse);
-      return res.status(200).json({ success: true, message: 'Email sent successfully via Resend', data: emailResponse });
+      console.log('[Zappit] Resend Email sent successfully to:', targetEmail, emailResponse);
+      return res.status(200).json({ success: true, message: `Email sent successfully to ${targetEmail}`, data: emailResponse });
     } else {
       console.log('========================================================================');
       console.log('[Zappit] MOCK EMAIL SENT (RESEND_API_KEY is missing or unconfigured)');
@@ -326,14 +327,15 @@ router.post('/send-welcome-email', async (req, res) => {
     `;
 
     if (resend) {
+      const targetEmail = process.env.RESEND_TEST_RECIPIENT || email;
       const emailResponse = await resend.emails.send({
         from: 'Zappit <onboarding@resend.dev>',
-        to: email,
+        to: targetEmail,
         subject: `⚡ Welcome to Zappit, ${name}!`,
         html: htmlContent
       });
-      console.log('[Zappit] Resend Welcome Email sent successfully:', emailResponse);
-      return res.status(200).json({ success: true, message: 'Welcome email sent successfully via Resend', data: emailResponse });
+      console.log('[Zappit] Resend Welcome Email sent successfully to:', targetEmail, emailResponse);
+      return res.status(200).json({ success: true, message: `Welcome email sent successfully to ${targetEmail}`, data: emailResponse });
     } else {
       console.log('========================================================================');
       console.log('[Zappit] MOCK WELCOME EMAIL SENT (RESEND_API_KEY is missing or unconfigured)');

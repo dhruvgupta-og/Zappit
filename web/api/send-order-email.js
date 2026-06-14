@@ -131,14 +131,15 @@ module.exports = async function handler(req, res) {
     const apiKey = process.env.RESEND_API_KEY;
     if (apiKey) {
       const resend = new Resend(apiKey);
+      const targetEmail = process.env.RESEND_TEST_RECIPIENT || email;
       const emailResponse = await resend.emails.send({
         from: 'Zappit <onboarding@resend.dev>',
-        to: email,
+        to: targetEmail,
         subject: `⚡ Zappit Order Confirmed - OTP: ${deliveryOtp}`,
         html: htmlContent
       });
-      console.log('[Zappit Vercel] Resend Email sent successfully:', emailResponse);
-      return res.status(200).json({ success: true, message: 'Email sent successfully via Resend', data: emailResponse });
+      console.log('[Zappit Vercel] Resend Email sent successfully to:', targetEmail, emailResponse);
+      return res.status(200).json({ success: true, message: `Email sent successfully to ${targetEmail}`, data: emailResponse });
     } else {
       console.log('========================================================================');
       console.log('[Zappit Vercel] MOCK EMAIL SENT (RESEND_API_KEY is missing or unconfigured)');
