@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import { auth, db } from '../firebase';
 import { doc, setDoc, getDoc, collection, getDocs, serverTimestamp } from 'firebase/firestore';
 import { User, Phone, School, ChevronDown, ArrowRight } from 'lucide-react';
@@ -63,6 +64,19 @@ const OnboardingPage = () => {
       localStorage.setItem('userCollegeName', collegeName);
       localStorage.setItem('userCollege', collegeName);
       localStorage.setItem('userAddress', 'Engineering Block A');
+
+      // Send Welcome Email via Resend
+      try {
+        await axios.post('/api/send-welcome-email', {
+          email: user.email || '',
+          name: name.trim(),
+          college: collegeName
+        });
+        console.log('[Zappit] Welcome email triggered successfully.');
+      } catch (emailErr) {
+        console.error('[Zappit] Failed to send welcome email:', emailErr);
+      }
+
       navigate('/');
     } catch (err) {
       setError(err.message);
