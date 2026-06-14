@@ -5,6 +5,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from './firebase';
 import { CartProvider, useCart } from './CartContext';
+import { initFcm } from './utils/fcm';
 
 import HomePage from './pages/Home';
 import StorePage from './pages/Store';
@@ -111,6 +112,10 @@ function App() {
           
           const isComplete = snap.exists() && data?.profile_complete === true;
           console.log("DEBUG: profileComplete calculated:", isComplete);
+          
+          if (isComplete) {
+            initFcm(firebaseUser.uid);
+          }
           
           setProfileComplete(isComplete);
           setCheckingAuth(false);
