@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { ArrowLeft, MapPin, CreditCard, CheckCircle, Trash2, Plus, Minus, ShoppingBag, Tag } from 'lucide-react';
 import { auth, db } from '../firebase';
-import { collection, addDoc, serverTimestamp, doc, getDoc, query, where, getDocs, updateDoc, arrayUnion } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, getDoc, query, where, getDocs, updateDoc, arrayUnion, onSnapshot } from 'firebase/firestore';
 import { useCart } from '../CartContext';
 
 const CheckoutPage = () => {
@@ -74,9 +74,24 @@ const CheckoutPage = () => {
     localStorage.setItem('userAddress', e.target.value);
   };
 
-  const deliveryFee = 20;
-  const platformFee = 5;
-  const total = subtotal + deliveryFee + platformFee;
+  // ── DYNAMIC FEES FROM FIRESTORE ──
+  const [fees, setFees] = useState([]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'config', 'fees'), (docSnap) => {
+      if (docSnap.exists() && Array.isArray(docSnap.data().list)) {
+        setFees(docSnap.data().list);
+      } else {
+        setFees([
+          { name: 'Delivery Fee', value: 20 },
+          { name: 'Platform Fee', value: 5 }
+        ]);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const totalFees = fees.reduce((sum, f) => sum + Number(f.value || 0), 0);
 
   // ── RAZORPAY SCRIPT LOADER ──
   const loadRazorpay = () => {
@@ -102,7 +117,7 @@ const CheckoutPage = () => {
 
       // 1. Create order on backend
       const discount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount_percent) / 100) : 0;
-      const amountToPay = Math.max(1, Math.round(subtotal + deliveryFee + platformFee - discount));
+      const amountToPay = Math.max(1, Math.round(subtotal + totalFees - discount));
       const amountInPaise = amountToPay * 100;
 
       const { data } = await axios.post('/api/create-order', {
@@ -215,7 +230,7 @@ const CheckoutPage = () => {
         
         const storeSubtotal = items.reduce((sum, i) => sum + (i.price * i.qty), 0);
         const isFirst = orderIds.length === 0;
-        const storeTotal = storeSubtotal + (isFirst ? deliveryFee + platformFee : 0);
+        const storeTotal = storeSubtotal + (isFirst ? totalFees : 0);
 
         const discount = appliedCoupon ? Math.round((storeSubtotal * appliedCoupon.discount_percent) / 100) : 0;
 
@@ -429,14 +444,12 @@ const CheckoutPage = () => {
               <span>Item Total</span>
               <span>₹{subtotal}</span>
             </div>
-            <div className="flex justify-between" style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-              <span>Delivery Fee</span>
-              <span>₹{deliveryFee}</span>
-            </div>
-            <div className="flex justify-between" style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-              <span>Platform Fee</span>
-              <span>₹{platformFee}</span>
-            </div>
+            {fees.map((fee, fIdx) => (
+              <div key={fIdx} className="flex justify-between" style={{ fontSize: '0.875rem', color: 'var(--text-muted)' }}>
+                <span>{fee.name}</span>
+                <span>₹{fee.value}</span>
+              </div>
+            ))}
             {appliedCoupon && (
               <div className="flex justify-between" style={{ fontSize: '0.875rem', color: '#10B981', fontWeight: 700 }}>
                 <span>Coupon Discount ({appliedCoupon.discount_percent}%)</span>
@@ -445,7 +458,7 @@ const CheckoutPage = () => {
             )}
             <div className="flex justify-between items-center" style={{ marginTop: '8px', paddingTop: '8px', borderTop: '1px dashed var(--border-color)', fontWeight: 700, fontSize: '1.125rem' }}>
               <span>To Pay</span>
-              <span style={{ color: 'var(--primary)' }}>₹{Math.max(0, Math.round(subtotal + deliveryFee + platformFee - (appliedCoupon ? (subtotal * appliedCoupon.discount_percent) / 100 : 0)))}</span>
+              <span style={{ color: 'var(--primary)' }}>₹{Math.max(0, Math.round(subtotal + totalFees - (appliedCoupon ? (subtotal * appliedCoupon.discount_percent) / 100 : 0)))}</span>
             </div>
           </div>
         </div>
@@ -458,7 +471,7 @@ const CheckoutPage = () => {
       <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--card-bg)', padding: '16px 20px', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))', boxShadow: '0 -4px 12px rgba(0,0,0,0.3)', zIndex: 100, maxWidth: '480px', margin: '0 auto', display: 'flex', gap: '16px', alignItems: 'center' }}>
         <div style={{ flexShrink: 0 }}>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>To Pay</div>
-          <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>₹{Math.max(0, Math.round(subtotal + deliveryFee + platformFee - (appliedCoupon ? (subtotal * appliedCoupon.discount_percent) / 100 : 0)))}</div>
+          <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>₹{Math.max(0, Math.round(subtotal + totalFees - (appliedCoupon ? (subtotal * appliedCoupon.discount_percent) / 100 : 0)))}</div>
         </div>
         <button 
           onClick={handlePayment} 

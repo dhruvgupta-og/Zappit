@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, getDocs, setDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import {
@@ -16,6 +16,53 @@ const AdminDashboard = () => {
   const [colleges, setColleges] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [banners, setBanners] = useState([]);
+  const [localFees, setLocalFees] = useState([]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'config', 'fees'), (docSnap) => {
+      if (docSnap.exists() && Array.isArray(docSnap.data().list)) {
+        setLocalFees(docSnap.data().list);
+      } else {
+        setLocalFees([
+          { name: 'Delivery Fee', value: 20 },
+          { name: 'Platform Fee', value: 5 }
+        ]);
+      }
+    });
+    return () => unsub();
+  }, []);
+
+  const addLocalFee = () => {
+    setLocalFees(p => [...p, { name: '', value: 0 }]);
+  };
+
+  const removeLocalFee = (index) => {
+    setLocalFees(p => p.filter((_, i) => i !== index));
+  };
+
+  const updateLocalFee = (index, field, val) => {
+    setLocalFees(p => p.map((f, i) => {
+      if (i === index) {
+        return { ...f, [field]: field === 'value' ? Number(val) : val };
+      }
+      return f;
+    }));
+  };
+
+  const saveFeesToDb = async () => {
+    const invalid = localFees.some(f => !f.name.trim());
+    if (invalid) {
+      alert('Fee names cannot be empty!');
+      return;
+    }
+
+    try {
+      await setDoc(doc(db, 'config', 'fees'), { list: localFees });
+      alert('Fees updated successfully!');
+    } catch (err) {
+      alert('Failed to save fees: ' + err.message);
+    }
+  };
   
   // Menu management state
   const [selectedStoreId, setSelectedStoreId] = useState('');
@@ -373,6 +420,7 @@ const AdminDashboard = () => {
     { key: 'menu',      label: '🍕 Menu' },
     { key: 'coupons',   label: '🎟️ Coupons' },
     { key: 'banners',   label: '🖼️ Banners' },
+    { key: 'fees',      label: '⚙️ Fees' },
   ];
 
   const handleExportData = async () => {
@@ -982,6 +1030,63 @@ const AdminDashboard = () => {
               ))}
             </div>
           </>
+        )}
+
+        {/* ════ FEES ════ */}
+        {activeTab === 'fees' && (
+          <div style={{ background: 'white', borderRadius: 12, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+            <h3 style={{ margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+              ⚙️ Manage Application Fees
+            </h3>
+            
+            <p style={{ fontSize: '0.85rem', color: '#64748B', marginBottom: 20 }}>
+              Adjust or add fees that are charged at checkout. All values are in INR (₹).
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+              {localFees.map((fee, idx) => (
+                <div key={idx} style={{ display: 'flex', gap: 10, alignItems: 'center', background: '#F8FAFC', padding: 10, borderRadius: 8, border: '1px solid #E2E8F0' }}>
+                  <input 
+                    type="text" 
+                    placeholder="Fee Name (e.g. Service Fee)" 
+                    value={fee.name} 
+                    onChange={e => updateLocalFee(idx, 'name', e.target.value)}
+                    style={{ flex: 2, padding: '8px 10px', borderRadius: 6, border: '1px solid #CBD5E1', outline: 'none', fontSize: '0.9rem' }} 
+                  />
+                  <input 
+                    type="number" 
+                    placeholder="Value (₹)" 
+                    value={fee.value} 
+                    onChange={e => updateLocalFee(idx, 'value', e.target.value)}
+                    style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid #CBD5E1', outline: 'none', fontSize: '0.9rem' }} 
+                  />
+                  <button 
+                    onClick={() => removeLocalFee(idx)}
+                    style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 6, padding: '8px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    title="Remove Fee"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button 
+                onClick={addLocalFee}
+                style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid #CBD5E1', background: 'white', color: '#0F172A', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+              >
+                <Plus size={16} /> Add Fee
+              </button>
+              
+              <button 
+                onClick={saveFeesToDb}
+                style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: '#10B981', color: 'white', fontWeight: 700, cursor: 'pointer' }}
+              >
+                Save Changes
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
