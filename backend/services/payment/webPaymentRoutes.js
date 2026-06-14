@@ -207,13 +207,14 @@ router.post('/send-order-email', async (req, res) => {
 
     if (resend) {
       const targetEmail = process.env.RESEND_TEST_RECIPIENT || email;
+      console.log('[Zappit Debug] Sending order receipt email. targetEmail:', targetEmail, '| raw email:', email, '| env recipient:', process.env.RESEND_TEST_RECIPIENT);
       const emailResponse = await resend.emails.send({
         from: 'Zappit <onboarding@resend.dev>',
         to: targetEmail,
         subject: `⚡ Zappit Order Confirmed - OTP: ${deliveryOtp}`,
         html: htmlContent
       });
-      console.log('[Zappit] Resend Email sent successfully to:', targetEmail, emailResponse);
+      console.log('[Zappit] Resend Email sent response:', targetEmail, emailResponse);
       return res.status(200).json({ success: true, message: `Email sent successfully to ${targetEmail}`, data: emailResponse });
     } else {
       console.log('========================================================================');
@@ -328,13 +329,14 @@ router.post('/send-welcome-email', async (req, res) => {
 
     if (resend) {
       const targetEmail = process.env.RESEND_TEST_RECIPIENT || email;
+      console.log('[Zappit Debug] Sending welcome email. targetEmail:', targetEmail, '| raw email:', email, '| env recipient:', process.env.RESEND_TEST_RECIPIENT);
       const emailResponse = await resend.emails.send({
         from: 'Zappit <onboarding@resend.dev>',
         to: targetEmail,
         subject: `⚡ Welcome to Zappit, ${name}!`,
         html: htmlContent
       });
-      console.log('[Zappit] Resend Welcome Email sent successfully to:', targetEmail, emailResponse);
+      console.log('[Zappit] Resend Welcome Email sent response to:', targetEmail, emailResponse);
       return res.status(200).json({ success: true, message: `Welcome email sent successfully to ${targetEmail}`, data: emailResponse });
     } else {
       console.log('========================================================================');
