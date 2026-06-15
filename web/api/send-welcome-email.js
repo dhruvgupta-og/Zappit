@@ -80,7 +80,7 @@ module.exports = async function handler(req, res) {
 
         <!-- CTA Button -->
         <div style="text-align: center; margin-bottom: 10px;">
-          <a href="https://zappit-dun.vercel.app" style="display: inline-block; background: linear-gradient(135deg, #FFC107 0%, #FF9800 100%); color: #ffffff; font-size: 16px; font-weight: 700; text-decoration: none; padding: 16px 32px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.4), 0 2px 4px -1px rgba(245, 158, 11, 0.2); font-family: inherit;">Explore Campus Stores ➔</a>
+          <a href="https://zappit.shop" style="display: inline-block; background: linear-gradient(135deg, #FFC107 0%, #FF9800 100%); color: #ffffff; font-size: 16px; font-weight: 700; text-decoration: none; padding: 16px 32px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.4), 0 2px 4px -1px rgba(245, 158, 11, 0.2); font-family: inherit;">Explore Campus Stores ➔</a>
         </div>
       </div>
       
