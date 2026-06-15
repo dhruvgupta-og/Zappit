@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, updateDoc, query } from 'firebase/firestore';
 import { Package, CheckCircle, Truck, MapPin, Clock, Store, Phone } from 'lucide-react';
+import axios from 'axios';
 
 const MAX_ACTIVE_ORDERS = 3;
 
@@ -101,7 +102,13 @@ const DeliveryDashboard = () => {
   const tabOrders = activeTab === 'new' ? newOrders : activeTab === 'active' ? activeOrders : completedOrders;
 
   const updateOrderStatus = async (orderId, status) => {
-    await updateDoc(doc(db, 'orders', orderId), { order_status: status });
+    try {
+      await updateDoc(doc(db, 'orders', orderId), { order_status: status });
+      // Call status notification endpoint
+      await axios.post('/api/send-status-notification', { orderId, status });
+    } catch (err) {
+      console.error('Failed to update order status or send push notification:', err);
+    }
   };
 
   const getItems = (items) => {

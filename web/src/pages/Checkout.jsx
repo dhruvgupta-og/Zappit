@@ -26,18 +26,34 @@ const CheckoutPage = () => {
     setApplying(true);
     setCouponError('');
     try {
-      const q = query(collection(db, 'coupons'), where('code', '==', couponCode.toUpperCase().trim()), where('active', '==', true));
+      const codeToQuery = couponCode.toUpperCase().trim();
+      console.log('[Zappit Debug] Applying coupon with code:', codeToQuery);
+      
+      // Query coupons by code only
+      const q = query(collection(db, 'coupons'), where('code', '==', codeToQuery));
       const snap = await getDocs(q);
       
+      console.log('[Zappit Debug] Query returned documents count:', snap.size);
+      
       if (snap.empty) {
+        // Let's check if there are other coupons in database just to log them
+        const allCouponsSnap = await getDocs(collection(db, 'coupons'));
+        console.log('[Zappit Debug] All coupons in DB:', allCouponsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+        
         setCouponError('Invalid or expired code');
         setAppliedCoupon(null);
       } else {
         const coupon = { id: snap.docs[0].id, ...snap.docs[0].data() };
-        const userCollegeId = localStorage.getItem('userCollegeId');
+        console.log('[Zappit Debug] Found coupon:', coupon);
         
-        if (coupon.college_id !== 'all' && coupon.college_id !== userCollegeId) {
-          setCouponError('Not valid for your college');
+        const userCollegeId = localStorage.getItem('userCollegeId');
+        console.log('[Zappit Debug] userCollegeId from localStorage:', userCollegeId);
+        
+        if (coupon.active === false) {
+          setCouponError('This coupon is inactive or expired');
+          setAppliedCoupon(null);
+        } else if (coupon.college_id !== 'all' && coupon.college_id !== userCollegeId) {
+          setCouponError(`Not valid for your college (Coupon college: ${coupon.college_id}, User college: ${userCollegeId})`);
           setAppliedCoupon(null);
         } else {
           // Check if single use
@@ -58,7 +74,8 @@ const CheckoutPage = () => {
         }
       }
     } catch (err) {
-      setCouponError('Error applying coupon');
+      console.error('[Zappit Debug] Error applying coupon:', err);
+      setCouponError('Error applying coupon: ' + err.message);
     } finally {
       setApplying(false);
     }

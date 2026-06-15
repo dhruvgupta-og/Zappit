@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, updateDoc, addDoc, query, deleteDoc } from 'firebase/firestore';
 import { Package, Clock, IndianRupee, ShoppingBag, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Bell, Store } from 'lucide-react';
+import axios from 'axios';
 
 const TAB_ORDERS = 'orders';
 const TAB_MENU = 'menu';
@@ -146,7 +147,13 @@ const StoreDashboard = () => {
   const todayRevenue = activeAndCompletedOrders.filter(o => getDateObj(o.created_at).toDateString() === new Date().toDateString()).reduce((s, o) => s + (o.total_amount || 0), 0);
 
   const updateOrderStatus = async (orderId, status) => {
-    await updateDoc(doc(db, 'orders', orderId), { order_status: status });
+    try {
+      await updateDoc(doc(db, 'orders', orderId), { order_status: status });
+      // Call status notification endpoint
+      await axios.post('/api/send-status-notification', { orderId, status });
+    } catch (err) {
+      console.error('Failed to update order status or send push notification:', err);
+    }
   };
 
 

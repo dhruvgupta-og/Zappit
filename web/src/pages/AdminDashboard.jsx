@@ -7,6 +7,7 @@ import {
   Plus, Trash2, Edit2, School, Package, TrendingUp, Menu as MenuIcon, Tag, Image as ImageIcon, Download
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import axios from 'axios';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -396,7 +397,13 @@ const AdminDashboard = () => {
   };
 
   const updateOrderStatus = async (orderId, status) => {
-    await updateDoc(doc(db, 'orders', orderId), { order_status: status });
+    try {
+      await updateDoc(doc(db, 'orders', orderId), { order_status: status });
+      // Call status notification endpoint
+      await axios.post('/api/send-status-notification', { orderId, status });
+    } catch (err) {
+      console.error('Failed to update order status or send push notification:', err);
+    }
   };
 
   const topStoresByRevenue = Object.entries(storeStats).sort((a, b) => b[1].revenue - a[1].revenue).slice(0, 5);

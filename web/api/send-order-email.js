@@ -119,7 +119,7 @@ module.exports = async function handler(req, res) {
       <!-- Footer -->
       <div style="background-color: #f9fafb; padding: 24px 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; line-height: 1.5;">
         <p style="margin: 0 0 6px 0; font-weight: 600; color: #6b7280;">Thank you for ordering with Zappit!</p>
-        <p style="margin: 0;">If you have any questions, reach out to us at <a href="mailto:support@zappit.com" style="color: #ff9800; text-decoration: none; font-weight: 600;">support@zappit.com</a></p>
+        <p style="margin: 0;">If you have any questions, reach out to us at <a href="mailto:support@zappit.shop" style="color: #ff9800; text-decoration: none; font-weight: 600;">support@zappit.shop</a></p>
       </div>
 
     </div>
@@ -131,15 +131,14 @@ module.exports = async function handler(req, res) {
     const apiKey = process.env.RESEND_API_KEY;
     if (apiKey) {
       const resend = new Resend(apiKey);
-      const targetEmail = process.env.RESEND_TEST_RECIPIENT || email;
       const emailResponse = await resend.emails.send({
-        from: 'Zappit <onboarding@resend.dev>',
-        to: targetEmail,
+        from: 'Zappit <orders@zappit.shop>',
+        to: email,
         subject: `⚡ Zappit Order Confirmed - OTP: ${deliveryOtp}`,
         html: htmlContent
       });
-      console.log('[Zappit Vercel] Resend Email sent successfully to:', targetEmail, emailResponse);
-      return res.status(200).json({ success: true, message: `Email sent successfully to ${targetEmail}`, data: emailResponse });
+      console.log('[Zappit Vercel] Resend Email sent successfully to:', email, emailResponse);
+      return res.status(200).json({ success: true, message: `Email sent successfully to ${email}`, data: emailResponse });
     } else {
       console.log('========================================================================');
       console.log('[Zappit Vercel] MOCK EMAIL SENT (RESEND_API_KEY is missing or unconfigured)');

@@ -3,8 +3,90 @@ const router = express.Router();
 const razorpay = require('./razorpay');
 const crypto = require('crypto');
 const { Resend } = require('resend');
+const { admin, db } = require('../../firebase');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+
+// Status → notification message map
+const STATUS_MESSAGES = {
+  preparing:        { title: '⚡ Order Accepted!',         body: 'Your order at Zappit is now being prepared by the store. Hang tight!' },
+  ready:            { title: '🍱 Order Ready!',             body: 'Your order is packed and ready for pickup by the delivery partner.' },
+  out_for_delivery: { title: '🛵 Out for Delivery!',       body: 'Your order has been picked up! Share your OTP with the delivery partner upon arrival.' },
+  delivered:        { title: '✅ Order Delivered!',         body: 'Your order has been delivered. Enjoy your meal! Thanks for ordering with Zappit 🎉' },
+  cancelled:        { title: '❌ Order Cancelled',           body: 'Unfortunately your order has been cancelled. Please contact support if this was unexpected.' },
+};
+
+// POST /api/send-status-notification
+router.post('/send-status-notification', async (req, res) => {
+  try {
+    const { orderId, status } = req.body;
+
+    if (!orderId || !status) {
+      return res.status(400).json({ success: false, error: 'orderId and status are required' });
+    }
+
+    const msg = STATUS_MESSAGES[status];
+    if (!msg) {
+      return res.status(400).json({ success: false, error: `Unknown status: ${status}` });
+    }
+
+    // 1. Fetch order to get user_id
+    const orderSnap = await db.collection('orders').doc(orderId).get();
+    if (!orderSnap.exists) {
+      return res.status(404).json({ success: false, error: 'Order not found' });
+    }
+    const order = orderSnap.data();
+    const userId = order.user_id || order.userId;
+
+    if (!userId) {
+      return res.status(200).json({ success: false, skipped: true, error: 'No user_id on order — cannot send push' });
+    }
+
+    // 2. Fetch user to get fcmToken
+    const userSnap = await db.collection('users').doc(userId).get();
+    if (!userSnap.exists) {
+      return res.status(200).json({ success: false, skipped: true, error: 'User not found in Firestore' });
+    }
+    const user = userSnap.data();
+    const fcmToken = user.fcmToken;
+
+    if (!fcmToken) {
+      return res.status(200).json({ success: false, skipped: true, error: 'User has no FCM token — notifications not enabled on their device' });
+    }
+
+    // 3. Send FCM push notification
+    const message = {
+      token: fcmToken,
+      notification: {
+        title: msg.title,
+        body: msg.body,
+      },
+      webpush: {
+        notification: {
+          icon: 'https://zappit-dun.vercel.app/zappit-icon.png',
+          badge: 'https://zappit-dun.vercel.app/zappit-icon.png',
+          requireInteraction: false,
+        },
+        fcmOptions: {
+          link: 'https://zappit-dun.vercel.app/orders',
+        },
+      },
+      data: {
+        orderId,
+        status,
+        click_action: 'https://zappit-dun.vercel.app/orders',
+      },
+    };
+
+    const response = await admin.messaging().send(message);
+    console.log(`[Zappit FCM] Push sent for order ${orderId} → status: ${status} | FCM response:`, response);
+
+    return res.status(200).json({ success: true, message: 'Push notification sent', fcmResponse: response });
+  } catch (err) {
+    console.error('[Zappit FCM] send-status-notification error:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // POST /api/create-order
 router.post('/create-order', async (req, res) => {
@@ -206,16 +288,15 @@ router.post('/send-order-email', async (req, res) => {
     `;
 
     if (resend) {
-      const targetEmail = process.env.RESEND_TEST_RECIPIENT || email;
-      console.log('[Zappit Debug] Sending order receipt email. targetEmail:', targetEmail, '| raw email:', email, '| env recipient:', process.env.RESEND_TEST_RECIPIENT);
+      console.log('[Zappit Debug] Sending order receipt email to:', email);
       const emailResponse = await resend.emails.send({
-        from: 'Zappit <onboarding@resend.dev>',
-        to: targetEmail,
+        from: 'Zappit <orders@zappit.shop>',
+        to: email,
         subject: `⚡ Zappit Order Confirmed - OTP: ${deliveryOtp}`,
         html: htmlContent
       });
-      console.log('[Zappit] Resend Email sent response:', targetEmail, emailResponse);
-      return res.status(200).json({ success: true, message: `Email sent successfully to ${targetEmail}`, data: emailResponse });
+      console.log('[Zappit] Resend Email sent response:', email, emailResponse);
+      return res.status(200).json({ success: true, message: `Email sent successfully to ${email}`, data: emailResponse });
     } else {
       console.log('========================================================================');
       console.log('[Zappit] MOCK EMAIL SENT (RESEND_API_KEY is missing or unconfigured)');
@@ -318,7 +399,7 @@ router.post('/send-welcome-email', async (req, res) => {
       <!-- Footer -->
       <div style="background-color: #f9fafb; padding: 24px 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; line-height: 1.5;">
         <p style="margin: 0 0 6px 0; font-weight: 600; color: #6b7280;">Welcome to the fast lane!</p>
-        <p style="margin: 0;">If you have any questions, reach out to us at <a href="mailto:support@zappit.com" style="color: #ff9800; text-decoration: none; font-weight: 600;">support@zappit.com</a></p>
+        <p style="margin: 0;">If you have any questions, reach out to us at <a href="mailto:support@zappit.shop" style="color: #ff9800; text-decoration: none; font-weight: 600;">support@zappit.shop</a></p>
       </div>
 
     </div>
@@ -328,16 +409,15 @@ router.post('/send-welcome-email', async (req, res) => {
     `;
 
     if (resend) {
-      const targetEmail = process.env.RESEND_TEST_RECIPIENT || email;
-      console.log('[Zappit Debug] Sending welcome email. targetEmail:', targetEmail, '| raw email:', email, '| env recipient:', process.env.RESEND_TEST_RECIPIENT);
+      console.log('[Zappit Debug] Sending welcome email to:', email);
       const emailResponse = await resend.emails.send({
-        from: 'Zappit <onboarding@resend.dev>',
-        to: targetEmail,
+        from: 'Zappit <hello@zappit.shop>',
+        to: email,
         subject: `⚡ Welcome to Zappit, ${name}!`,
         html: htmlContent
       });
-      console.log('[Zappit] Resend Welcome Email sent response to:', targetEmail, emailResponse);
-      return res.status(200).json({ success: true, message: `Welcome email sent successfully to ${targetEmail}`, data: emailResponse });
+      console.log('[Zappit] Resend Welcome Email sent response to:', email, emailResponse);
+      return res.status(200).json({ success: true, message: `Welcome email sent successfully to ${email}`, data: emailResponse });
     } else {
       console.log('========================================================================');
       console.log('[Zappit] MOCK WELCOME EMAIL SENT (RESEND_API_KEY is missing or unconfigured)');
