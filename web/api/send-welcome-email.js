@@ -70,14 +70,7 @@ module.exports = async function handler(req, res) {
           </table>
         </div>
 
-        <!-- Special Welcome Offer -->
-        <div style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border: 1px solid #fde68a; border-radius: 12px; padding: 24px; text-align: center; margin-bottom: 30px;">
-          <div style="font-size: 12px; text-transform: uppercase; letter-spacing: 2px; color: #b45309; font-weight: 700; margin-bottom: 6px;">Your Welcome Gift 🎁</div>
-          <div style="font-size: 20px; font-weight: 800; color: #78350f; margin-bottom: 4px;">Get 10% Off Your First Order</div>
-          <p style="color: #92400e; font-size: 14px; margin: 0 0 16px 0;">Apply the coupon code below at checkout</p>
-          <div style="display: inline-block; background-color: #ffffff; border: 2px dashed #f59e0b; border-radius: 8px; padding: 10px 20px; font-family: monospace; font-size: 18px; font-weight: 800; color: #d97706; letter-spacing: 1px;">WELCOME10</div>
-        </div>
-
+     
         <!-- CTA Button -->
         <div style="text-align: center; margin-bottom: 10px;">
           <a href="https://zappit.shop" style="display: inline-block; background: linear-gradient(135deg, #FFC107 0%, #FF9800 100%); color: #ffffff; font-size: 16px; font-weight: 700; text-decoration: none; padding: 16px 32px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(245, 158, 11, 0.4), 0 2px 4px -1px rgba(245, 158, 11, 0.2); font-family: inherit;">Explore Campus Stores ➔</a>
@@ -87,7 +80,7 @@ module.exports = async function handler(req, res) {
       <!-- Footer -->
       <div style="background-color: #f9fafb; padding: 24px 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; line-height: 1.5;">
         <p style="margin: 0 0 6px 0; font-weight: 600; color: #6b7280;">Welcome to the fast lane!</p>
-        <p style="margin: 0;">If you have any questions, reach out to us at <a href="mailto:support@zappit.shop" style="color: #ff9800; text-decoration: none; font-weight: 600;">support@zappit.shop</a></p>
+        <p style="margin: 0;">If you have any questions, reach out to us at <a href="mailto:zappit.shop@gmail.com" style="color: #ff9800; text-decoration: none; font-weight: 600;">support@zappit.shop</a></p>
       </div>
 
     </div>

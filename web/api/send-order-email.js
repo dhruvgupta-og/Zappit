@@ -119,7 +119,7 @@ module.exports = async function handler(req, res) {
       <!-- Footer -->
       <div style="background-color: #f9fafb; padding: 24px 30px; text-align: center; border-top: 1px solid #e5e7eb; font-size: 12px; color: #9ca3af; line-height: 1.5;">
         <p style="margin: 0 0 6px 0; font-weight: 600; color: #6b7280;">Thank you for ordering with Zappit!</p>
-        <p style="margin: 0;">If you have any questions, reach out to us at <a href="mailto:support@zappit.shop" style="color: #ff9800; text-decoration: none; font-weight: 600;">support@zappit.shop</a></p>
+        <p style="margin: 0;">If you have any questions, reach out to us at <a href="mailto:zappit.shop@gmail.com" style="color: #ff9800; text-decoration: none; font-weight: 600;">support@zappit.shop</a></p>
       </div>
 
     </div>
