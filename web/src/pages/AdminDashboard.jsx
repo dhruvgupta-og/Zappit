@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import axios from 'axios';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../firebase';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -140,14 +142,28 @@ const AdminDashboard = () => {
 
   // ── REAL-TIME DATA (orders only — must be live for admin tracking) ──────────
   useEffect(() => {
-    loadAllData();
-    // Orders stay real-time so admin sees new orders instantly
-    const unsubOrders = onSnapshot(
-      collection(db, 'orders'),
-      s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(o => o.payment_status === 'completed')),
-      err => console.warn('[Admin] Orders listener error:', err.message)
-    );
-    return () => unsubOrders();
+    let unsubOrders;
+    
+    // Wait for Firebase Auth to initialize before fetching, 
+    // otherwise rules reject it because auth is null for a split second
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        loadAllData();
+        unsubOrders = onSnapshot(
+          collection(db, 'orders'),
+          s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(o => o.payment_status === 'completed')),
+          err => console.warn('[Admin] Orders listener error:', err.message)
+        );
+      } else {
+        // User not logged in, clear data
+        setOrders([]);
+      }
+    });
+
+    return () => {
+      unsubAuth();
+      if (unsubOrders) unsubOrders();
+    };
   }, []);
 
   const loadMenuData = async () => {
