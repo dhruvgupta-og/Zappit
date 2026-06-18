@@ -15,7 +15,15 @@ const PaymentCallback = () => {
     const verifyPayment = async () => {
       const merchantOrderId = searchParams.get('merchantOrderId');
       const transactionId = searchParams.get('transactionId');
+      const isVerified = searchParams.get('verified') === 'true';
+      const errorMsg = searchParams.get('error');
       
+      if (errorMsg) {
+        setStatus('failure');
+        setError(decodeURIComponent(errorMsg));
+        return;
+      }
+
       if (!merchantOrderId) {
         setStatus('failure');
         setError('Missing Order ID');
@@ -23,21 +31,20 @@ const PaymentCallback = () => {
       }
 
       try {
-        // 1. Verify with backend
-        const { data } = await axios.post('http://localhost:5000/api/payments/verify', {
-          merchantOrderId
-        });
-
-        if (data.success && data.verified) {
-          // 2. Finalize order in Firestore
+        if (isVerified) {
+          // Finalize order in Firestore
           await finalizeOrder(transactionId || merchantOrderId);
           setStatus('success');
           
-          // Redirect to tracker after delay
+          // Clear cart
+          localStorage.removeItem('zappit_cart');
+          localStorage.removeItem('zappit_cart_storeId');
+          localStorage.removeItem('zappit_cart_storeName');
+
+          // Redirect to home/orders after delay
           setTimeout(() => {
-             // In a real app, you'd get the new order IDs from the finalizeOrder response
-             navigate('/orders'); // Fallback to orders list
-          }, 3000);
+             navigate('/');
+          }, 4000);
         } else {
           setStatus('failure');
           setError('Payment verification failed');
@@ -50,7 +57,7 @@ const PaymentCallback = () => {
     };
 
     verifyPayment();
-  }, []);
+  }, [searchParams, navigate]);
 
   const finalizeOrder = async (paymentTransactionId) => {
     const pendingData = JSON.parse(localStorage.getItem('pendingOrderData'));

@@ -17,6 +17,9 @@ module.exports = async function handler(req, res) {
 
     const secret = process.env.RAZORPAY_KEY_SECRET;
     if (!secret) {
+      if (req.headers['content-type'] === 'application/x-www-form-urlencoded') {
+        return res.redirect(302, `/payment-callback?error=config_missing`);
+      }
       return res.status(503).json({ success: false, error: 'Razorpay secret not configured' });
     }
 
@@ -24,13 +27,28 @@ module.exports = async function handler(req, res) {
     hmac.update(razorpay_order_id + '|' + razorpay_payment_id);
     const generated_signature = hmac.digest('hex');
 
-    if (generated_signature === razorpay_signature) {
+    const isVerified = generated_signature === razorpay_signature;
+
+    // If request comes from Razorpay callback_url (form submission)
+    if (req.headers['content-type'] === 'application/x-www-form-urlencoded') {
+      if (isVerified) {
+        return res.redirect(302, `/payment-callback?merchantOrderId=${razorpay_order_id}&transactionId=${razorpay_payment_id}&verified=true`);
+      } else {
+        return res.redirect(302, `/payment-callback?merchantOrderId=${razorpay_order_id}&verified=false`);
+      }
+    }
+
+    // Default JSON response for handler flows
+    if (isVerified) {
       return res.status(200).json({ success: true, verified: true });
     } else {
       return res.status(400).json({ success: false, verified: false, message: 'Invalid signature' });
     }
   } catch (err) {
     console.error('Verify Payment Error:', err);
+    if (req.headers['content-type'] === 'application/x-www-form-urlencoded') {
+      return res.redirect(302, `/payment-callback?error=${encodeURIComponent(err.message)}`);
+    }
     return res.status(500).json({ success: false, error: err.message });
   }
 };

@@ -164,6 +164,16 @@ const CheckoutPage = () => {
 
       console.log('[Zappit] Order API response:', data);
 
+      // Save pending order data so PaymentCallback can retrieve it after redirect
+      localStorage.setItem('pendingOrderData', JSON.stringify({
+        cartItems,
+        address,
+        appliedCoupon,
+        subtotal,
+        deliveryFee: fees.find(f => f.name.toLowerCase().includes('delivery'))?.value || 0,
+        platformFee: fees.find(f => f.name.toLowerCase().includes('platform'))?.value || 0,
+      }));
+
       // 2. Open Razorpay Checkout
       const options = {
         key: data.key_id || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_T0gdDL6JAF6MCI',
@@ -172,6 +182,8 @@ const CheckoutPage = () => {
         name: 'Zappit',
         description: 'Campus Delivery',
         order_id: data.order_id,
+        callback_url: window.location.origin + '/api/verify-payment',
+        redirect: true,
         handler: async function (response) {
           try {
             // 3. Verify Payment Signature
