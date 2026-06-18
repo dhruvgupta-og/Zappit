@@ -120,29 +120,49 @@ const AdminDashboard = () => {
     });
   };
 
-  // ── REAL-TIME DATA ──
+  // ── DATA LOADING (one-time fetch to save Firestore quota) ──────────────────
+  const loadAllData = async () => {
+    try {
+      const [storesSnap, collegesSnap, bannersSnap, couponsSnap] = await Promise.all([
+        getDocs(collection(db, 'stores')),
+        getDocs(collection(db, 'colleges')),
+        getDocs(collection(db, 'banners')),
+        getDocs(collection(db, 'coupons')),
+      ]);
+      setStores(storesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setColleges(collegesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setBanners(bannersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setCoupons(couponsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (err) {
+      console.error('[Admin] Failed to load data:', err.message);
+    }
+  };
+
+  // ── REAL-TIME DATA (orders only — must be live for admin tracking) ──────────
   useEffect(() => {
-    const unsubs = [
-      onSnapshot(collection(db, 'orders'),  s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(o => o.payment_status === 'completed'))),
-      onSnapshot(collection(db, 'stores'),  s => setStores(s.docs.map(d => ({ id: d.id, ...d.data() })))),
-      onSnapshot(collection(db, 'colleges'),s => setColleges(s.docs.map(d => ({ id: d.id, ...d.data() })))),
-      onSnapshot(collection(db, 'banners'), s => setBanners(s.docs.map(d => ({ id: d.id, ...d.data() })))),
-      // ✅ Coupons: real-time from Firestore directly (no backend needed)
-      onSnapshot(collection(db, 'coupons'), s => setCoupons(s.docs.map(d => ({ id: d.id, ...d.data() })))),
-    ];
-    return () => unsubs.forEach(u => u());
+    loadAllData();
+    // Orders stay real-time so admin sees new orders instantly
+    const unsubOrders = onSnapshot(
+      collection(db, 'orders'),
+      s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(o => o.payment_status === 'completed')),
+      err => console.warn('[Admin] Orders listener error:', err.message)
+    );
+    return () => unsubOrders();
   }, []);
 
-  // Fetch menu when a store is selected in Menu tab
-  useEffect(() => {
-    if (!selectedStoreId) {
-      setMenuItems([]);
-      return;
-    }
-    const unsub = onSnapshot(collection(db, `stores/${selectedStoreId}/menu`), s => {
+  const loadMenuData = async () => {
+    if (!selectedStoreId) { setMenuItems([]); return; }
+    try {
+      const s = await getDocs(collection(db, `stores/${selectedStoreId}/menu`));
       setMenuItems(s.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsub();
+    } catch (err) {
+      console.warn('[Admin] Menu fetch error:', err.message);
+    }
+  };
+
+  // Fetch menu when a store is selected in Menu tab (one-time, not real-time)
+  useEffect(() => {
+    loadMenuData();
   }, [selectedStoreId]);
 
   // ── FILTERING LOGIC ──
@@ -227,6 +247,7 @@ const AdminDashboard = () => {
       setStoreForm({ name: '', image: '', rating: '4.5', delivery_time_mins: '15-20', tags: '', college_id: '' });
       setShowStoreForm(false);
       setEditingStoreId(null);
+      await loadAllData();
     } catch (err) {
       alert('Error saving store: ' + err.message);
     }
@@ -264,6 +285,7 @@ const AdminDashboard = () => {
       setCollegeForm({ name: '', city: '' });
       setShowCollegeForm(false);
       setEditingCollegeId(null);
+      await loadAllData();
     } catch (err) {
       alert('Error saving college: ' + err.message);
     }
@@ -273,6 +295,7 @@ const AdminDashboard = () => {
     await updateDoc(doc(db, 'stores', store.id), {
       is_open: store.is_open === false ? true : false
     });
+    await loadAllData();
   };
 
   // ── COLLEGE MANAGEMENT ──
@@ -305,7 +328,7 @@ const AdminDashboard = () => {
       setCouponForm({ code: '', discount: '', college_id: 'all', once_per_user: true });
       setShowCouponForm(false);
       setEditingCouponId(null);
-      // onSnapshot will auto-refresh the list
+      await loadAllData();
     } catch (err) {
       alert('Error saving coupon: ' + err.message);
     }
@@ -315,7 +338,7 @@ const AdminDashboard = () => {
     if (window.confirm('Delete this coupon?')) {
       try {
         await deleteDoc(doc(db, 'coupons', id));
-        // onSnapshot will auto-refresh the list
+        await loadAllData();
       } catch (err) {
         alert('Error deleting coupon: ' + err.message);
       }
@@ -350,6 +373,7 @@ const AdminDashboard = () => {
       setBannerForm({ image: '', link: '' });
       setShowBannerForm(false);
       setEditingBannerId(null);
+      await loadAllData();
     } catch (err) {
       alert('Error saving banner: ' + err.message);
     }
@@ -385,6 +409,7 @@ const AdminDashboard = () => {
       setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true, image: '' });
       setShowMenuForm(false);
       setEditingMenuId(null);
+      await loadMenuData();
     } catch (err) {
       alert('Error saving menu item: ' + err.message);
     }
@@ -404,15 +429,22 @@ const AdminDashboard = () => {
   };
 
   const deleteItem = async (col, id) => {
-    if (window.confirm('Delete?')) await deleteDoc(doc(db, col, id));
+    if (window.confirm('Delete?')) {
+      await deleteDoc(doc(db, col, id));
+      await loadAllData();
+    }
   };
 
   const deleteMenuItem = async (id) => {
-    if (window.confirm('Delete menu item?')) await deleteDoc(doc(db, `stores/${selectedStoreId}/menu`, id));
+    if (window.confirm('Delete menu item?')) {
+      await deleteDoc(doc(db, `stores/${selectedStoreId}/menu`, id));
+      await loadMenuData();
+    }
   };
 
   const toggleMenuAvailability = async (item) => {
     await updateDoc(doc(db, `stores/${selectedStoreId}/menu`, item.id), { is_available: !item.is_available });
+    await loadMenuData();
   };
 
   const updateOrderStatus = async (orderId, status) => {
