@@ -105,9 +105,15 @@ const StoreDashboard = () => {
   };
 
   const filteredOrders = getFilteredOrders();
+  
+  const getOrderSubtotal = (order) => {
+    const itemsList = getItems(order.items);
+    return itemsList.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || item.quantity || 1)), 0);
+  };
+
   const totalRevenue = filteredOrders
     .filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending')
-    .reduce((s, o) => s + (o.total_amount || 0), 0);
+    .reduce((s, o) => s + getOrderSubtotal(o), 0);
 
   const getItems = (items) => {
     if (!items) return [];
@@ -136,13 +142,13 @@ const StoreDashboard = () => {
   // "New" = confirmed (paid) orders waiting for store to start preparing
   const newOrders       = orders.filter(o => o.order_status === 'confirmed');
   const preparingOrders = orders.filter(o => o.order_status === 'preparing');
-  const readyOrders     = orders.filter(o => o.order_status === 'ready' || o.order_status === 'out_for_delivery');
+  const readyOrders     = orders.filter(o => o.order_status === 'ready' || o.order_status === 'out_for_delivery' || o.order_status === 'picked_up');
   const completedOrders = orders.filter(o => o.order_status === 'delivered' || o.order_status === 'completed');
 
   const activeAndCompletedOrders = orders.filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending');
   const todayRevenue = activeAndCompletedOrders
     .filter(o => getDateObj(o.created_at).toDateString() === new Date().toDateString())
-    .reduce((s, o) => s + (o.total_amount || 0), 0);
+    .reduce((s, o) => s + getOrderSubtotal(o), 0);
 
   const updateOrderStatus = async (orderId, status) => {
     try {
@@ -163,7 +169,8 @@ const StoreDashboard = () => {
     confirmed:        { bg: '#FFF7ED', text: '#C2410C', label: '🆕 New Order' },
     preparing:        { bg: '#FEF9C3', text: '#854D0E', label: '👨‍🍳 Preparing' },
     ready:            { bg: '#E0F2FE', text: '#075985', label: '✅ Ready' },
-    out_for_delivery: { bg: '#D1FAE5', text: '#065F46', label: '🛵 With Delivery Boy' },
+    out_for_delivery: { bg: '#D1FAE5', text: '#065F46', label: '🛵 Handed to Boy' },
+    picked_up:        { bg: '#DBEAFE', text: '#1E3A8A', label: '🚴 En Route' },
     delivered:        { bg: '#DCFCE7', text: '#14532D', label: '✅ Delivered' },
     cancelled:        { bg: '#FEE2E2', text: '#991B1B', label: 'Cancelled' },
   };
@@ -333,10 +340,10 @@ const StoreDashboard = () => {
                       )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>—</span>}
                     </div>
 
-                    {/* ── ADDRESS + TOTAL ── */}
+                    {/* ── ADDRESS + STORE EARNINGS ── */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>📍 {order.address || 'N/A'}</span>
-                      <span style={{ fontWeight: 800, color: 'var(--primary)' }}>₹{order.total_amount}</span>
+                      <span style={{ fontWeight: 800, color: 'var(--primary)' }}>₹{getOrderSubtotal(order)}</span>
                     </div>
 
                     {/* ── ACTION BUTTONS (no accept/reject — auto-flow) ── */}
@@ -362,7 +369,7 @@ const StoreDashboard = () => {
                         </button>
                       )}
 
-                      {/* READY → Hand to Delivery Boy */}
+                      {/* READY -> Hand to Delivery Boy */}
                       {order.order_status === 'ready' && (
                         <div style={{ display: 'flex', gap: 8, width: '100%' }}>
                           <button
@@ -380,8 +387,8 @@ const StoreDashboard = () => {
                         </div>
                       )}
 
-                      {/* OUT FOR DELIVERY → Delivered */}
-                      {order.order_status === 'out_for_delivery' && (
+                      {/* OUT FOR DELIVERY / PICKED UP -> Delivered */}
+                      {(order.order_status === 'out_for_delivery' || order.order_status === 'picked_up') && (
                         <button
                           onClick={() => updateOrderStatus(order.id, 'delivered')}
                           style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #34D399, #10B981)', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: '0.9rem' }}
