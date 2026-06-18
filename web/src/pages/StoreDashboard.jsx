@@ -106,6 +106,12 @@ const StoreDashboard = () => {
 
   const filteredOrders = getFilteredOrders();
   
+  const getItems = (items) => {
+    if (!items) return [];
+    if (Array.isArray(items)) return items;
+    return Object.entries(items).map(([id, qty]) => ({ id, name: id, qty, price: 0 }));
+  };
+
   const getOrderSubtotal = (order) => {
     const itemsList = getItems(order.items);
     return itemsList.reduce((sum, item) => sum + ((item.price || 0) * (item.qty || item.quantity || 1)), 0);
@@ -114,12 +120,6 @@ const StoreDashboard = () => {
   const totalRevenue = filteredOrders
     .filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending')
     .reduce((s, o) => s + getOrderSubtotal(o), 0);
-
-  const getItems = (items) => {
-    if (!items) return [];
-    if (Array.isArray(items)) return items;
-    return Object.entries(items).map(([id, qty]) => ({ id, name: id, qty, price: 0 }));
-  };
 
   const dishStats = filteredOrders.reduce((acc, o) => {
     if (o.order_status === 'cancelled') return acc;
