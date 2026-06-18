@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, getDocs, setDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, getDocs, setDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../firebase';
 import {
@@ -19,16 +19,7 @@ const AdminDashboard = () => {
   const [banners, setBanners] = useState([]);
   const [localFees, setLocalFees] = useState([]);
 
-  const loadCoupons = async () => {
-    try {
-      const res = await axios.get('/api/get-coupons');
-      if (res.data.success) {
-        setCoupons(res.data.coupons);
-      }
-    } catch (err) {
-      console.warn('[Zappit] Failed to load coupons from backend:', err.message);
-    }
-  };
+  // Coupons are loaded via onSnapshot in useEffect below (real-time, no backend needed)
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'config', 'fees'), (docSnap) => {
@@ -131,12 +122,13 @@ const AdminDashboard = () => {
 
   // ── REAL-TIME DATA ──
   useEffect(() => {
-    loadCoupons();
     const unsubs = [
       onSnapshot(collection(db, 'orders'),  s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(o => o.payment_status === 'completed'))),
       onSnapshot(collection(db, 'stores'),  s => setStores(s.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'colleges'),s => setColleges(s.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'banners'), s => setBanners(s.docs.map(d => ({ id: d.id, ...d.data() })))),
+      // ✅ Coupons: real-time from Firestore directly (no backend needed)
+      onSnapshot(collection(db, 'coupons'), s => setCoupons(s.docs.map(d => ({ id: d.id, ...d.data() })))),
     ];
     return () => unsubs.forEach(u => u());
   }, []);
@@ -290,25 +282,30 @@ const AdminDashboard = () => {
 
   const saveCoupon = async () => {
     if (!couponForm.code || !couponForm.discount) return;
+
     const data = {
-      id: editingCouponId || undefined,
       code: couponForm.code.toUpperCase().trim(),
       discount_percent: Number(couponForm.discount),
-      college_id: couponForm.college_id,
+      college_id: couponForm.college_id || 'all',
       once_per_user: couponForm.once_per_user,
-      active: true
+      active: true,
+      updated_at: new Date().toISOString(),
     };
 
     try {
-      const res = await axios.post('/api/save-coupon', data);
-      if (!res.data.success) {
-        throw new Error(res.data.error || 'Server error saving coupon');
+      if (editingCouponId) {
+        // Update existing coupon in Firestore
+        await updateDoc(doc(db, 'coupons', editingCouponId), data);
+      } else {
+        // Create new coupon in Firestore
+        data.created_at = new Date().toISOString();
+        await addDoc(collection(db, 'coupons'), data);
       }
 
       setCouponForm({ code: '', discount: '', college_id: 'all', once_per_user: true });
       setShowCouponForm(false);
       setEditingCouponId(null);
-      await loadCoupons();
+      // onSnapshot will auto-refresh the list
     } catch (err) {
       alert('Error saving coupon: ' + err.message);
     }
@@ -317,11 +314,8 @@ const AdminDashboard = () => {
   const deleteCoupon = async (id) => {
     if (window.confirm('Delete this coupon?')) {
       try {
-        const res = await axios.post('/api/delete-coupon', { id });
-        if (!res.data.success) {
-          throw new Error(res.data.error || 'Server error deleting coupon');
-        }
-        await loadCoupons();
+        await deleteDoc(doc(db, 'coupons', id));
+        // onSnapshot will auto-refresh the list
       } catch (err) {
         alert('Error deleting coupon: ' + err.message);
       }
