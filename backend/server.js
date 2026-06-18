@@ -14,7 +14,8 @@ process.on('uncaughtException', (err) => {
 });
 
 // Load Balancer & Clustering implementation (Sharding across CPUs)
-if (cluster.isPrimary || cluster.isMaster) {
+const useClustering = process.env.NODE_ENV === 'production';
+if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
   const numCPUs = os.cpus().length;
   console.log(`Master process ${process.pid} is running`);
   console.log(`Setting up ${numCPUs} worker processes for load balancing...`);
@@ -32,7 +33,7 @@ if (cluster.isPrimary || cluster.isMaster) {
 } else {
   // Database and Cache Setup
   // Using Firebase Admin as the database layer to avoid local MongoDB installation issues
-  // require('./database/mongodb'); 
+  require('./database/mongodb'); 
   // require('./cache/redis');
 
   const app = express();
@@ -46,6 +47,12 @@ if (cluster.isPrimary || cluster.isMaster) {
 
   app.use(cors());
   app.use(express.json());
+
+  // DEBUG: Log all incoming requests
+  app.use((req, res, next) => {
+    console.log(`[DEBUG] ${req.method} ${req.url} - Body:`, JSON.stringify(req.body));
+    next();
+  });
 
 // API GATEWAY: Rate Limiting
 const apiLimiter = rateLimit({

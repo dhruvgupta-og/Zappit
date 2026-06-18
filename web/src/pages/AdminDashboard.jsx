@@ -19,6 +19,17 @@ const AdminDashboard = () => {
   const [banners, setBanners] = useState([]);
   const [localFees, setLocalFees] = useState([]);
 
+  const loadCoupons = async () => {
+    try {
+      const res = await axios.get('/api/get-coupons');
+      if (res.data.success) {
+        setCoupons(res.data.coupons);
+      }
+    } catch (err) {
+      console.warn('[Zappit] Failed to load coupons from backend:', err.message);
+    }
+  };
+
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'config', 'fees'), (docSnap) => {
       if (docSnap.exists() && Array.isArray(docSnap.data().list)) {
@@ -120,11 +131,11 @@ const AdminDashboard = () => {
 
   // ── REAL-TIME DATA ──
   useEffect(() => {
+    loadCoupons();
     const unsubs = [
-      onSnapshot(collection(db, 'orders'),  s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() })))),
+      onSnapshot(collection(db, 'orders'),  s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(o => o.payment_status === 'completed'))),
       onSnapshot(collection(db, 'stores'),  s => setStores(s.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'colleges'),s => setColleges(s.docs.map(d => ({ id: d.id, ...d.data() })))),
-      onSnapshot(collection(db, 'coupons'), s => setCoupons(s.docs.map(d => ({ id: d.id, ...d.data() })))),
       onSnapshot(collection(db, 'banners'), s => setBanners(s.docs.map(d => ({ id: d.id, ...d.data() })))),
     ];
     return () => unsubs.forEach(u => u());
@@ -280,26 +291,40 @@ const AdminDashboard = () => {
   const saveCoupon = async () => {
     if (!couponForm.code || !couponForm.discount) return;
     const data = {
+      id: editingCouponId || undefined,
       code: couponForm.code.toUpperCase().trim(),
       discount_percent: Number(couponForm.discount),
       college_id: couponForm.college_id,
       once_per_user: couponForm.once_per_user,
-      active: true,
-      created_at: new Date().toISOString()
+      active: true
     };
 
     try {
-      if (editingCouponId) {
-        await updateDoc(doc(db, 'coupons', editingCouponId), data);
-      } else {
-        await addDoc(collection(db, 'coupons'), data);
+      const res = await axios.post('/api/save-coupon', data);
+      if (!res.data.success) {
+        throw new Error(res.data.error || 'Server error saving coupon');
       }
 
       setCouponForm({ code: '', discount: '', college_id: 'all', once_per_user: true });
       setShowCouponForm(false);
       setEditingCouponId(null);
+      await loadCoupons();
     } catch (err) {
       alert('Error saving coupon: ' + err.message);
+    }
+  };
+
+  const deleteCoupon = async (id) => {
+    if (window.confirm('Delete this coupon?')) {
+      try {
+        const res = await axios.post('/api/delete-coupon', { id });
+        if (!res.data.success) {
+          throw new Error(res.data.error || 'Server error deleting coupon');
+        }
+        await loadCoupons();
+      } catch (err) {
+        alert('Error deleting coupon: ' + err.message);
+      }
     }
   };
 
@@ -398,7 +423,12 @@ const AdminDashboard = () => {
 
   const updateOrderStatus = async (orderId, status) => {
     try {
-      await updateDoc(doc(db, 'orders', orderId), { order_status: status });
+      // Try local update for optimistic UI, but ignore if Firestore rules block client writes
+      try {
+        await updateDoc(doc(db, 'orders', orderId), { order_status: status });
+      } catch (localErr) {
+        console.log('Local optimistic update blocked by Firestore rules, relying on backend:', localErr.message);
+      }
       // Call status notification endpoint
       await axios.post('/api/send-status-notification', { orderId, status });
     } catch (err) {
@@ -885,7 +915,7 @@ const AdminDashboard = () => {
         {/* ════ COUPONS ════ */}
         {activeTab === 'coupons' && (
           <>
-            <button onClick={() => { setEditingCouponId(null); setCouponForm({ code: '', discount: '', college_id: 'all' }); setShowCouponForm(true); }} style={{ width: '100%', padding: '13px', borderRadius: 12, border: '2px dashed #065F46', background: 'rgba(6,95,70,0.05)', color: '#065F46', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 14 }}>
+            <button onClick={() => { setEditingCouponId(null); setCouponForm({ code: '', discount: '', college_id: 'all', once_per_user: true }); setShowCouponForm(true); }} style={{ width: '100%', padding: '13px', borderRadius: 12, border: '2px dashed #065F46', background: 'rgba(6,95,70,0.05)', color: '#065F46', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 14 }}>
               <Plus size={18} /> Create New Coupon
             </button>
 
@@ -944,7 +974,7 @@ const AdminDashboard = () => {
                     <button onClick={() => { setEditingCouponId(c.id); setCouponForm({ code: c.code, discount: String(c.discount_percent), college_id: c.college_id, once_per_user: c.once_per_user !== false }); setShowCouponForm(true); }} style={{ background: '#EFF6FF', color: '#2563EB', border: 'none', borderRadius: 8, padding: '7px 10px', cursor: 'pointer' }}>
                       <Edit2 size={15} />
                     </button>
-                    <button onClick={() => deleteDoc(doc(db, 'coupons', c.id))} style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, padding: '7px 10px', cursor: 'pointer' }}>
+                    <button onClick={() => deleteCoupon(c.id)} style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 8, padding: '7px 10px', cursor: 'pointer' }}>
                       <Trash2 size={15} />
                     </button>
                   </div>

@@ -103,7 +103,12 @@ const DeliveryDashboard = () => {
 
   const updateOrderStatus = async (orderId, status) => {
     try {
-      await updateDoc(doc(db, 'orders', orderId), { order_status: status });
+      // Try local update for optimistic UI, but ignore if Firestore rules block client writes
+      try {
+        await updateDoc(doc(db, 'orders', orderId), { order_status: status });
+      } catch (localErr) {
+        console.log('Local optimistic update blocked by Firestore rules, relying on backend:', localErr.message);
+      }
       // Call status notification endpoint
       await axios.post('/api/send-status-notification', { orderId, status });
     } catch (err) {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, updateDoc, addDoc, query, deleteDoc } from 'firebase/firestore';
-import { Package, Clock, IndianRupee, ShoppingBag, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, Bell, Store } from 'lucide-react';
+import { Package, Clock, IndianRupee, ShoppingBag, Plus, Edit2, Trash2, Bell } from 'lucide-react';
 import axios from 'axios';
 
 const TAB_ORDERS = 'orders';
@@ -11,7 +11,7 @@ const TAB_ANALYTICS = 'analytics';
 const StoreDashboard = () => {
   const [isOpen, setIsOpen] = useState(true);
 
-  // ── AUTH-BASED STORE IDP ──
+  // ── AUTH-BASED STORE ID ──
   const storeId   = sessionStorage.getItem('staff_store_id');
   const storeName = sessionStorage.getItem('staff_store_name') || 'My Store';
   const isLoggedIn = sessionStorage.getItem('staff_role') === 'store_owner' && !!storeId;
@@ -39,7 +39,7 @@ const StoreDashboard = () => {
   const [activeTab, setActiveTab] = useState(TAB_ORDERS);
   const [orderSubTab, setOrderSubTab] = useState('new');
   const [notification, setNotification] = useState(null);
-  const [timeFilter, setTimeFilter] = useState('all'); // day, week, month, all
+  const [timeFilter, setTimeFilter] = useState('all');
   const prevOrderCount = useRef(0);
 
   // ── REAL-TIME ORDERS ──
@@ -48,15 +48,14 @@ const StoreDashboard = () => {
     const unsubscribe = onSnapshot(query(collection(db, 'orders')), (snapshot) => {
       const ordersData = snapshot.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(o => o.store_id === selectedStore.id);
-        
-      const newCount = ordersData.filter(o => o.order_status === 'pending' || o.order_status === 'confirmed').length;
-      
-      // Alert on new order
+        .filter(o => o.store_id === selectedStore.id && o.payment_status === 'completed');
+
+      // Only confirmed (paid) orders count as "new"
+      const newCount = ordersData.filter(o => o.order_status === 'confirmed').length;
+
       if (newCount > prevOrderCount.current && prevOrderCount.current >= 0) {
         setNotification('🔔 New Order Received!');
         setTimeout(() => setNotification(null), 4000);
-        // Play notification sound via Web Audio API
         try {
           const ctx = new (window.AudioContext || window.webkitAudioContext)();
           const osc = ctx.createOscillator();
@@ -106,8 +105,9 @@ const StoreDashboard = () => {
   };
 
   const filteredOrders = getFilteredOrders();
-  // Include all orders that are paid/active (exclude only cancelled and pending)
-  const totalRevenue = filteredOrders.filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending').reduce((s, o) => s + (o.total_amount || 0), 0);
+  const totalRevenue = filteredOrders
+    .filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending')
+    .reduce((s, o) => s + (o.total_amount || 0), 0);
 
   const getItems = (items) => {
     if (!items) return [];
@@ -115,11 +115,8 @@ const StoreDashboard = () => {
     return Object.entries(items).map(([id, qty]) => ({ id, name: id, qty, price: 0 }));
   };
 
-  
   const dishStats = filteredOrders.reduce((acc, o) => {
-    // Only count dishes from non-cancelled orders
     if (o.order_status === 'cancelled') return acc;
-    
     const itemsList = getItems(o.items);
     itemsList.forEach(item => {
       if (item && item.name) {
@@ -134,45 +131,48 @@ const StoreDashboard = () => {
   }, {});
 
   const topDishes = Object.entries(dishStats).sort((a, b) => b[1].count - a[1].count);
-  
-  // Status Counters
-  const newOrders       = orders.filter(o => o.order_status === 'pending' || o.order_status === 'confirmed');
+
+  // ── STATUS BUCKETS ──
+  // "New" = confirmed (paid) orders waiting for store to start preparing
+  const newOrders       = orders.filter(o => o.order_status === 'confirmed');
   const preparingOrders = orders.filter(o => o.order_status === 'preparing');
   const readyOrders     = orders.filter(o => o.order_status === 'ready' || o.order_status === 'out_for_delivery');
   const completedOrders = orders.filter(o => o.order_status === 'delivered' || o.order_status === 'completed');
-  const cancelledOrders = orders.filter(o => o.order_status === 'cancelled');
-  
-  // Today's revenue should include any active/completed order, not just 'delivered' ones
+
   const activeAndCompletedOrders = orders.filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending');
-  const todayRevenue = activeAndCompletedOrders.filter(o => getDateObj(o.created_at).toDateString() === new Date().toDateString()).reduce((s, o) => s + (o.total_amount || 0), 0);
+  const todayRevenue = activeAndCompletedOrders
+    .filter(o => getDateObj(o.created_at).toDateString() === new Date().toDateString())
+    .reduce((s, o) => s + (o.total_amount || 0), 0);
 
   const updateOrderStatus = async (orderId, status) => {
     try {
-      await updateDoc(doc(db, 'orders', orderId), { order_status: status });
-      // Call status notification endpoint
+      // Try local update for optimistic UI, but ignore if Firestore rules block client writes
+      try {
+        await updateDoc(doc(db, 'orders', orderId), { order_status: status });
+      } catch (localErr) {
+        console.log('Local optimistic update blocked by Firestore rules, relying on backend:', localErr.message);
+      }
       await axios.post('/api/send-status-notification', { orderId, status });
     } catch (err) {
       console.error('Failed to update order status or send push notification:', err);
     }
   };
 
-
-
   const statusColors = {
-    pending:          { bg: '#FEF3C7', text: '#92400E', label: 'Pending' },
-    confirmed:        { bg: '#DBEAFE', text: '#1E40AF', label: 'Confirmed' },
-    preparing:        { bg: '#FEF9C3', text: '#854D0E', label: 'Preparing' },
-    ready:            { bg: '#E0F2FE', text: '#075985', label: 'Ready' },
-    out_for_delivery: { bg: '#D1FAE5', text: '#065F46', label: 'Out for Delivery' },
-    delivered:        { bg: '#D1FAE5', text: '#065F46', label: 'Delivered' },
+    pending:          { bg: '#FEF3C7', text: '#92400E', label: 'Pending Payment' },
+    confirmed:        { bg: '#FFF7ED', text: '#C2410C', label: '🆕 New Order' },
+    preparing:        { bg: '#FEF9C3', text: '#854D0E', label: '👨‍🍳 Preparing' },
+    ready:            { bg: '#E0F2FE', text: '#075985', label: '✅ Ready' },
+    out_for_delivery: { bg: '#D1FAE5', text: '#065F46', label: '🛵 With Delivery Boy' },
+    delivered:        { bg: '#DCFCE7', text: '#14532D', label: '✅ Delivered' },
     cancelled:        { bg: '#FEE2E2', text: '#991B1B', label: 'Cancelled' },
   };
 
   const orderTabs = [
-    { key: 'new',       label: 'New',       count: newOrders.length },
-    { key: 'preparing', label: 'Preparing', count: preparingOrders.length },
-    { key: 'ready',     label: 'Ready',     count: readyOrders.length },
-    { key: 'completed', label: 'Done',      count: completedOrders.length },
+    { key: 'new',       label: '🆕 New',       count: newOrders.length },
+    { key: 'preparing', label: '👨‍🍳 Preparing', count: preparingOrders.length },
+    { key: 'ready',     label: '🛵 Delivery',   count: readyOrders.length },
+    { key: 'completed', label: '✅ Done',        count: completedOrders.length },
   ];
 
   const tabOrders = orderSubTab === 'new' ? newOrders
@@ -256,10 +256,10 @@ const StoreDashboard = () => {
         {/* Stats Summary */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8, marginTop: 20 }}>
           {[
-            { label: 'Orders',   value: activeTab === TAB_ANALYTICS ? filteredOrders.length : orders.length, icon: <ShoppingBag size={14} /> },
-            { label: 'Revenue',  value: `₹${activeTab === TAB_ANALYTICS ? totalRevenue : todayRevenue}`, icon: <IndianRupee size={14} /> },
-            { label: 'Active',   value: newOrders.length, icon: <Clock size={14} /> },
-            { label: 'Menu',     value: menuItems.length, icon: <Package size={14} /> },
+            { label: 'Orders',  value: activeTab === TAB_ANALYTICS ? filteredOrders.length : orders.length, icon: <ShoppingBag size={14} /> },
+            { label: 'Revenue', value: `₹${activeTab === TAB_ANALYTICS ? totalRevenue : todayRevenue}`, icon: <IndianRupee size={14} /> },
+            { label: 'New',     value: newOrders.length, icon: <Clock size={14} /> },
+            { label: 'Menu',    value: menuItems.length, icon: <Package size={14} /> },
           ].map(s => (
             <div key={s.label} style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: '10px 6px', textAlign: 'center' }}>
               <div style={{ opacity: 0.85, marginBottom: 2 }}>{s.icon}</div>
@@ -273,7 +273,7 @@ const StoreDashboard = () => {
       {/* ── MAIN TABS ── */}
       <div style={{ display: 'flex', gap: 0, background: 'white', borderBottom: '2px solid var(--border-color)' }}>
         {[
-          { key: TAB_ORDERS, label: '📦 Orders' }, 
+          { key: TAB_ORDERS, label: '📦 Orders' },
           { key: TAB_ANALYTICS, label: '📈 Stats' },
           { key: TAB_MENU, label: '🍽️ Menu' }
         ].map(t => (
@@ -290,7 +290,7 @@ const StoreDashboard = () => {
             {/* Sub-tabs */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 16, background: 'white', padding: 6, borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
               {orderTabs.map(tab => (
-                <button key={tab.key} onClick={() => setOrderSubTab(tab.key)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: orderSubTab === tab.key ? 'var(--primary-gradient)' : 'transparent', color: orderSubTab === tab.key ? 'white' : 'var(--text-muted)', fontWeight: 600, cursor: 'pointer', fontSize: '0.78rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, transition: 'all 0.2s ease' }}>
+                <button key={tab.key} onClick={() => setOrderSubTab(tab.key)} style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: 'none', background: orderSubTab === tab.key ? 'var(--primary-gradient)' : 'transparent', color: orderSubTab === tab.key ? 'white' : 'var(--text-muted)', fontWeight: 600, cursor: 'pointer', fontSize: '0.72rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, transition: 'all 0.2s ease' }}>
                   {tab.label}
                   {tab.count > 0 && <span style={{ background: orderSubTab === tab.key ? 'rgba(255,255,255,0.3)' : 'var(--primary)', color: 'white', borderRadius: 10, padding: '1px 6px', fontSize: '0.7rem', fontWeight: 700 }}>{tab.count}</span>}
                 </button>
@@ -308,7 +308,9 @@ const StoreDashboard = () => {
                 const items = getItems(order.items);
                 const sc = statusColors[order.order_status] || { bg: '#F3F4F6', text: '#374151', label: order.order_status };
                 return (
-                  <div key={order.id} className="card" style={{ padding: 16 }}>
+                  <div key={order.id} className="card" style={{ padding: 16, border: order.order_status === 'confirmed' ? '2px solid #FB923C' : '1px solid var(--border-color)' }}>
+
+                    {/* ── ORDER HEADER ── */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
                       <div>
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>ORDER</div>
@@ -321,6 +323,7 @@ const StoreDashboard = () => {
                       <span style={{ background: sc.bg, color: sc.text, padding: '4px 10px', borderRadius: 20, fontSize: '0.72rem', fontWeight: 700 }}>{sc.label}</span>
                     </div>
 
+                    {/* ── ITEMS ── */}
                     <div style={{ marginBottom: 10, paddingBottom: 10, borderBottom: '1px dashed var(--border-color)' }}>
                       {items.length > 0 ? items.map((item, i) => (
                         <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', marginBottom: 3 }}>
@@ -330,43 +333,63 @@ const StoreDashboard = () => {
                       )) : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>—</span>}
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    {/* ── ADDRESS + TOTAL ── */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>📍 {order.address || 'N/A'}</span>
                       <span style={{ fontWeight: 800, color: 'var(--primary)' }}>₹{order.total_amount}</span>
                     </div>
 
-                    {/* Action Buttons */}
+                    {/* ── ACTION BUTTONS (no accept/reject — auto-flow) ── */}
                     <div style={{ display: 'flex', gap: 8 }}>
-                      {(order.order_status === 'pending' || order.order_status === 'confirmed') && (
-                        <>
-                          <button onClick={() => updateOrderStatus(order.id, 'preparing')} style={{ flex: 2, padding: '10px', borderRadius: 10, border: 'none', background: '#DBEAFE', color: '#1E40AF', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
-                            ✅ Accept
-                          </button>
-                          <button onClick={() => updateOrderStatus(order.id, 'cancelled')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#FEE2E2', color: '#991B1B', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
-                            ✕ Reject
-                          </button>
-                        </>
-                      )}
-                      {order.order_status === 'preparing' && (
-                        <button onClick={() => updateOrderStatus(order.id, 'ready')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#D1FAE5', color: '#065F46', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
-                          🍱 Mark Ready
+
+                      {/* NEW ORDER → Start Preparing */}
+                      {order.order_status === 'confirmed' && (
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'preparing')}
+                          style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #FB923C, #F97316)', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: '0.9rem', letterSpacing: '0.02em' }}
+                        >
+                          👨‍🍳 Start Preparing
                         </button>
                       )}
+
+                      {/* PREPARING → Ready for Pickup */}
+                      {order.order_status === 'preparing' && (
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'ready')}
+                          style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #34D399, #10B981)', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: '0.9rem' }}
+                        >
+                          ✅ Order Ready
+                        </button>
+                      )}
+
+                      {/* READY → Hand to Delivery Boy */}
                       {order.order_status === 'ready' && (
                         <div style={{ display: 'flex', gap: 8, width: '100%' }}>
-                          <button onClick={() => updateOrderStatus(order.id, 'out_for_delivery')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#EDE9FE', color: '#5B21B6', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
-                            🛵 Handed to Delivery
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'out_for_delivery')}
+                            style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #818CF8, #6366F1)', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: '0.88rem' }}
+                          >
+                            🛵 Hand to Delivery Boy
                           </button>
-                          <button onClick={() => updateOrderStatus(order.id, 'delivered')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#D1FAE5', color: '#065F46', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
-                            ✅ Picked by Customer
+                          <button
+                            onClick={() => updateOrderStatus(order.id, 'delivered')}
+                            style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #34D399, #10B981)', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: '0.88rem' }}
+                          >
+                            🚶 Self Pickup
                           </button>
                         </div>
                       )}
+
+                      {/* OUT FOR DELIVERY → Delivered */}
                       {order.order_status === 'out_for_delivery' && (
-                        <button onClick={() => updateOrderStatus(order.id, 'delivered')} style={{ flex: 1, padding: '10px', borderRadius: 10, border: 'none', background: '#D1FAE5', color: '#065F46', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>
-                          ✅ Mark Delivered (Manual)
+                        <button
+                          onClick={() => updateOrderStatus(order.id, 'delivered')}
+                          style={{ flex: 1, padding: '12px', borderRadius: 10, border: 'none', background: 'linear-gradient(135deg, #34D399, #10B981)', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: '0.9rem' }}
+                        >
+                          ✅ Mark as Delivered
                         </button>
                       )}
+
                     </div>
                   </div>
                 );
@@ -378,30 +401,29 @@ const StoreDashboard = () => {
         {/* ════ ANALYTICS TAB ════ */}
         {activeTab === TAB_ANALYTICS && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-             <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 800 }}>Best Selling Dishes</h3>
-             <p style={{ margin: '0 0 12px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Top dishes by quantity sold in the selected period.</p>
-
-             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-               {topDishes.length === 0 ? (
-                 <div className="card" style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>No sales data for this period</div>
-               ) : topDishes.map(([name, stats], i) => (
-                 <div key={name} className="card" style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: i === 0 ? '#FEF3C7' : '#F1F5F9', color: i === 0 ? '#92400E' : '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.8rem' }}>
-                        {i + 1}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 700 }}>{name}</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{stats.count} sold</div>
-                      </div>
+            <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 800 }}>Best Selling Dishes</h3>
+            <p style={{ margin: '0 0 12px', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Top dishes by quantity sold in the selected period.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {topDishes.length === 0 ? (
+                <div className="card" style={{ padding: 24, textAlign: 'center', color: 'var(--text-muted)' }}>No sales data for this period</div>
+              ) : topDishes.map(([name, stats], i) => (
+                <div key={name} className="card" style={{ padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: i === 0 ? '#FEF3C7' : '#F1F5F9', color: i === 0 ? '#92400E' : '#64748B', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '0.8rem' }}>
+                      {i + 1}
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontWeight: 800, color: 'var(--primary)' }}>₹{stats.revenue}</div>
-                      <div style={{ fontSize: '0.65rem', color: '#10B981', fontWeight: 700 }}>Earned</div>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{name}</div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{stats.count} sold</div>
                     </div>
-                 </div>
-               ))}
-             </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 800, color: 'var(--primary)' }}>₹{stats.revenue}</div>
+                    <div style={{ fontSize: '0.65rem', color: '#10B981', fontWeight: 700 }}>Earned</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
@@ -412,7 +434,6 @@ const StoreDashboard = () => {
               <Plus size={18} /> Add New Menu Item
             </button>
 
-            {/* Menu Form */}
             {showMenuForm && (
               <div className="card" style={{ padding: 16, marginBottom: 16, border: '2px solid var(--primary)' }}>
                 <h4 style={{ margin: '0 0 12px', color: 'var(--primary)' }}>{editingMenuId ? 'Edit' : 'New'} Menu Item</h4>
@@ -437,7 +458,6 @@ const StoreDashboard = () => {
               </div>
             )}
 
-            {/* Menu List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {menuItems.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>No menu items yet</div>

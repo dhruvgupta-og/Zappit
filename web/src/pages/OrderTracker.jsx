@@ -8,8 +8,7 @@ const ORDER_STEPS = [
   { key: 'confirmed',        label: 'Order Confirmed',       icon: CheckCircle,  color: '#10B981', desc: 'Your payment was received. Store has been notified.' },
   { key: 'preparing',        label: 'Preparing Your Food',   icon: ChefHat,      color: '#F59E0B', desc: 'The store is cooking your order right now.' },
   { key: 'ready',            label: 'Ready for Pickup',      icon: Package,      color: '#3B82F6', desc: 'Your order is ready. Waiting for delivery partner.' },
-  { key: 'out_for_delivery', label: 'Handed to Delivery',    icon: Clock,        color: '#8B5CF6', desc: 'A delivery partner has picked up your order.' },
-  { key: 'picked_up',        label: 'On the Way',            icon: Truck,        color: '#EC4899', desc: 'Your delivery partner is heading to you!' },
+  { key: 'out_for_delivery', label: 'On the Way to You',     icon: Truck,        color: '#8B5CF6', desc: 'Delivery partner is heading to you! Keep your OTP ready.' },
   { key: 'delivered',        label: 'Delivered!',            icon: Home,         color: '#10B981', desc: 'Enjoy your meal 🎉' },
 ];
 
@@ -127,6 +126,14 @@ const OrderTracker = () => {
           )}
           {currentStepData.label}
         </div>
+
+        {/* OTP pill — always visible so user can check anytime */}
+        {order.delivery_otp && (
+          <div style={{ marginTop: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(0,0,0,0.25)', borderRadius: '12px', padding: '8px 14px' }}>
+            <span style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', opacity: 0.85 }}>🔐 Your OTP</span>
+            <span style={{ fontSize: '1.2rem', fontWeight: 900, letterSpacing: '0.2em' }}>{order.delivery_otp}</span>
+          </div>
+        )}
       </div>
 
       <div style={{ padding: '0 20px', marginTop: '-20px' }}>
@@ -187,12 +194,12 @@ const OrderTracker = () => {
           </div>
         </div>
 
-        {/* OTP Display for Delivery */}
-        {order.order_status === 'picked_up' && order.delivery_otp && (
+        {/* OTP big card — prominent when delivery is on the way */}
+        {(order.order_status === 'out_for_delivery' || order.order_status === 'delivered') && order.delivery_otp && (
           <div className="card animate-fade-in" style={{ padding: '20px', marginBottom: '16px', background: 'var(--primary-gradient)', color: 'white', border: 'none', textAlign: 'center' }}>
-            <div style={{ fontSize: '0.875rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px', opacity: 0.9 }}>Delivery OTP</div>
-            <div style={{ fontSize: '2.5rem', fontWeight: 800, letterSpacing: '0.2em' }}>{order.delivery_otp}</div>
-            <div style={{ fontSize: '0.875rem', opacity: 0.9, marginTop: '8px' }}>Share this code with your delivery partner to receive your order.</div>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: '8px', opacity: 0.85 }}>🔐 Delivery OTP — Share with Delivery Partner</div>
+            <div style={{ fontSize: '3.5rem', fontWeight: 900, letterSpacing: '0.3em', lineHeight: 1 }}>{order.delivery_otp}</div>
+            <div style={{ fontSize: '0.8rem', opacity: 0.9, marginTop: '10px' }}>Show this code to your delivery partner to receive your order.</div>
           </div>
         )}
 

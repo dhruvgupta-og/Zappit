@@ -107,8 +107,9 @@ module.exports = async function handler(req, res) {
                 <div style="font-size: 14px; color: #374151; line-height: 1.5; font-weight: 500;">${address}</div>
               </td>
               <td style="width: 50%; vertical-align: top;">
-                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; margin-bottom: 4px;">Order ID(s)</div>
-                <div style="font-size: 13px; color: #6b7280; font-family: monospace; line-height: 1.4; word-break: break-all;">${orderIds.join(', ')}</div>
+                <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; margin-bottom: 4px;">Order ID</div>
+                <div style="font-size: 20px; color: #111827; font-family: monospace; font-weight: 900; letter-spacing: 2px;">${orderIds.map(id => '#' + id.slice(-6).toUpperCase()).join(', ')}</div>
+                <div style="font-size: 11px; color: #9ca3af; margin-top: 4px; word-break: break-all;">${orderIds.join(', ')}</div>
               </td>
             </tr>
           </table>
