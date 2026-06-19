@@ -1,6 +1,11 @@
 import axios from 'axios';
 import { auth } from './firebase';
 
+// Set the base URL for the live backend in production, or use local proxy in development
+axios.defaults.baseURL = import.meta.env.MODE === 'production' 
+  ? 'https://zappit-backend.onrender.com' 
+  : '';
+
 // Automatically attach Firebase ID token to every axios request
 axios.interceptors.request.use(async (config) => {
   try {
