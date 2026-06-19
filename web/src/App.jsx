@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { Home, ShoppingCart, ShoppingBag, User } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from './firebase';
+import { auth } from './firebase';
+import axios from 'axios';
 import { CartProvider, useCart } from './CartContext';
 import { initFcm } from './utils/fcm';
 
@@ -85,57 +85,38 @@ function App() {
   const [checkingAuth, setCheckingAuth] = useState(true);
 
   useEffect(() => {
-    let profileUnsub = null;
-    let failsafeTimer = null;
-
-    const authUnsub = onAuthStateChanged(auth, (firebaseUser) => {
+    const authUnsub = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
-      
-      // Clear old profile listener if user changes
-      if (profileUnsub) profileUnsub();
-      if (failsafeTimer) clearTimeout(failsafeTimer);
 
-      // ── FAILSAFE TIMEOUT ──
-      // If Firestore takes too long to respond (slow network), force the app to load
-      failsafeTimer = setTimeout(() => {
-        setCheckingAuth(false);
-      }, 1500);
-
-      if (firebaseUser) {
-        profileUnsub = onSnapshot(doc(db, 'users', firebaseUser.uid), (snap) => {
-          if (failsafeTimer) clearTimeout(failsafeTimer);
-          
-          const data = snap.data();
-          console.log("DEBUG: Auth User:", firebaseUser.uid);
-          console.log("DEBUG: User Profile Exists:", snap.exists());
-          console.log("DEBUG: User Profile Data:", data);
-          
-          const isComplete = snap.exists() && data?.profile_complete === true;
-          console.log("DEBUG: profileComplete calculated:", isComplete);
-          
-          if (isComplete) {
-            initFcm(firebaseUser.uid);
-          }
-          
-          setProfileComplete(isComplete);
-          setCheckingAuth(false);
-        }, (err) => {
-          if (failsafeTimer) clearTimeout(failsafeTimer);
-          console.error("Profile fetch error:", err);
-          setProfileComplete(false);
-          setCheckingAuth(false);
-        });
-      } else {
+      if (!firebaseUser) {
         setProfileComplete(false);
+        setCheckingAuth(false);
+        return;
+      }
+
+      // Check profile completion from MongoDB
+      try {
+        const res = await axios.get(`/api/users/${firebaseUser.uid}`);
+        console.log('DEBUG: Auth User:', firebaseUser.uid);
+        console.log('DEBUG: User Profile Exists:', res.data.exists);
+        console.log('DEBUG: User Profile Data:', res.data.user);
+
+        const isComplete = res.data.exists && res.data.user?.profile_complete === true;
+        console.log('DEBUG: profileComplete calculated:', isComplete);
+
+        if (isComplete) {
+          initFcm(firebaseUser.uid);
+        }
+        setProfileComplete(isComplete);
+      } catch (err) {
+        console.error('Profile fetch error:', err);
+        setProfileComplete(false);
+      } finally {
         setCheckingAuth(false);
       }
     });
 
-    return () => {
-      authUnsub();
-      if (profileUnsub) profileUnsub();
-      if (failsafeTimer) clearTimeout(failsafeTimer);
-    };
+    return () => authUnsub();
   }, []);
 
   return (
