@@ -28,6 +28,13 @@ router.post('/:uid', async (req, res) => {
     );
     res.json({ success: true, user: { id: user._id, ...user.toObject() } });
   } catch (err) {
+    // Handle MongoDB duplicate key error (e.g. phone number already registered)
+    if (err.code === 11000 && err.keyPattern && err.keyPattern.phone) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'This phone number is already registered to another account. Please use a different phone number or log in using OTP.' 
+      });
+    }
     res.status(500).json({ success: false, error: err.message });
   }
 });

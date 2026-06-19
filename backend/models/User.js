@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const UserSchema = new mongoose.Schema({
   _id: { type: String, required: true }, // Auth UID
   name: { type: String },
-  phone: { type: String, unique: true },
+  phone: { type: String }, // Removed unique: true to allow testing with same phone
   college: { type: String },
   college_name: { type: String },
   college_id: { type: String },
