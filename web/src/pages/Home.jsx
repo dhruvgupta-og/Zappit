@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { MapPin, Clock, Star, Zap, ChevronLeft, ChevronRight } from 'lucide-react';
-import { collection, getDocs, collectionGroup, onSnapshot, doc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { MapPin, Clock, Star, Zap } from 'lucide-react';
+import axios from 'axios';
+import { auth } from '../firebase';
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -32,77 +32,43 @@ const HomePage = () => {
   };
 
   useEffect(() => {
-    const unsubStores = onSnapshot(collection(db, 'stores'), async (snapshot) => {
-      const storesData = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      // Fetch menus for dish search — wrapped separately so stores always load
-      // even if collectionGroup query fails due to Firestore rules
-      let menuDataByStore = {};
+    // Fetch stores and banners from MongoDB via API
+    const fetchData = async () => {
       try {
-        const menuSnapshot = await getDocs(collectionGroup(db, 'menu'));
-        menuSnapshot.docs.forEach(doc => {
-          const storeId = doc.ref.parent.parent?.id;
-          if (storeId) {
-            if (!menuDataByStore[storeId]) menuDataByStore[storeId] = [];
-            if (doc.data().name) menuDataByStore[storeId].push(doc.data().name.toLowerCase());
-          }
-        });
-      } catch (menuErr) {
-        // Menu search unavailable — stores will still load fine
-        console.warn('Menu search unavailable:', menuErr.message);
+        const [storesRes, bannersRes] = await Promise.all([
+          axios.get('/api/stores'),
+          axios.get('/api/stores/banners/active')
+        ]);
+
+        if (storesRes.data.success) {
+          setAllStores(storesRes.data.stores);
+        }
+        if (bannersRes.data.success) {
+          setBanners(bannersRes.data.banners.filter(b => b.active !== false));
+        }
+      } catch (err) {
+        console.error('Failed to fetch home data:', err.message);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      const storesWithMenu = storesData.map(store => ({
-        ...store,
-        menuItemsForSearch: menuDataByStore[store.id] || []
-      }));
+    fetchData();
 
-      setAllStores(storesWithMenu);
-      setLoading(false);
-    }, (err) => {
-      console.error('Stores listener error:', err.message);
-      setLoading(false);
-    });
-
-    const unsubBanners = onSnapshot(collection(db, 'banners'), (snapshot) => {
-      setBanners(snapshot.docs.map(d => ({ id: d.id, ...d.data() })).filter(b => b.active !== false));
-    });
-
-    // ── SYNC USER PROFILE & COLLEGE ──
-    let unsubUser = () => {};
-    const setupUserListener = () => {
-      const user = auth.currentUser;
+    // ── SYNC USER COLLEGE FROM LOCALSTORAGE / FIREBASE AUTH ──
+    const unsubAuth = auth.onAuthStateChanged((user) => {
       if (user) {
-        unsubUser = onSnapshot(doc(db, 'users', user.uid), (snap) => {
-          if (snap.exists()) {
-            const data = snap.data();
-            const collegeId = data.college_id || null;
-            const collegeName = data.college_name || data.college || null;
-            
-            setUserCollege({ id: collegeId, name: collegeName });
-            // Persist both so page works on next load without waiting for Firestore
-            if (collegeId) localStorage.setItem('userCollegeId', collegeId);
-            if (collegeName) {
-              localStorage.setItem('userCollegeName', collegeName);
-              localStorage.setItem('userCollege', collegeName);
-            }
-            if (data.name) localStorage.setItem('userName', data.name);
-          }
-        });
+        // Try to get college from localStorage (set during onboarding/profile save)
+        const collegeId = localStorage.getItem('userCollegeId');
+        const collegeName = localStorage.getItem('userCollegeName') || localStorage.getItem('userCollege');
+        if (collegeId || collegeName) {
+          setUserCollege({ id: collegeId, name: collegeName });
+        }
+        if (user.displayName) localStorage.setItem('userName', user.displayName);
       }
-    };
-    setupUserListener();
-    const unsubAuth = auth.onAuthStateChanged(() => setupUserListener());
+    });
 
-    return () => {
-      unsubStores();
-      unsubBanners();
-      unsubUser();
-      unsubAuth();
-    };
+    return () => unsubAuth();
   }, []);
 
   // ── FILTER STORES ──

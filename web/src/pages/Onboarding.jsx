@@ -1,10 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { auth, db } from '../firebase';
-import {
-  doc, setDoc, getDoc, collection, getDocs, serverTimestamp
-} from 'firebase/firestore';
+import { auth } from '../firebase';
 import {
   EmailAuthProvider,
   linkWithCredential,
@@ -83,25 +80,28 @@ const OnboardingPage = () => {
   const inputStyle = mkInputStyle();
 
   useEffect(() => {
-    // Fetch colleges
-    getDocs(collection(db, 'colleges')).then(snap => {
-      setColleges(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    // Fetch colleges from public MongoDB API
+    axios.get('/api/stores/colleges/all').then(res => {
+      if (res.data.success) setColleges(res.data.colleges);
+    }).catch(() => {});
 
     // Check if profile complete → redirect home
     const checkStatus = async () => {
       const user = auth.currentUser;
       if (!user) return;
 
-      const snap = await getDoc(doc(db, 'users', user.uid));
-      if (snap.exists() && snap.data().profile_complete === true) {
-        navigate('/', { replace: true });
-        return;
+      try {
+        const res = await axios.get(`/api/users/${user.uid}`);
+        if (res.data.success && res.data.exists && res.data.user?.profile_complete === true) {
+          navigate('/', { replace: true });
+          return;
+        }
+      } catch (e) {
+        // If can't check, allow onboarding to proceed
       }
 
       // Determine sign-in method
       const providerIds = user.providerData.map(p => p.providerId);
-      // Google user = has google.com provider but NOT password provider (yet)
       setIsGoogleUser(
         providerIds.includes('google.com') && !providerIds.includes('password')
       );
@@ -166,7 +166,7 @@ const OnboardingPage = () => {
     }
   };
 
-  // ── Shared: save profile to Firestore + localStorage ──
+  // ── Shared: save profile to MongoDB + localStorage ──
   const saveProfileToFirestore = async () => {
     setLoading(true);
     setError('');
@@ -175,7 +175,7 @@ const OnboardingPage = () => {
       const selectedCollege = colleges.find(c => c.id === college);
       const collegeName = selectedCollege ? selectedCollege.name : college;
 
-      await setDoc(doc(db, 'users', user.uid), {
+      await axios.post(`/api/users/${user.uid}`, {
         uid: user.uid,
         email: user.email || '',
         name: name.trim(),
@@ -187,7 +187,7 @@ const OnboardingPage = () => {
         profile_complete: true,
         auth_method: isGoogleUser ? 'google' : 'email',
         updated_at: new Date().toISOString(),
-      }, { merge: true });
+      });
 
       localStorage.setItem('userName', name.trim());
       localStorage.setItem('userCollegeId', college);
@@ -208,7 +208,7 @@ const OnboardingPage = () => {
 
       navigate('/');
     } catch (err) {
-      setError(err.message || 'Failed to save profile.');
+      setError(err.response?.data?.error || err.message || 'Failed to save profile.');
     } finally {
       setLoading(false);
     }

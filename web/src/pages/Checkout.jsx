@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import { ArrowLeft, MapPin, CreditCard, CheckCircle, Trash2, Plus, Minus, ShoppingBag, Tag } from 'lucide-react';
-import { auth, db } from '../firebase';
-import { collection, addDoc, serverTimestamp, doc, getDoc, query, where, getDocs, updateDoc, arrayUnion, onSnapshot } from 'firebase/firestore';
+import { auth } from '../firebase';
 import { useCart } from '../CartContext';
 
 const CheckoutPage = () => {
@@ -28,55 +27,35 @@ const CheckoutPage = () => {
     try {
       const codeToQuery = couponCode.toUpperCase().trim();
 
-      let coupon = null;
-      try {
-        const res = await axios.post('/api/verify-coupon', { code: codeToQuery });
-        if (res.data.success) {
-          coupon = res.data.coupon;
-        }
-      } catch (apiErr) {
-        console.warn('[Zappit] Backend verify-coupon failed, falling back to direct Firestore query:', apiErr.message);
-        // Query coupons by code directly from Firestore
-        const q = query(collection(db, 'coupons'), where('code', '==', codeToQuery));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          coupon = { id: snap.docs[0].id, ...snap.docs[0].data() };
-        }
-      }
+      // Use backend API only (MongoDB)
+      const res = await axios.post('/api/verify-coupon', { code: codeToQuery });
+      const coupon = res.data.success ? res.data.coupon : null;
 
       if (!coupon) {
         setCouponError('Invalid or expired coupon code');
         setAppliedCoupon(null);
       } else {
-
         if (coupon.active === false) {
           setCouponError('This coupon is inactive or expired');
           setAppliedCoupon(null);
           return;
         }
 
-        // Resolve user college_id — try localStorage first, fallback to Firestore
-        let userCollegeId = localStorage.getItem('userCollegeId') || '';
-        if (!userCollegeId && auth.currentUser?.uid) {
-          const userSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
-          if (userSnap.exists()) {
-            userCollegeId = userSnap.data().college_id || '';
-            if (userCollegeId) localStorage.setItem('userCollegeId', userCollegeId);
-          }
-        }
+        // Resolve user college_id from localStorage
+        const userCollegeId = localStorage.getItem('userCollegeId') || '';
 
-        // College check — skip if coupon is 'all' or if we couldn't determine user college
+        // College check
         if (coupon.college_id && coupon.college_id !== 'all' && userCollegeId && coupon.college_id !== userCollegeId) {
           setCouponError('This coupon is not valid for your college campus');
           setAppliedCoupon(null);
           return;
         }
 
-        // Single-use check
+        // Single-use check via MongoDB user data
         if (coupon.once_per_user !== false && auth.currentUser) {
-          const userSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
-          if (userSnap.exists()) {
-            const usedCoupons = userSnap.data().used_coupons || [];
+          const userRes = await axios.get(`/api/users/${auth.currentUser.uid}`);
+          if (userRes.data.success && userRes.data.exists) {
+            const usedCoupons = userRes.data.user.used_coupons || [];
             if (usedCoupons.includes(coupon.code)) {
               setCouponError('You have already used this coupon');
               setAppliedCoupon(null);
@@ -107,22 +86,11 @@ const CheckoutPage = () => {
     localStorage.setItem('userAddress', e.target.value);
   };
 
-  // ── DYNAMIC FEES FROM FIRESTORE ──
-  const [fees, setFees] = useState([]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'config', 'fees'), (docSnap) => {
-      if (docSnap.exists() && Array.isArray(docSnap.data().list)) {
-        setFees(docSnap.data().list);
-      } else {
-        setFees([
-          { name: 'Delivery Fee', value: 20 },
-          { name: 'Platform Fee', value: 5 }
-        ]);
-      }
-    });
-    return () => unsub();
-  }, []);
+  // ── FEES (static defaults - no Firestore) ──
+  const [fees, setFees] = useState([
+    { name: 'Delivery Fee', value: 20 },
+    { name: 'Platform Fee', value: 5 }
+  ]);
 
   const totalFees = fees.reduce((sum, f) => sum + Number(f.value || 0), 0);
 
@@ -245,69 +213,71 @@ const CheckoutPage = () => {
       // Generate a 6-digit delivery OTP
       const deliveryOtp = Math.floor(100000 + Math.random() * 900000).toString();
 
-      let userPhone = '';
-      let userCollegeId = localStorage.getItem('userCollegeId') || '';
-      if (auth.currentUser?.uid) {
-        const userSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
-        if (userSnap.exists()) {
-          userPhone = userSnap.data().phone || '';
-          userCollegeId = userSnap.data().college_id || userCollegeId;
+        // Get user phone from MongoDB
+        let userPhone = '';
+        let userCollegeId = localStorage.getItem('userCollegeId') || '';
+        if (auth.currentUser?.uid) {
+          try {
+            const userRes = await axios.get(`/api/users/${auth.currentUser.uid}`);
+            if (userRes.data.success && userRes.data.exists) {
+              userPhone = userRes.data.user.phone || '';
+              userCollegeId = userRes.data.user.college_id || userCollegeId;
+            }
+          } catch (e) { /* use localStorage fallback */ }
         }
-      }
-      
-      if (!userCollegeId) {
-        throw new Error("Campus identity missing. Please go to Profile and re-select your college.");
-      }
-
-      // Group items by store
-      const itemsByStore = {};
-      cartItems.forEach(item => {
-        if (!itemsByStore[item.storeId]) itemsByStore[item.storeId] = [];
-        itemsByStore[item.storeId].push(item);
-      });
-
-      const orderIds = [];
-      const storeNames = [];
-
-      for (const [storeId, items] of Object.entries(itemsByStore)) {
-        const storeName = items[0].storeName || 'Campus Store';
-        storeNames.push(storeName);
         
-        const storeSubtotal = items.reduce((sum, i) => sum + (i.price * i.qty), 0);
-        const isFirst = orderIds.length === 0;
-        const storeTotal = storeSubtotal + (isFirst ? totalFees : 0);
+        if (!userCollegeId) {
+          throw new Error('Campus identity missing. Please go to Profile and re-select your college.');
+        }
 
-        const discount = appliedCoupon ? Math.round((storeSubtotal * appliedCoupon.discount_percent) / 100) : 0;
-
-        const docRef = await addDoc(collection(db, 'orders'), {
-          user_id: auth.currentUser?.uid || 'guest_user',
-          user_name: auth.currentUser?.displayName || 'Campus User',
-          user_phone: userPhone,
-          college_id: userCollegeId,
-          store_id: storeId,
-          store_name: storeName,
-          items: items,
-          total_amount: Math.max(0, storeTotal - discount),
-          discount_amount: discount,
-          coupon_applied: appliedCoupon ? appliedCoupon.code : null,
-          address: address,
-          payment_status: 'completed',
-          payment_transaction_id: paymentTransactionId,
-          order_status: 'confirmed',
-          delivery_otp: deliveryOtp,
-          created_at: serverTimestamp()
+        // Group items by store
+        const itemsByStore = {};
+        cartItems.forEach(item => {
+          if (!itemsByStore[item.storeId]) itemsByStore[item.storeId] = [];
+          itemsByStore[item.storeId].push(item);
         });
-        orderIds.push(docRef.id);
-      }
 
-      // Track coupon usage if single-use
-      if (appliedCoupon && appliedCoupon.once_per_user !== false && auth.currentUser) {
-        await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-          used_coupons: arrayUnion(appliedCoupon.code)
-        });
-      }
+        const orderIds = [];
+        const storeNames = [];
 
-      // Send Order Confirmation Email via Resend
+        for (const [storeId, items] of Object.entries(itemsByStore)) {
+          const storeName = items[0].storeName || 'Campus Store';
+          storeNames.push(storeName);
+          
+          const storeSubtotal = items.reduce((sum, i) => sum + (i.price * i.qty), 0);
+          const isFirst = orderIds.length === 0;
+          const storeTotal = storeSubtotal + (isFirst ? totalFees : 0);
+
+          const discount = appliedCoupon ? Math.round((storeSubtotal * appliedCoupon.discount_percent) / 100) : 0;
+
+          // Save order to MongoDB via API
+          const orderResponse = await axios.post('/api/orders', {
+            user_id: auth.currentUser?.uid || 'guest_user',
+            user_name: auth.currentUser?.displayName || localStorage.getItem('userName') || 'Campus User',
+            user_phone: userPhone,
+            college_id: userCollegeId,
+            store_id: storeId,
+            store_name: storeName,
+            items: items,
+            total_amount: Math.max(0, storeTotal - discount),
+            discount_amount: discount,
+            coupon_applied: appliedCoupon ? appliedCoupon.code : null,
+            address: address,
+            payment_status: 'completed',
+            payment_transaction_id: paymentTransactionId,
+            order_status: 'confirmed',
+            delivery_otp: deliveryOtp,
+            created_at: new Date().toISOString()
+          });
+          orderIds.push(orderResponse.data.order?.id || orderResponse.data.order?._id);
+        }
+
+        // Track coupon usage in MongoDB
+        if (appliedCoupon && appliedCoupon.once_per_user !== false && auth.currentUser) {
+          await axios.post(`/api/users/${auth.currentUser.uid}/track-coupon`, { code: appliedCoupon.code });
+        }
+
+        // Send Order Confirmation Email via Resend
       try {
         const discountAmount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount_percent) / 100) : 0;
         const totalAmount = Math.max(1, Math.round(subtotal + totalFees - discountAmount));

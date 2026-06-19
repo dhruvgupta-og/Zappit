@@ -18,20 +18,28 @@ const StoreDashboard = () => {
   const selectedStore = isLoggedIn ? { id: storeId, name: storeName } : null;
 
   // ── REAL-TIME STORE STATUS ──
-  useEffect(() => {
+  const fetchStoreData = async () => {
     if (!selectedStore) return;
-    const unsubscribe = onSnapshot(doc(db, 'stores', selectedStore.id), (docSnap) => {
-      if (docSnap.exists()) {
-        setIsOpen(docSnap.data().is_open !== false);
+    try {
+      const res = await axios.get(`/api/stores/${selectedStore.id}`);
+      if (res.data.success) {
+        setIsOpen(res.data.store.is_open !== false);
+        setMenuItems(res.data.menu.map(m => ({ id: m._id, ...m })));
       }
-    });
-    return () => unsubscribe();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchStoreData();
   }, [selectedStore]);
 
   const toggleStoreStatus = async () => {
     if (!selectedStore) return;
     const newStatus = !isOpen;
-    await updateDoc(doc(db, 'stores', selectedStore.id), { is_open: newStatus });
+    await axios.post('/api/admin/stores', { id: selectedStore.id, is_open: newStatus });
+    fetchStoreData();
   };
 
   const [orders, setOrders] = useState([]);
@@ -44,44 +52,44 @@ const StoreDashboard = () => {
   const prevOrderCount = useRef(0);
 
   // ── REAL-TIME ORDERS ──
-  useEffect(() => {
+  const fetchOrders = async () => {
     if (!selectedStore) return;
-    const unsubscribe = onSnapshot(query(collection(db, 'orders')), (snapshot) => {
-      const ordersData = snapshot.docs
-        .map(d => ({ id: d.id, ...d.data() }))
-        .filter(o => o.store_id === selectedStore.id && o.payment_status === 'completed');
+    try {
+      // For Store Dashboard we fetch all orders, but our backend can take admin=true to get everything
+      // then we filter. A more optimal way would be to pass store_id in query, but admin=true works.
+      const res = await axios.get('/api/orders?admin=true');
+      if (res.data.success) {
+        const ordersData = res.data.orders
+          .filter(o => o.store_id === selectedStore.id && (o.payment_status === 'completed' || o.payment_status === 'paid' || o.payment_status === 'pending'));
 
-      // Only confirmed (paid) orders count as "new"
-      const newCount = ordersData.filter(o => o.order_status === 'confirmed').length;
-
-      if (newCount > prevOrderCount.current && prevOrderCount.current >= 0) {
-        setNotification('🔔 New Order Received!');
-        setTimeout(() => setNotification(null), 4000);
-        try {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.frequency.setValueAtTime(880, ctx.currentTime);
-          osc.frequency.setValueAtTime(660, ctx.currentTime + 0.15);
-          gain.gain.setValueAtTime(0.3, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
-          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5);
-        } catch (e) { /* audio blocked */ }
+        const newCount = ordersData.filter(o => o.order_status === 'confirmed').length;
+        if (newCount > prevOrderCount.current && prevOrderCount.current >= 0) {
+          setNotification('🔔 New Order Received!');
+          setTimeout(() => setNotification(null), 4000);
+          try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.setValueAtTime(660, ctx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+            osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5);
+          } catch (e) { /* audio blocked */ }
+        }
+        prevOrderCount.current = newCount;
+        setOrders(ordersData);
       }
-      prevOrderCount.current = newCount;
-      setOrders(ordersData);
-    });
-    return () => unsubscribe();
-  }, [selectedStore]);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-  // ── REAL-TIME MENU ──
   useEffect(() => {
-    if (!selectedStore) return;
-    const unsubscribe = onSnapshot(collection(db, 'stores', selectedStore.id, 'menu'), (snapshot) => {
-      setMenuItems(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
-    return () => unsubscribe();
+    fetchOrders();
+    const intervalId = setInterval(fetchOrders, 10000);
+    return () => clearInterval(intervalId);
   }, [selectedStore]);
 
   const getDateObj = (val) => {
@@ -163,8 +171,9 @@ const StoreDashboard = () => {
     // Optimistic local update: immediately move the order in the UI
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, order_status: status } : o));
     try {
-      // The API will persist the status to Firestore via Admin SDK (bypasses rules)
+      await axios.patch(`/api/orders/${orderId}/status`, { order_status: status });
       await axios.post('/api/send-status-notification', { orderId, status });
+      fetchOrders();
     } catch (err) {
       console.error('Failed to update order status:', err);
       // Revert optimistic update on failure
@@ -204,23 +213,26 @@ const StoreDashboard = () => {
 
   const saveMenuItem = async () => {
     if (!menuForm.name || !menuForm.price || !selectedStore) return;
-    const data = { ...menuForm, price: Number(menuForm.price), is_available: true };
-    if (editingMenuId) {
-      await updateDoc(doc(db, 'stores', selectedStore.id, 'menu', editingMenuId), data);
-    } else {
-      await addDoc(collection(db, 'stores', selectedStore.id, 'menu'), data);
-    }
+    const data = { ...menuForm, price: Number(menuForm.price), is_available: true, store_id: selectedStore.id };
+    if (editingMenuId) data.id = editingMenuId;
+
+    await axios.post('/api/admin/menu', data);
     setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
     setEditingMenuId(null);
     setShowMenuForm(false);
+    fetchStoreData();
   };
 
   const deleteMenuItem = async (id) => {
-    if (window.confirm('Delete this item?')) await deleteDoc(doc(db, 'stores', selectedStore.id, 'menu', id));
+    if (window.confirm('Delete this item?')) {
+      await axios.post('/api/admin/delete', { collection: 'menu', id });
+      fetchStoreData();
+    }
   };
 
   const toggleAvailability = async (item) => {
-    await updateDoc(doc(db, 'stores', selectedStore.id, 'menu', item.id), { is_available: !item.is_available });
+    await axios.post('/api/admin/menu', { id: item.id, is_available: !item.is_available });
+    fetchStoreData();
   };
 
   if (!selectedStore) {

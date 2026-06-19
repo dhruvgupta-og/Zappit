@@ -41,27 +41,26 @@ const DeliveryDashboard = () => {
 
 
 
-  useEffect(() => {
+  const fetchDeliveryData = async () => {
     if (!collegeId) return;
-    
-    // Fetch stores to provide robust mapping in case of ID vs Name mismatches
-    const unsubStores = onSnapshot(collection(db, 'stores'), (storeSnap) => {
-      const stores = storeSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-      
-      const q = query(collection(db, 'orders'));
-      const unsubOrders = onSnapshot(q, (snapshot) => {
-        const raw = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-        
-        const ordersData = raw.filter(o => {
+    try {
+      const [storesRes, ordersRes] = await Promise.all([
+        axios.get('/api/stores'),
+        axios.get('/api/orders?admin=true')
+      ]);
+
+      if (storesRes.data.success && ordersRes.data.success) {
+        const stores = storesRes.data.stores;
+        const rawOrders = ordersRes.data.orders;
+
+        const ordersData = rawOrders.filter(o => {
           const oColId = (o.college_id || '').trim();
           const sColId = (collegeId || '').trim();
           const sColName = (collegeName || '').trim();
           
-          // 1. Direct match on order's college_id
           if (oColId === sColId && sColId !== '') return true;
           if (oColId === sColName && sColName !== '') return true;
           
-          // 2. Fallback via store mapping
           const store = stores.find(s => s.id === o.store_id);
           if (store) {
             const storeColId = (store.college_id || '').trim();
@@ -74,15 +73,19 @@ const DeliveryDashboard = () => {
           
           return false;
         });
-        
+
         setOrders(ordersData);
         setMyActiveCount(ordersData.filter(o => o.order_status === 'picked_up').length);
-      });
-      
-      return () => unsubOrders();
-    });
-    
-    return () => unsubStores();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchDeliveryData();
+    const intervalId = setInterval(fetchDeliveryData, 10000);
+    return () => clearInterval(intervalId);
   }, [collegeId, collegeName]);
 
   // Helper to safely get Date object from Firestore Timestamp or string
@@ -103,16 +106,12 @@ const DeliveryDashboard = () => {
 
   const updateOrderStatus = async (orderId, status) => {
     try {
-      // Try local update for optimistic UI, but ignore if Firestore rules block client writes
-      try {
-        await updateDoc(doc(db, 'orders', orderId), { order_status: status });
-      } catch (localErr) {
-        console.log('Local optimistic update blocked by Firestore rules, relying on backend:', localErr.message);
-      }
-      // Call status notification endpoint
+      await axios.patch(`/api/orders/${orderId}/status`, { order_status: status });
       await axios.post('/api/send-status-notification', { orderId, status });
+      fetchDeliveryData();
     } catch (err) {
       console.error('Failed to update order status or send push notification:', err);
+      alert('Failed to update order status');
     }
   };
 

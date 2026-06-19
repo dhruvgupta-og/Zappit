@@ -74,11 +74,15 @@ const storeService = require('./services/store/storeRoutes');
 const orderService = require('./services/order/orderRoutes');
 const paymentService = require('./services/payment/paymentRoutes');
 const webPaymentService = require('./services/payment/webPaymentRoutes');
+const adminService = require('./services/admin/adminRoutes');
+const userService = require('./services/user/userRoutes');
 
 // app.use('/api/auth', authService);
 app.use('/api/stores', storeService);
 app.use('/api/orders', authCheck, orderService);
 app.use('/api/payments', authCheck, paymentService);
+app.use('/api/admin', authCheck, adminService);
+app.use('/api/users', authCheck, userService);
 app.use('/api', authCheck, webPaymentService);
 
   // Error handling middleware to prevent app from crashing on unhandled promise rejections

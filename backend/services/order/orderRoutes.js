@@ -2,14 +2,16 @@ const express = require('express');
 const router = express.Router();
 const Order = require('../../models/Order');
 
-// Get all orders for a specific user
+// Get all orders for a specific user (or all if admin)
 router.get('/', async (req, res) => {
   try {
-    const { user_id } = req.query; // Usually extracted from JWT in authCheck middleware
-    if (!user_id) return res.status(400).json({ success: false, message: 'user_id required' });
+    const { user_id, admin } = req.query; 
 
-    const orders = await Order.find({ user_id }).sort({ created_at: -1 });
-    res.json({ success: true, orders });
+    let query = {};
+    if (user_id) query.user_id = user_id;
+
+    const orders = await Order.find(query).sort({ created_at: -1 });
+    res.json({ success: true, orders: orders.map(o => ({ id: o._id, ...o.toObject() })) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -32,6 +34,17 @@ router.post('/', async (req, res) => {
 
     const savedOrder = await newOrder.save();
     res.status(201).json({ success: true, order: savedOrder });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update Order Status (Store/Admin Dashboard)
+router.patch('/:id/status', async (req, res) => {
+  try {
+    const { order_status } = req.body;
+    const updatedOrder = await Order.findByIdAndUpdate(req.params.id, { order_status }, { new: true });
+    res.json({ success: true, order: updatedOrder });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

@@ -1,13 +1,15 @@
 const mongoose = require('mongoose');
 
 const MenuItemSchema = new mongoose.Schema({
-  store_id: { type: mongoose.Schema.Types.ObjectId, ref: 'Store', required: true },
+  _id: { type: String, required: true },
+  store_id: { type: String, required: true },
   name: { type: String, required: true },
   price: { type: Number, required: true },
   desc: { type: String },
   category: { type: String },
   isVeg: { type: Boolean, default: true },
-  image: { type: String }
+  image: { type: String },
+  is_available: { type: Boolean, default: true }
 });
 
 module.exports = mongoose.model('MenuItem', MenuItemSchema);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { auth, db } from '../firebase';
-import { collection, query, where, onSnapshot, doc, getDoc, setDoc, getDocs } from 'firebase/firestore';
+import { auth } from '../firebase';
+import axios from 'axios';
 import { User, MapPin, Package, LogOut, ChevronRight, Phone, School, Edit2, CheckCircle, X } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 
@@ -24,58 +24,71 @@ const ProfilePage = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch colleges (from admin panel)
+  // Fetch colleges (public route, no auth needed)
   useEffect(() => {
-    getDocs(collection(db, 'colleges')).then(snap => {
-      setColleges(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    axios.get('/api/stores/colleges/all').then(res => {
+      if (res.data.success) setColleges(res.data.colleges);
+    }).catch(() => {});
   }, []);
 
-  // Fetch user profile from Firestore
+  // Fetch user profile from MongoDB
   useEffect(() => {
     if (!currentUser) { setLoading(false); return; }
     const fetchProfile = async () => {
-      const snap = await getDoc(doc(db, 'users', currentUser.uid));
-      if (snap.exists()) {
-        const data = snap.data();
-        setProfile(data);
-        setEditForm({ 
-          name: data.name || '', 
-          phone: data.phone || '', 
-          college: data.college_name || data.college || '',
-          college_id: data.college_id || ''
-        });
+      try {
+        const res = await axios.get(`/api/users/${currentUser.uid}`);
+        if (res.data.success && res.data.exists) {
+          const data = res.data.user;
+          setProfile(data);
+          setEditForm({
+            name: data.name || '',
+            phone: data.phone || '',
+            college: data.college_name || data.college || '',
+            college_id: data.college_id || ''
+          });
+        }
+      } catch (err) {
+        console.error('Failed to fetch profile:', err);
       }
     };
     fetchProfile();
   }, [currentUser]);
 
-  // Live order updates
+  // Fetch order history from MongoDB (with 10s polling for active orders)
   useEffect(() => {
     if (!currentUser) return;
-    const q = query(collection(db, 'orders'), where('user_id', '==', currentUser.uid));
-    const unsub = onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-      data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      setOrders(data);
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
+    const fetchOrders = async () => {
+      try {
+        const res = await axios.get(`/api/orders?user_id=${currentUser.uid}`);
+        if (res.data.success) {
+          const data = [...res.data.orders];
+          data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+          setOrders(data);
+        }
+      } catch (err) {
+        console.error('Failed to fetch orders:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchOrders();
+    const intervalId = setInterval(fetchOrders, 10000);
+    return () => clearInterval(intervalId);
   }, [currentUser]);
 
   const handleSaveProfile = async () => {
     if (!editForm.name.trim() || !editForm.college) return;
     if (editForm.phone.trim().length !== 10) {
-      alert("Please enter a valid 10-digit phone number.");
+      alert('Please enter a valid 10-digit phone number.');
       return;
     }
     setSaving(true);
     try {
-      await setDoc(doc(db, 'users', currentUser.uid), {
-        ...profile,
+      await axios.post(`/api/users/${currentUser.uid}`, {
         name: editForm.name.trim(),
         phone: editForm.phone.trim(),
-        college_id: editForm.college_id || profile?.college_id || '',
+        email: currentUser.email || '',
+        college_id: editForm.college_id || '',
         college: editForm.college,
         college_name: editForm.college,
         updated_at: new Date().toISOString(),
@@ -88,6 +101,7 @@ const ProfilePage = () => {
       setEditMode(false);
     } catch (err) {
       console.error(err);
+      alert('Failed to save profile: ' + (err.response?.data?.error || err.message));
     } finally {
       setSaving(false);
     }

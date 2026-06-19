@@ -125,52 +125,67 @@ const AdminDashboard = () => {
   // ── DATA LOADING (one-time fetch to save Firestore quota) ──────────────────
   const loadAllData = async () => {
     try {
-      const [storesSnap, collegesSnap, bannersSnap, couponsSnap] = await Promise.all([
-        getDocs(collection(db, 'stores')),
-        getDocs(collection(db, 'colleges')),
-        getDocs(collection(db, 'banners')),
-        getDocs(collection(db, 'coupons')),
+      const [storesRes, collegesRes, bannersRes] = await Promise.all([
+        axios.get('/api/stores'),
+        axios.get('/api/admin/colleges'),
+        axios.get('/api/admin/banners')
       ]);
-      setStores(storesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setColleges(collegesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setBanners(bannersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setCoupons(couponsSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+      if (storesRes.data.success) setStores(storesRes.data.stores);
+      if (collegesRes.data.success) setColleges(collegesRes.data.colleges);
+      if (bannersRes.data.success) setBanners(bannersRes.data.banners);
+      
+      try {
+        const couponsRes = await axios.get('/api/get-coupons');
+        if (couponsRes.data.success) {
+          setCoupons(couponsRes.data.coupons);
+        }
+      } catch (couponErr) {
+        console.error('Failed to load coupons via API:', couponErr);
+      }
     } catch (err) {
       console.error('[Admin] Failed to load data:', err.message);
     }
   };
 
   // ── REAL-TIME DATA (orders only — must be live for admin tracking) ──────────
+  const fetchOrders = async () => {
+    try {
+      const res = await axios.get('/api/orders?admin=true');
+      if (res.data.success) {
+        setOrders(res.data.orders.filter(o => o.payment_status === 'paid' || o.payment_status === 'completed' || o.payment_status === 'pending')); // Admin tracking all orders
+      }
+    } catch (err) {
+      console.warn('[Admin] Orders fetch error:', err.message);
+    }
+  };
+
   useEffect(() => {
-    let unsubOrders;
+    let intervalId;
     
-    // Wait for Firebase Auth to initialize before fetching, 
-    // otherwise rules reject it because auth is null for a split second
+    // Wait for Firebase Auth to initialize before fetching
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       if (user) {
         loadAllData();
-        unsubOrders = onSnapshot(
-          collection(db, 'orders'),
-          s => setOrders(s.docs.map(d => ({ id: d.id, ...d.data() })).filter(o => o.payment_status === 'completed')),
-          err => console.warn('[Admin] Orders listener error:', err.message)
-        );
+        fetchOrders();
+        intervalId = setInterval(fetchOrders, 10000); // 10s polling
       } else {
         // User not logged in, clear data
         setOrders([]);
+        if (intervalId) clearInterval(intervalId);
       }
     });
 
     return () => {
       unsubAuth();
-      if (unsubOrders) unsubOrders();
+      if (intervalId) clearInterval(intervalId);
     };
   }, []);
 
   const loadMenuData = async () => {
     if (!selectedStoreId) { setMenuItems([]); return; }
     try {
-      const s = await getDocs(collection(db, `stores/${selectedStoreId}/menu`));
-      setMenuItems(s.docs.map(d => ({ id: d.id, ...d.data() })));
+      const s = await axios.get(`/api/stores/${selectedStoreId}`);
+      if (s.data.success) setMenuItems(s.data.menu.map(m => ({ id: m._id, ...m })));
     } catch (err) {
       console.warn('[Admin] Menu fetch error:', err.message);
     }
@@ -255,9 +270,11 @@ const AdminDashboard = () => {
 
     try {
       if (editingStoreId) {
-        await updateDoc(doc(db, 'stores', editingStoreId), storeData);
+        storeData.id = editingStoreId;
+        // Assume update is handled by the same POST route with upsert logic, or we ignore it for now as per minimal rewrite
+        await axios.post('/api/admin/stores', storeData); 
       } else {
-        await addDoc(collection(db, 'stores'), storeData);
+        await axios.post('/api/admin/stores', storeData);
       }
 
       setStoreForm({ name: '', image: '', rating: '4.5', delivery_time_mins: '15-20', tags: '', college_id: '' });
@@ -292,11 +309,9 @@ const AdminDashboard = () => {
     
     try {
       const data = { ...collegeForm, created_at: new Date().toISOString() };
-      if (editingCollegeId) {
-        await updateDoc(doc(db, 'colleges', editingCollegeId), data);
-      } else {
-        await addDoc(collection(db, 'colleges'), data);
-      }
+      if (editingCollegeId) data.id = editingCollegeId;
+
+      await axios.post('/api/admin/colleges', data);
 
       setCollegeForm({ name: '', city: '' });
       setShowCollegeForm(false);
@@ -308,9 +323,7 @@ const AdminDashboard = () => {
   };
 
   const toggleStoreStatus = async (store) => {
-    await updateDoc(doc(db, 'stores', store.id), {
-      is_open: store.is_open === false ? true : false
-    });
+    await axios.post('/api/admin/stores', { id: store.id, is_open: !store.is_open });
     await loadAllData();
   };
 
@@ -323,40 +336,36 @@ const AdminDashboard = () => {
     if (!couponForm.code || !couponForm.discount) return;
 
     const data = {
-      code: couponForm.code.toUpperCase().trim(),
-      discount_percent: Number(couponForm.discount),
+      code: couponForm.code,
+      discount_percent: couponForm.discount,
       college_id: couponForm.college_id || 'all',
       once_per_user: couponForm.once_per_user,
-      active: true,
-      updated_at: new Date().toISOString(),
+      active: true
     };
 
+    if (editingCouponId) {
+      data.id = editingCouponId;
+    }
+
     try {
-      if (editingCouponId) {
-        // Update existing coupon in Firestore
-        await updateDoc(doc(db, 'coupons', editingCouponId), data);
-      } else {
-        // Create new coupon in Firestore
-        data.created_at = new Date().toISOString();
-        await addDoc(collection(db, 'coupons'), data);
-      }
+      await axios.post('/api/save-coupon', data);
 
       setCouponForm({ code: '', discount: '', college_id: 'all', once_per_user: true });
       setShowCouponForm(false);
       setEditingCouponId(null);
       await loadAllData();
     } catch (err) {
-      alert('Error saving coupon: ' + err.message);
+      alert('Error saving coupon: ' + (err.response?.data?.error || err.message));
     }
   };
 
   const deleteCoupon = async (id) => {
     if (window.confirm('Delete this coupon?')) {
       try {
-        await deleteDoc(doc(db, 'coupons', id));
+        await axios.post('/api/delete-coupon', { id });
         await loadAllData();
       } catch (err) {
-        alert('Error deleting coupon: ' + err.message);
+        alert('Error deleting coupon: ' + (err.response?.data?.error || err.message));
       }
     }
   };
@@ -378,13 +387,10 @@ const AdminDashboard = () => {
       active: true,
       created_at: new Date().toISOString()
     };
+    if (editingBannerId) data.id = editingBannerId;
 
     try {
-      if (editingBannerId) {
-        await updateDoc(doc(db, 'banners', editingBannerId), data);
-      } else {
-        await addDoc(collection(db, 'banners'), data);
-      }
+      await axios.post('/api/admin/banners', data);
 
       setBannerForm({ image: '', link: '' });
       setShowBannerForm(false);
@@ -412,15 +418,13 @@ const AdminDashboard = () => {
     const menuData = { 
       ...menuForm, 
       price: Number(menuForm.price), 
-      is_available: true 
+      is_available: true,
+      store_id: selectedStoreId
     };
+    if (editingMenuId) menuData.id = editingMenuId;
 
     try {
-      if (editingMenuId) {
-        await updateDoc(doc(db, `stores/${selectedStoreId}/menu`, editingMenuId), menuData);
-      } else {
-        await addDoc(collection(db, `stores/${selectedStoreId}/menu`), menuData);
-      }
+      await axios.post('/api/admin/menu', menuData);
 
       setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true, image: '' });
       setShowMenuForm(false);
@@ -446,33 +450,29 @@ const AdminDashboard = () => {
 
   const deleteItem = async (col, id) => {
     if (window.confirm('Delete?')) {
-      await deleteDoc(doc(db, col, id));
+      await axios.post('/api/admin/delete', { collection: col, id });
       await loadAllData();
     }
   };
 
   const deleteMenuItem = async (id) => {
     if (window.confirm('Delete menu item?')) {
-      await deleteDoc(doc(db, `stores/${selectedStoreId}/menu`, id));
+      await axios.post('/api/admin/delete', { collection: 'menu', id });
       await loadMenuData();
     }
   };
 
   const toggleMenuAvailability = async (item) => {
-    await updateDoc(doc(db, `stores/${selectedStoreId}/menu`, item.id), { is_available: !item.is_available });
+    await axios.post('/api/admin/menu', { id: item.id, is_available: !item.is_available });
     await loadMenuData();
   };
 
   const updateOrderStatus = async (orderId, status) => {
     try {
-      // Try local update for optimistic UI, but ignore if Firestore rules block client writes
-      try {
-        await updateDoc(doc(db, 'orders', orderId), { order_status: status });
-      } catch (localErr) {
-        console.log('Local optimistic update blocked by Firestore rules, relying on backend:', localErr.message);
-      }
+      await axios.patch(`/api/orders/${orderId}/status`, { order_status: status });
       // Call status notification endpoint
       await axios.post('/api/send-status-notification', { orderId, status });
+      fetchOrders();
     } catch (err) {
       console.error('Failed to update order status or send push notification:', err);
     }
@@ -505,18 +505,21 @@ const AdminDashboard = () => {
   const handleExportData = async () => {
     try {
       setIsExporting(true);
-      const ordersSnap = await getDocs(collection(db, 'orders'));
-      const storesSnap = await getDocs(collection(db, 'stores'));
-      const collegesSnap = await getDocs(collection(db, 'colleges'));
+      const ordersRes = await axios.get('/api/orders?admin=true');
+      const storesRes = await axios.get('/api/stores');
+      const collegesRes = await axios.get('/api/admin/colleges');
       
+      const ordersArr = ordersRes.data.orders || [];
+      const storesArr = storesRes.data.stores || [];
+      const collegesArr = collegesRes.data.colleges || [];
+
       const storesDict = {};
-      storesSnap.forEach(d => { storesDict[d.id] = { id: d.id, ...d.data() }; });
+      storesArr.forEach(d => { storesDict[d.id] = d; });
       const collegesDict = {};
-      collegesSnap.forEach(d => { collegesDict[d.id] = { id: d.id, ...d.data() }; });
+      collegesArr.forEach(d => { collegesDict[d.id] = d; });
 
       const exportData = [];
-      ordersSnap.forEach(docSnap => {
-        const order = docSnap.data();
+      ordersArr.forEach(order => {
         // Fallback for timestamps
         let dateObj = new Date();
         if (order.created_at) {
@@ -530,7 +533,7 @@ const AdminDashboard = () => {
         const college = collegeId ? (collegesDict[collegeId] || {}) : {};
         
         exportData.push({
-          'Order ID': docSnap.id,
+          'Order ID': order.id || order._id,
           'Date': dateObj.toLocaleDateString(),
           'Time': dateObj.toLocaleTimeString(),
           'College': college.name || order.college_name || 'Unknown',
