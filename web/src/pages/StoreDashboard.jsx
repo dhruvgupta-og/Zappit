@@ -40,6 +40,7 @@ const StoreDashboard = () => {
   const [orderSubTab, setOrderSubTab] = useState('new');
   const [notification, setNotification] = useState(null);
   const [timeFilter, setTimeFilter] = useState('all');
+  const [ordersDateFilter, setOrdersDateFilter] = useState('today'); // 'today' | 'all'
   const prevOrderCount = useRef(0);
 
   // ── REAL-TIME ORDERS ──
@@ -138,12 +139,20 @@ const StoreDashboard = () => {
 
   const topDishes = Object.entries(dishStats).sort((a, b) => b[1].count - a[1].count);
 
-  // ── STATUS BUCKETS ──
+  // ── STATUS BUCKETS (with optional date filter) ──
+  const filterOrdersByDate = (list) => {
+    if (ordersDateFilter === 'today') {
+      const today = new Date().toDateString();
+      return list.filter(o => getDateObj(o.created_at).toDateString() === today);
+    }
+    return list;
+  };
+
   // "New" = confirmed (paid) orders waiting for store to start preparing
-  const newOrders       = orders.filter(o => o.order_status === 'confirmed');
-  const preparingOrders = orders.filter(o => o.order_status === 'preparing');
-  const readyOrders     = orders.filter(o => o.order_status === 'ready' || o.order_status === 'out_for_delivery' || o.order_status === 'picked_up');
-  const completedOrders = orders.filter(o => o.order_status === 'delivered' || o.order_status === 'completed');
+  const newOrders       = filterOrdersByDate(orders.filter(o => o.order_status === 'confirmed'));
+  const preparingOrders = filterOrdersByDate(orders.filter(o => o.order_status === 'preparing'));
+  const readyOrders     = filterOrdersByDate(orders.filter(o => o.order_status === 'ready' || o.order_status === 'out_for_delivery' || o.order_status === 'picked_up'));
+  const completedOrders = filterOrdersByDate(orders.filter(o => o.order_status === 'delivered' || o.order_status === 'completed'));
 
   const activeAndCompletedOrders = orders.filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending');
   const todayRevenue = activeAndCompletedOrders
@@ -294,6 +303,16 @@ const StoreDashboard = () => {
         {/* ════ ORDERS TAB ════ */}
         {activeTab === TAB_ORDERS && (
           <>
+            {/* Date Filter Toggle */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 10, alignItems: 'center' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>Show:</span>
+              {[{ key: 'today', label: "📅 Today" }, { key: 'all', label: "📂 All Orders" }].map(f => (
+                <button key={f.key} onClick={() => setOrdersDateFilter(f.key)} style={{ padding: '5px 12px', borderRadius: 8, border: 'none', background: ordersDateFilter === f.key ? 'var(--primary)' : 'rgba(0,0,0,0.06)', color: ordersDateFilter === f.key ? 'white' : 'var(--text-muted)', fontWeight: 700, cursor: 'pointer', fontSize: '0.72rem' }}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
             {/* Sub-tabs */}
             <div style={{ display: 'flex', gap: 6, marginBottom: 16, background: 'white', padding: 6, borderRadius: 12, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
               {orderTabs.map(tab => (
