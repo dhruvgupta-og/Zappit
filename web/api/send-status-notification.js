@@ -52,13 +52,23 @@ module.exports = async function handler(req, res) {
       return res.status(400).json({ success: false, error: `Unknown status: ${status}` });
     }
 
-    // 1. Fetch order to get user_id
+    // 1. Update order status in Firestore (Admin SDK bypasses security rules)
+    await db.collection('orders').doc(orderId).update({
+      order_status: status,
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    console.log(`[Zappit] Order ${orderId} status updated to: ${status}`);
+
+    const msg = STATUS_MESSAGES[status];
+
+    // 2. Fetch order to get user_id (re-fetch after update)
     const orderSnap = await db.collection('orders').doc(orderId).get();
-    if (!orderSnap.exists) {
-      return res.status(404).json({ success: false, error: 'Order not found' });
-    }
     const order = orderSnap.data();
     const userId = order.user_id || order.userId;
+
+    if (!msg) {
+      return res.status(200).json({ success: true, updated: true, skipped: true, reason: 'No push message for this status' });
+    }
 
     if (!userId) {
       return res.status(200).json({ success: false, skipped: true, error: 'No user_id on order — cannot send push' });

@@ -160,18 +160,19 @@ const StoreDashboard = () => {
     .reduce((s, o) => s + getOrderSubtotal(o), 0);
 
   const updateOrderStatus = async (orderId, status) => {
+    // Optimistic local update: immediately move the order in the UI
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, order_status: status } : o));
     try {
-      // Try local update for optimistic UI, but ignore if Firestore rules block client writes
-      try {
-        await updateDoc(doc(db, 'orders', orderId), { order_status: status });
-      } catch (localErr) {
-        console.log('Local optimistic update blocked by Firestore rules, relying on backend:', localErr.message);
-      }
+      // The API will persist the status to Firestore via Admin SDK (bypasses rules)
       await axios.post('/api/send-status-notification', { orderId, status });
     } catch (err) {
-      console.error('Failed to update order status or send push notification:', err);
+      console.error('Failed to update order status:', err);
+      // Revert optimistic update on failure
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, order_status: 'confirmed' } : o));
+      alert('Failed to update order status. Please try again.');
     }
   };
+
 
   const statusColors = {
     pending:          { bg: '#FEF3C7', text: '#92400E', label: 'Pending Payment' },
