@@ -57,13 +57,15 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
     next();
   });
 
-// API GATEWAY: Rate Limiting
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'production' ? 100 : 5000, // Limit each IP to 100 requests per windowMs (production), 5000 in dev
-  message: 'Too many requests from this IP, please try again after 15 minutes'
-});
-app.use('/api/', apiLimiter);
+// API GATEWAY: Rate Limiting (disabled in development)
+if (process.env.NODE_ENV === 'production') {
+  const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    message: 'Too many requests from this IP, please try again after 15 minutes'
+  });
+  app.use('/api/', apiLimiter);
+}
 
 // Auth Check Middleware (Mock for now, would verify JWT/Firebase Token)
 const authCheck = (req, res, next) => {
