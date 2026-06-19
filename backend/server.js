@@ -38,6 +38,9 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
 
   const app = express();
 
+  // Trust Render's reverse proxy so rate limiting works correctly
+  app.set('trust proxy', 1);
+
   // Security Headers and Payload Compression for Production
   app.use(helmet());
   app.use(compression());
