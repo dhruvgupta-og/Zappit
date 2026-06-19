@@ -3,8 +3,10 @@ const router = express.Router();
 const razorpay = require('./razorpay');
 const crypto = require('crypto');
 const { Resend } = require('resend');
-const { admin, db } = require('../../firebase');
+const { admin } = require('../../firebase');
 const Coupon = require('../../models/Coupon');
+const Order = require('../../models/Order');
+const User = require('../../models/User');
 const mongoose = require('mongoose');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -32,27 +34,25 @@ router.post('/send-status-notification', async (req, res) => {
       return res.status(400).json({ success: false, error: `Unknown status: ${status}` });
     }
 
-    // Update the order status in Firestore using Admin SDK
-    await db.collection('orders').doc(orderId).update({ order_status: status });
+    // Update the order status in MongoDB
+    await Order.findByIdAndUpdate(orderId, { order_status: status });
 
     // 1. Fetch order to get user_id
-    const orderSnap = await db.collection('orders').doc(orderId).get();
-    if (!orderSnap.exists) {
+    const order = await Order.findById(orderId);
+    if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
-    const order = orderSnap.data();
-    const userId = order.user_id || order.userId;
+    const userId = order.user_id;
 
     if (!userId) {
       return res.status(200).json({ success: false, skipped: true, error: 'No user_id on order — cannot send push' });
     }
 
     // 2. Fetch user to get fcmToken
-    const userSnap = await db.collection('users').doc(userId).get();
-    if (!userSnap.exists) {
-      return res.status(200).json({ success: false, skipped: true, error: 'User not found in Firestore' });
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(200).json({ success: false, skipped: true, error: 'User not found in MongoDB' });
     }
-    const user = userSnap.data();
     const fcmToken = user.fcmToken;
 
     if (!fcmToken) {

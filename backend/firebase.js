@@ -1,5 +1,7 @@
 const admin = require('firebase-admin');
 
+let isInitialized = false;
+
 try {
   const serviceAccount = process.env.FIREBASE_PROJECT_ID 
     ? {
@@ -12,12 +14,14 @@ try {
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount)
   });
+  isInitialized = true;
   console.log('Firebase Admin initialized successfully');
 } catch (error) {
-  console.error('Firebase Admin initialization error:', error);
+  console.warn('Firebase Admin skipping initialization (no serviceAccountKey found). App will continue without Push Notifications.');
 }
 
-const db = admin.firestore();
-const auth = admin.auth();
+// Export mock objects if initialization failed so the app doesn't crash
+const db = isInitialized ? admin.firestore() : { collection: () => ({ doc: () => ({ get: async () => ({ exists: false }), update: async () => {} }) }) };
+const auth = isInitialized ? admin.auth() : {};
 
-module.exports = { admin, db, auth };
+module.exports = { admin: isInitialized ? admin : { messaging: () => ({ send: async () => console.warn('Mock push sent') }) }, db, auth };
