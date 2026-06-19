@@ -15,20 +15,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get single store with menu
-router.get('/:id', async (req, res) => {
-  try {
-    const store = await Store.findById(req.params.id);
-    if (!store) return res.status(404).json({ success: false, message: 'Store not found' });
-    
-    const menu = await MenuItem.find({ store_id: req.params.id });
-    
-    res.json({ success: true, store: { id: store._id, ...store.toObject() }, menu: menu.map(m => ({ id: m._id, ...m.toObject() })) });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 // Public: Get all colleges (no auth needed for onboarding/profile)
 router.get('/colleges/all', async (req, res) => {
   try {
@@ -44,6 +30,20 @@ router.get('/banners/active', async (req, res) => {
   try {
     const banners = await Banner.find({ active: { $ne: false } });
     res.json({ success: true, banners: banners.map(b => ({ id: b._id, ...b.toObject() })) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get single store with menu
+router.get('/:id', async (req, res) => {
+  try {
+    const store = await Store.findById(req.params.id);
+    if (!store) return res.status(404).json({ success: false, message: 'Store not found' });
+    
+    const menu = await MenuItem.find({ store_id: req.params.id });
+    
+    res.json({ success: true, store: { id: store._id, ...store.toObject() }, menu: menu.map(m => ({ id: m._id, ...m.toObject() })) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
