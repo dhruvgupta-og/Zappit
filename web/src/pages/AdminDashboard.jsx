@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot, doc, updateDoc, addDoc, deleteDoc, getDocs, setDoc, getDoc } from 'firebase/firestore';
+import axios from 'axios';
+import { onAuthStateChanged } from 'firebase/auth';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../firebase';
+import { auth, storage } from '../firebase';
 import {
   BarChart3, Users, Store, ShoppingBag, IndianRupee,
   Plus, Trash2, Edit2, School, Package, TrendingUp, Menu as MenuIcon, Tag, Image as ImageIcon, Download
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import axios from 'axios';
-import { onAuthStateChanged } from 'firebase/auth';
-import { auth } from '../firebase';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -19,23 +17,10 @@ const AdminDashboard = () => {
   const [colleges, setColleges] = useState([]);
   const [coupons, setCoupons] = useState([]);
   const [banners, setBanners] = useState([]);
-  const [localFees, setLocalFees] = useState([]);
-
-  // Coupons are loaded via onSnapshot in useEffect below (real-time, no backend needed)
-
-  useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'config', 'fees'), (docSnap) => {
-      if (docSnap.exists() && Array.isArray(docSnap.data().list)) {
-        setLocalFees(docSnap.data().list);
-      } else {
-        setLocalFees([
-          { name: 'Delivery Fee', value: 20 },
-          { name: 'Platform Fee', value: 5 }
-        ]);
-      }
-    });
-    return () => unsub();
-  }, []);
+  const [localFees, setLocalFees] = useState([
+    { name: 'Delivery Fee', value: 20 },
+    { name: 'Platform Fee', value: 5 }
+  ]);
 
   const addLocalFee = () => {
     setLocalFees(p => [...p, { name: '', value: 0 }]);
