@@ -444,30 +444,11 @@ router.post('/send-welcome-email', async (req, res) => {
   }
 });
 
-// Helper to race a promise with a timeout
-const withTimeout = (promise, timeoutMs = 3000) => {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error('Firestore operation timed out')), timeoutMs))
-  ]);
-};
-
-// GET /api/get-coupons
+// GET /api/get-coupons - MongoDB only
 router.get('/get-coupons', async (req, res) => {
   try {
-    let coupons = [];
-    let source = 'firestore';
-    try {
-      const snap = await withTimeout(db.collection('coupons').get(), 3000);
-      coupons = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch (err) {
-      console.warn('[Zappit Coupon] Firestore get failed/timed out, using MongoDB only:', err.message);
-      source = 'mongodb';
-    }
-
-    // Merge with MongoDB coupons
     const mongoCoupons = await Coupon.find({});
-    const mongoCouponsMapped = mongoCoupons.map(c => ({
+    const coupons = mongoCoupons.map(c => ({
       id: c._id.toString(),
       code: c.code,
       discount_percent: c.discount_percent,
@@ -477,27 +458,14 @@ router.get('/get-coupons', async (req, res) => {
       created_at: c.createdAt,
       updated_at: c.updatedAt
     }));
-
-    if (source === 'mongodb') {
-      coupons = mongoCouponsMapped;
-    } else {
-      // Merge: avoid duplicates by code
-      const existingCodes = new Set(coupons.map(c => c.code));
-      for (const mc of mongoCouponsMapped) {
-        if (!existingCodes.has(mc.code)) {
-          coupons.push(mc);
-        }
-      }
-    }
-
-    return res.status(200).json({ success: true, coupons, source });
+    return res.status(200).json({ success: true, coupons, source: 'mongodb' });
   } catch (err) {
     console.error('[Zappit Coupon] get-coupons error:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// POST /api/verify-coupon
+// POST /api/verify-coupon - MongoDB only
 router.post('/verify-coupon', async (req, res) => {
   try {
     const { code } = req.body;
@@ -505,41 +473,21 @@ router.post('/verify-coupon', async (req, res) => {
       return res.status(400).json({ success: false, error: 'code is required' });
     }
     const codeToQuery = code.toUpperCase().trim();
-    let coupon = null;
-    let source = 'firestore';
-
-    try {
-      const snap = await withTimeout(db.collection('coupons').where('code', '==', codeToQuery).get(), 3000);
-      if (!snap.empty) {
-        coupon = { id: snap.docs[0].id, ...snap.docs[0].data() };
-      }
-    } catch (err) {
-      console.warn('[Zappit Coupon] Firestore verify failed/timed out, checking MongoDB:', err.message);
+    const c = await Coupon.findOne({ code: codeToQuery, active: true });
+    if (!c) {
+      return res.status(404).json({ success: false, error: 'Coupon not found or inactive' });
     }
-
-    // If not found in Firestore or Firestore failed/timed out, check MongoDB
-    if (!coupon) {
-      const c = await Coupon.findOne({ code: codeToQuery });
-      if (c) {
-        coupon = {
-          id: c._id.toString(),
-          code: c.code,
-          discount_percent: c.discount_percent,
-          college_id: c.college_id,
-          once_per_user: c.once_per_user,
-          active: c.active,
-          created_at: c.createdAt,
-          updated_at: c.updatedAt
-        };
-        source = 'mongodb';
-      }
-    }
-
-    if (!coupon) {
-      return res.status(404).json({ success: false, error: 'Coupon not found' });
-    }
-
-    return res.status(200).json({ success: true, coupon, source });
+    const coupon = {
+      id: c._id.toString(),
+      code: c.code,
+      discount_percent: c.discount_percent,
+      college_id: c.college_id,
+      once_per_user: c.once_per_user,
+      active: c.active,
+      created_at: c.createdAt,
+      updated_at: c.updatedAt
+    };
+    return res.status(200).json({ success: true, coupon, source: 'mongodb' });
   } catch (err) {
     console.error('[Zappit Coupon] verify-coupon error:', err);
     return res.status(500).json({ success: false, error: err.message });
@@ -547,112 +495,46 @@ router.post('/verify-coupon', async (req, res) => {
 });
 
 // POST /api/save-coupon
+// POST /api/save-coupon - MongoDB only
 router.post('/save-coupon', async (req, res) => {
-  console.log('[DEBUG] Inside save-coupon route handler');
   try {
     const { id, code, discount_percent, college_id, once_per_user, active } = req.body;
-    console.log('[DEBUG] Request body parsed:', { id, code, discount_percent });
-
     if (!code || discount_percent === undefined) {
       return res.status(400).json({ success: false, error: 'code and discount_percent are required' });
     }
-
-    const data = {
+    const mongoData = {
       code: code.toUpperCase().trim(),
       discount_percent: Number(discount_percent),
       college_id: college_id || 'all',
       once_per_user: once_per_user !== false,
       active: active !== false,
-      updated_at: new Date().toISOString()
     };
-
-    let firestoreSuccess = false;
-    let savedId = id;
-
-    // 1. Try Firestore with timeout
-    try {
-      if (id && !mongoose.Types.ObjectId.isValid(id)) {
-        await withTimeout(db.collection('coupons').doc(id).update(data), 3000);
-        console.log(`[Zappit Coupon] Updated coupon in Firestore: ${id} (${data.code})`);
-        firestoreSuccess = true;
-      } else if (!id) {
-        data.created_at = new Date().toISOString();
-        const docRef = await withTimeout(db.collection('coupons').add(data), 3000);
-        savedId = docRef.id;
-        console.log(`[Zappit Coupon] Created coupon in Firestore: ${savedId} (${data.code})`);
-        firestoreSuccess = true;
-      }
-    } catch (err) {
-      console.warn(`[Zappit Coupon] Firestore write failed/timed out. Falling back to MongoDB. Error: ${err.message}`);
-    }
-
-    // 2. Save/Sync to MongoDB
-    const mongoData = {
-      code: data.code,
-      discount_percent: data.discount_percent,
-      college_id: data.college_id,
-      once_per_user: data.once_per_user,
-      active: data.active
-    };
-
     let mongoCoupon;
     if (id && mongoose.Types.ObjectId.isValid(id)) {
       mongoCoupon = await Coupon.findByIdAndUpdate(id, mongoData, { new: true, upsert: true });
     } else {
-      mongoCoupon = await Coupon.findOneAndUpdate({ code: data.code }, mongoData, { new: true, upsert: true });
+      mongoCoupon = await Coupon.findOneAndUpdate({ code: mongoData.code }, mongoData, { new: true, upsert: true, setDefaultsOnInsert: true });
     }
-
-    if (!savedId) {
-      savedId = mongoCoupon._id.toString();
-    }
-
-    return res.status(200).json({ 
-      success: true, 
-      message: firestoreSuccess ? 'Coupon saved to Firestore and synced to MongoDB' : 'Coupon saved to MongoDB (Firestore offline/quota exceeded)', 
-      id: savedId,
-      source: firestoreSuccess ? 'firestore' : 'mongodb'
-    });
+    return res.status(200).json({ success: true, message: 'Coupon saved to MongoDB', id: mongoCoupon._id.toString(), source: 'mongodb' });
   } catch (err) {
     console.error('[Zappit Coupon] save-coupon error:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// POST /api/delete-coupon
+// POST /api/delete-coupon - MongoDB only
 router.post('/delete-coupon', async (req, res) => {
   try {
     const { id } = req.body;
     if (!id) {
       return res.status(400).json({ success: false, error: 'id is required' });
     }
-
-    // 1. Try to delete from Firestore with timeout
-    let firestoreSuccess = false;
-    if (id && !mongoose.Types.ObjectId.isValid(id)) {
-      try {
-        await withTimeout(db.collection('coupons').doc(id).delete(), 3000);
-        console.log(`[Zappit Coupon] Deleted coupon in Firestore: ${id}`);
-        firestoreSuccess = true;
-      } catch (err) {
-        console.warn(`[Zappit Coupon] Firestore delete failed/timed out. Error: ${err.message}`);
-      }
-    }
-
-    // 2. Delete from MongoDB
-    let mongoDeleteCount = 0;
     if (mongoose.Types.ObjectId.isValid(id)) {
-      const deleteRes = await Coupon.deleteOne({ _id: id });
-      mongoDeleteCount = deleteRes.deletedCount;
+      await Coupon.deleteOne({ _id: id });
+    } else {
+      await Coupon.deleteOne({ code: id });
     }
-    const deleteByCodeRes = await Coupon.deleteOne({ code: id });
-    
-    console.log(`[Zappit Coupon] Deleted from MongoDB. Delete count: ${mongoDeleteCount || deleteByCodeRes.deletedCount}`);
-
-    return res.status(200).json({ 
-      success: true, 
-      message: 'Coupon deleted successfully',
-      source: firestoreSuccess ? 'firestore' : 'mongodb'
-    });
+    return res.status(200).json({ success: true, message: 'Coupon deleted successfully', source: 'mongodb' });
   } catch (err) {
     console.error('[Zappit Coupon] delete-coupon error:', err);
     return res.status(500).json({ success: false, error: err.message });
