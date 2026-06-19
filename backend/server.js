@@ -60,7 +60,7 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
 // API GATEWAY: Rate Limiting
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: process.env.NODE_ENV === 'production' ? 100 : 5000, // Limit each IP to 100 requests per windowMs (production), 5000 in dev
   message: 'Too many requests from this IP, please try again after 15 minutes'
 });
 app.use('/api/', apiLimiter);
