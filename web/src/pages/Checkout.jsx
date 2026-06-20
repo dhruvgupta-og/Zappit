@@ -86,11 +86,29 @@ const CheckoutPage = () => {
     localStorage.setItem('userAddress', e.target.value);
   };
 
-  // ── FEES (static defaults - no Firestore) ──
-  const [fees, setFees] = useState([
-    { name: 'Delivery Fee', value: 20 },
-    { name: 'Platform Fee', value: 5 }
-  ]);
+  // ── FEES (loaded from MongoDB config) ──
+  const [fees, setFees] = useState([]);
+
+  useEffect(() => {
+    axios.get('/api/admin/config/fees')
+      .then(res => {
+        if (res.data?.data?.list) {
+          setFees(res.data.data.list);
+        } else {
+          // Fallback defaults if no fees saved yet
+          setFees([
+            { name: 'Delivery Fee', value: 0 },
+            { name: 'Platform Fee', value: 0 }
+          ]);
+        }
+      })
+      .catch(() => {
+        setFees([
+          { name: 'Delivery Fee', value: 0 },
+          { name: 'Platform Fee', value: 0 }
+        ]);
+      });
+  }, []);
 
   const totalFees = fees.reduce((sum, f) => sum + Number(f.value || 0), 0);
 
