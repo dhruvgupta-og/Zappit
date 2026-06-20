@@ -47,7 +47,7 @@ const AdminDashboard = () => {
     }
 
     try {
-      await setDoc(doc(db, 'config', 'fees'), { list: localFees });
+      await axios.post('/api/admin/config/fees', { list: localFees });
       alert('Fees updated successfully!');
     } catch (err) {
       alert('Failed to save fees: ' + err.message);
@@ -110,14 +110,16 @@ const AdminDashboard = () => {
   // ── DATA LOADING (one-time fetch to save Firestore quota) ──────────────────
   const loadAllData = async () => {
     try {
-      const [storesRes, collegesRes, bannersRes] = await Promise.all([
+      const [storesRes, collegesRes, bannersRes, feesRes] = await Promise.all([
         axios.get('/api/stores'),
         axios.get('/api/admin/colleges'),
-        axios.get('/api/admin/banners')
+        axios.get('/api/admin/banners'),
+        axios.get('/api/admin/config/fees').catch(() => ({ data: { data: null } }))
       ]);
       if (storesRes.data.success) setStores(storesRes.data.stores);
       if (collegesRes.data.success) setColleges(collegesRes.data.colleges);
       if (bannersRes.data.success) setBanners(bannersRes.data.banners);
+      if (feesRes.data.data?.list) setLocalFees(feesRes.data.data.list);
       
       try {
         const couponsRes = await axios.get('/api/get-coupons');

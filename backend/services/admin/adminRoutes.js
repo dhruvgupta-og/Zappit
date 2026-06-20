@@ -5,6 +5,7 @@ const College = require('../../models/College');
 const Banner = require('../../models/Banner');
 const Store = require('../../models/Store');
 const MenuItem = require('../../models/MenuItem');
+const Config = require('../../models/Config');
 
 const generateId = () => new mongoose.Types.ObjectId().toString();
 
@@ -106,6 +107,29 @@ router.post('/menu', async (req, res) => {
 
     const newMenuItem = await MenuItem.findByIdAndUpdate(data._id, updateData, { upsert: true, new: true, setDefaultsOnInsert: true });
     res.json({ success: true, menuItem: newMenuItem });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// --- CONFIG / FEES ---
+router.get('/config/:key', async (req, res) => {
+  try {
+    const config = await Config.findById(req.params.key);
+    res.json({ success: true, data: config || null });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+router.post('/config/:key', async (req, res) => {
+  try {
+    const updated = await Config.findByIdAndUpdate(
+      req.params.key,
+      { _id: req.params.key, ...req.body },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, data: updated });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
