@@ -17,21 +17,21 @@ router.get('/', async (req, res) => {
   }
 });
 
+const mongoose = require('mongoose');
+
 // Create Order (Moved checkout logic here for DB creation)
 router.post('/', async (req, res) => {
   try {
-    const { user_id, store_id, items, total_amount, address } = req.body;
+    const orderData = { ...req.body };
+    if (!orderData._id) {
+      orderData._id = new mongoose.Types.ObjectId().toString();
+    }
+    
+    // Ensure default statuses if not provided by frontend
+    if (!orderData.payment_status) orderData.payment_status = 'pending';
+    if (!orderData.order_status) orderData.order_status = 'pending';
 
-    const newOrder = new Order({
-      user_id,
-      store_id,
-      items,
-      total_amount,
-      address,
-      payment_status: 'pending',
-      order_status: 'pending'
-    });
-
+    const newOrder = new Order(orderData);
     const savedOrder = await newOrder.save();
     res.status(201).json({ success: true, order: savedOrder });
   } catch (err) {
