@@ -63,7 +63,7 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
 if (process.env.NODE_ENV === 'production') {
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 300,
+    max: 3000, // Temporarily increased to prevent blocking during development/testing
     message: 'Too many requests from this IP, please try again after 15 minutes'
   });
   app.use('/api/', apiLimiter);
