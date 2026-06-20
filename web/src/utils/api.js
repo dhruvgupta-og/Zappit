@@ -2,10 +2,17 @@
  * Axios instance with automatic retry logic for when the Render backend is waking up.
  * Retries up to 6 times with exponential backoff (covers ~90 seconds of Render cold start).
  * Also exports a warmUp() function to pre-ping /health before making real requests.
+ *
+ * IMPORTANT: axios.create() does NOT inherit axios.defaults.baseURL set in axiosSetup.js,
+ * so we must set it explicitly here too.
  */
 import axios from 'axios';
+import { auth } from '../firebase';
 
-const api = axios.create();
+const BASE_URL = import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.MODE === 'production' ? 'https://zappit-backend.onrender.com' : '');
+
+const api = axios.create({ baseURL: BASE_URL });
 
 const MAX_RETRIES = 6;
 const BASE_DELAY_MS = 5000; // 5 seconds base
@@ -25,6 +32,20 @@ export const warmUp = async () => {
   }
   return false;
 };
+
+// Attach Firebase ID token to all requests from this instance too
+api.interceptors.request.use(async (config) => {
+  try {
+    const user = auth.currentUser;
+    if (user) {
+      const token = await user.getIdToken();
+      if (token) config.headers.Authorization = `Bearer ${token}`;
+    }
+  } catch {
+    // If token fetch fails, continue without token (public routes still work)
+  }
+  return config;
+}, (error) => Promise.reject(error));
 
 api.interceptors.response.use(
   (response) => response,
@@ -54,4 +75,3 @@ api.interceptors.response.use(
 );
 
 export default api;
-
