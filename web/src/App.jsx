@@ -137,7 +137,7 @@ function App() {
                 <Route path="/store-dashboard" element={<StoreDashboard />} />
                 <Route path="/delivery-dashboard" element={<DeliveryDashboard />} />
                 <Route path="/staff-login" element={<StaffLogin />} />
-                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/admin-secure-dashboard" element={<AdminDashboard />} />
                 <Route path="/payment-callback" element={<PaymentCallback />} />
               </Routes>
             </AuthGuard>
