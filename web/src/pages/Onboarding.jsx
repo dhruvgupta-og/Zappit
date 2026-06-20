@@ -93,7 +93,7 @@ const OnboardingPage = () => {
       try {
         const res = await axios.get(`/api/users/${user.uid}`);
         if (res.data.success && res.data.exists && res.data.user?.profile_complete === true) {
-          navigate('/', { replace: true });
+          window.location.href = '/';
           return;
         }
       } catch (e) {
@@ -206,7 +206,7 @@ const OnboardingPage = () => {
         console.error('[Zappit] Welcome email failed:', emailErr);
       }
 
-      navigate('/');
+      window.location.href = '/';
     } catch (err) {
       setError(err.response?.data?.error || err.message || 'Failed to save profile.');
     } finally {

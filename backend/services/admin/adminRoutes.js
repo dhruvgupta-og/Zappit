@@ -24,7 +24,11 @@ router.post('/colleges', async (req, res) => {
     if (!data.id && !data._id) data._id = generateId();
     else if (data.id) data._id = data.id;
 
-    const newCollege = await College.findByIdAndUpdate(data._id, data, { upsert: true, new: true, setDefaultsOnInsert: true });
+    const updateData = { ...data };
+    delete updateData._id;
+    delete updateData.id;
+
+    const newCollege = await College.findByIdAndUpdate(data._id, updateData, { upsert: true, new: true, setDefaultsOnInsert: true });
     res.json({ success: true, college: newCollege });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -60,7 +64,11 @@ router.post('/banners', async (req, res) => {
     if (!data.id && !data._id) data._id = generateId();
     else if (data.id) data._id = data.id;
 
-    const newBanner = await Banner.findByIdAndUpdate(data._id, data, { upsert: true, new: true, setDefaultsOnInsert: true });
+    const updateData = { ...data };
+    delete updateData._id;
+    delete updateData.id;
+
+    const newBanner = await Banner.findByIdAndUpdate(data._id, updateData, { upsert: true, new: true, setDefaultsOnInsert: true });
     res.json({ success: true, banner: newBanner });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -74,7 +82,11 @@ router.post('/stores', async (req, res) => {
     if (!data.id && !data._id) data._id = generateId();
     else if (data.id) data._id = data.id;
 
-    const newStore = await Store.findByIdAndUpdate(data._id, data, { upsert: true, new: true, setDefaultsOnInsert: true });
+    const updateData = { ...data };
+    delete updateData._id;
+    delete updateData.id;
+
+    const newStore = await Store.findByIdAndUpdate(data._id, updateData, { upsert: true, new: true, setDefaultsOnInsert: true });
     res.json({ success: true, store: newStore });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -88,7 +100,11 @@ router.post('/menu', async (req, res) => {
     if (!data.id && !data._id) data._id = generateId();
     else if (data.id) data._id = data.id;
 
-    const newMenuItem = await MenuItem.findByIdAndUpdate(data._id, data, { upsert: true, new: true, setDefaultsOnInsert: true });
+    const updateData = { ...data };
+    delete updateData._id;
+    delete updateData.id;
+
+    const newMenuItem = await MenuItem.findByIdAndUpdate(data._id, updateData, { upsert: true, new: true, setDefaultsOnInsert: true });
     res.json({ success: true, menuItem: newMenuItem });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

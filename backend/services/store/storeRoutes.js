@@ -9,7 +9,7 @@ const Banner = require('../../models/Banner');
 router.get('/', async (req, res) => {
   try {
     const stores = await Store.find();
-    res.json({ success: true, stores });
+    res.json({ success: true, stores: stores.map(s => ({ id: s._id, ...s.toObject() })) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
