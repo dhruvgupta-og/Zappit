@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } f
 import { Home, ShoppingCart, ShoppingBag, User } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from './firebase';
-import axios from 'axios';
+import api from './utils/api';
 import { CartProvider, useCart } from './CartContext';
 import { initFcm } from './utils/fcm';
 
@@ -96,7 +96,7 @@ function App() {
 
       // Check profile completion from MongoDB
       try {
-        const res = await axios.get(`/api/users/${firebaseUser.uid}`);
+        const res = await api.get(`/api/users/${firebaseUser.uid}`);
         console.log('DEBUG: Auth User:', firebaseUser.uid);
         console.log('DEBUG: User Profile Exists:', res.data.exists);
         console.log('DEBUG: User Profile Data:', res.data.user);

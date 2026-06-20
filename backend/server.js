@@ -50,6 +50,19 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
   // Health Check for Hosting Providers
   app.get('/health', (req, res) => res.status(200).json({ status: 'healthy', timestamp: new Date() }));
 
+  // ── KEEP-ALIVE: Self-ping every 14 minutes to prevent Render free tier from sleeping
+  if (process.env.NODE_ENV === 'production' && process.env.BACKEND_URL) {
+    const http = require('https');
+    setInterval(() => {
+      http.get(`${process.env.BACKEND_URL}/health`, (res) => {
+        console.log(`[Keep-Alive] Self-ping status: ${res.statusCode}`);
+      }).on('error', (err) => {
+        console.error('[Keep-Alive] Self-ping failed:', err.message);
+      });
+    }, 14 * 60 * 1000); // every 14 minutes
+    console.log('[Keep-Alive] Self-ping scheduled every 14 minutes');
+  }
+
   app.use(cors());
   app.use(express.json());
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MapPin, Clock, Star, Zap } from 'lucide-react';
-import axios from 'axios';
+import api from '../utils/api';
 import { auth } from '../firebase';
 
 const HomePage = () => {
@@ -36,8 +36,8 @@ const HomePage = () => {
     const fetchData = async () => {
       try {
         const [storesRes, bannersRes] = await Promise.all([
-          axios.get('/api/stores'),
-          axios.get('/api/stores/banners/active')
+          api.get('/api/stores'),
+          api.get('/api/stores/banners/active')
         ]);
 
         if (storesRes.data.success) {
