@@ -42,7 +42,9 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
   app.set('trust proxy', 1);
 
   // Security Headers and Payload Compression for Production
-  app.use(helmet());
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  }));
   app.use(compression());
 
   // Health Check for Hosting Providers
