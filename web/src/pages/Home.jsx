@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { MapPin, Clock, Star, Zap } from 'lucide-react';
-import api from '../utils/api';
+import api, { warmUp } from '../utils/api';
+import axios from 'axios';
 import { auth } from '../firebase';
 
 const HomePage = () => {
@@ -10,6 +11,7 @@ const HomePage = () => {
   const [banners, setBanners] = useState([]);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [wakingUp, setWakingUp] = useState(false);
   const [showToast, setShowToast] = useState(null); // { message, type }
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
@@ -35,6 +37,15 @@ const HomePage = () => {
     // Fetch stores and banners from MongoDB via API
     const fetchData = async () => {
       try {
+        // First, quietly check if server is alive; if not, warm it up
+        try {
+          await axios.get('/api/health', { timeout: 4000 });
+        } catch {
+          setWakingUp(true);
+          await warmUp();
+          setWakingUp(false);
+        }
+
         const [storesRes, bannersRes] = await Promise.all([
           api.get('/api/stores'),
           api.get('/api/stores/banners/active')
@@ -50,6 +61,7 @@ const HomePage = () => {
         console.error('Failed to fetch home data:', err.message);
       } finally {
         setLoading(false);
+        setWakingUp(false);
       }
     };
 
@@ -289,7 +301,20 @@ const HomePage = () => {
           <h3 style={{ marginBottom: '16px', fontSize: '1.125rem' }}>Restaurants near you</h3>
           <div className="flex flex-col gap-4">
             {loading ? (
-              <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>Loading stores...</div>
+              <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
+                {wakingUp ? (
+                  <>
+                    <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>⚡</div>
+                    <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-main)', marginBottom: '6px' }}>Starting up...</div>
+                    <div style={{ fontSize: '0.85rem' }}>Our server is warming up. This takes ~30 seconds on first visit.</div>
+                    <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
+                      <div style={{ width: 36, height: 36, border: '3px solid var(--border-color)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                    </div>
+                  </>
+                ) : (
+                  <div>Loading stores...</div>
+                )}
+              </div>
             ) : filteredStores.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)' }}>
                 <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔍</div>

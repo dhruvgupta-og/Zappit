@@ -51,16 +51,21 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
   app.get('/health', (req, res) => res.status(200).json({ status: 'healthy', timestamp: new Date() }));
 
   // ── KEEP-ALIVE: Self-ping every 14 minutes to prevent Render free tier from sleeping
-  if (process.env.NODE_ENV === 'production' && process.env.BACKEND_URL) {
-    const http = require('https');
+  if (process.env.NODE_ENV === 'production') {
+    const keepAliveUrl = process.env.BACKEND_URL
+      ? `${process.env.BACKEND_URL}/health`
+      : `http://localhost:${process.env.PORT || 5000}/health`;
+    const https = require('https');
+    const http = require('http');
+    const requester = keepAliveUrl.startsWith('https') ? https : http;
     setInterval(() => {
-      http.get(`${process.env.BACKEND_URL}/health`, (res) => {
-        console.log(`[Keep-Alive] Self-ping status: ${res.statusCode}`);
+      requester.get(keepAliveUrl, (res) => {
+        console.log(`[Keep-Alive] Self-ping OK: ${res.statusCode}`);
       }).on('error', (err) => {
         console.error('[Keep-Alive] Self-ping failed:', err.message);
       });
     }, 14 * 60 * 1000); // every 14 minutes
-    console.log('[Keep-Alive] Self-ping scheduled every 14 minutes');
+    console.log(`[Keep-Alive] Self-ping scheduled every 14 minutes → ${keepAliveUrl}`);
   }
 
   app.use(cors());
