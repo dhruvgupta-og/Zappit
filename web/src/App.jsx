@@ -20,12 +20,12 @@ import OnboardingPage from './pages/Onboarding';
 import StaffLogin from './pages/StaffLogin';
 import PaymentCallback from './pages/PaymentCallback';
 
-const DASHBOARD_PATHS = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin', '/onboarding', '/staff-login', '/payment-callback'];
+const DASHBOARD_PATHS = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin-secure-dashboard', '/onboarding', '/staff-login', '/payment-callback'];
 
 // ── Auth Guard: redirects to login if not authenticated, onboarding if profile incomplete
 const AuthGuard = ({ children, user, profileComplete, checkingAuth }) => {
   const location = useLocation();
-  const publicPaths = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin', '/staff-login'];
+  const publicPaths = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin-secure-dashboard', '/staff-login'];
 
   if (checkingAuth) {
     return (
