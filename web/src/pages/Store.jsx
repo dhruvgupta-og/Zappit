@@ -4,6 +4,7 @@ import { ArrowLeft, Star, Clock, Plus, Minus, Info } from 'lucide-react';
 import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useCart } from '../CartContext';
+import axios from 'axios';
 
 const StorePage = () => {
   const { id } = useParams();
@@ -15,19 +16,10 @@ const StorePage = () => {
   useEffect(() => {
     const fetchStoreAndMenu = async () => {
       try {
-        const storeRef = doc(db, 'stores', id);
-        const storeSnap = await getDoc(storeRef);
-        
-        if (storeSnap.exists()) {
-          setStore({ id: storeSnap.id, ...storeSnap.data() });
-          
-          // Fetch menu subcollection
-          const menuSnap = await getDocs(collection(storeRef, 'menu'));
-          const menuData = menuSnap.docs.map(mDoc => ({
-            id: mDoc.id,
-            ...mDoc.data()
-          }));
-          setMenu(menuData);
+        const res = await axios.get(`/api/stores/${id}`);
+        if (res.data.success) {
+          setStore(res.data.store);
+          setMenu(res.data.menu || []);
         }
       } catch (err) {
         console.error("Error fetching store:", err);
