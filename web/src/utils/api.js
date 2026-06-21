@@ -9,7 +9,7 @@
 import axios from 'axios';
 import { auth } from '../firebase';
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ||
+export const BASE_URL = import.meta.env.VITE_API_BASE_URL ||
   (import.meta.env.MODE === 'production' ? 'https://zappit-backend.onrender.com' : '');
 
 const api = axios.create({ baseURL: BASE_URL });
@@ -19,11 +19,11 @@ const BASE_DELAY_MS = 5000; // 5 seconds base
 
 const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
-// Pre-warm: ping /health and wait for a 200 before making real requests
+// Pre-warm: ping /api/health (locally) or /health (prod) and wait for a 200 before making real requests
 export const warmUp = async () => {
   for (let i = 0; i < 10; i++) {
     try {
-      const res = await axios.get('/api/health', { timeout: 8000 });
+      const res = await axios.get(`${BASE_URL}/api/health`, { timeout: 8000 });
       if (res.status === 200) return true;
     } catch {
       // still waking up

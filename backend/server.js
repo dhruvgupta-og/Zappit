@@ -47,8 +47,9 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
   }));
   app.use(compression());
 
-  // Health Check for Hosting Providers
+  // Health Check for Hosting Providers and Frontend Proxy
   app.get('/health', (req, res) => res.status(200).json({ status: 'healthy', timestamp: new Date() }));
+  app.get('/api/health', (req, res) => res.status(200).json({ status: 'healthy', timestamp: new Date() }));
 
   // ── KEEP-ALIVE: Self-ping every 14 minutes to prevent Render free tier from sleeping
   if (process.env.NODE_ENV === 'production') {

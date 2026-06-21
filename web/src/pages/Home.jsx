@@ -39,7 +39,7 @@ const HomePage = () => {
       try {
         // First, quietly check if server is alive; if not, warm it up
         try {
-          await axios.get('/api/health', { timeout: 4000 });
+          await axios.get(`${api.defaults.baseURL || ''}/api/health`, { timeout: 4000 });
         } catch {
           setWakingUp(true);
           await warmUp();
