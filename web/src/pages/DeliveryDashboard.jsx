@@ -38,7 +38,7 @@ const DeliveryDashboard = () => {
   }, []);
 
   const handleMarkDelivered = (order) => {
-    if (order.delivery_otp) {
+    if (order.requires_otp) {
       setOtpPromptId(order.id);
       setOtpInput('');
     } else {

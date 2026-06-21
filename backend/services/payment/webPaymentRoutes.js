@@ -132,7 +132,7 @@ router.post('/create-order', async (req, res) => {
       if (c) {
          if (c.once_per_user && req.user) {
             const user = await User.findById(req.user.uid);
-            if (!user.used_coupons.includes(c.code)) {
+            if (!user || !user.used_coupons?.includes(c.code)) {
                discount = Math.round((subtotal * c.discount_percent) / 100);
                validCoupon = c;
             }

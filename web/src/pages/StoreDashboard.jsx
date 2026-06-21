@@ -11,12 +11,14 @@ const StoreDashboard = () => {
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [staffStoreId, setStaffStoreId] = useState(null);
 
   useEffect(() => {
     const checkRole = async () => {
       try {
-        const res = await api.get('/api/orders');
-        if (res.data.success) {
+        const res = await api.get('/api/users/me/staff');
+        if (res.data.success && res.data.role === 'store_owner') {
+          setStaffStoreId(res.data.store_id);
           setIsLoggedIn(true);
         } else {
           setIsLoggedIn(false);
@@ -32,9 +34,9 @@ const StoreDashboard = () => {
 
   // ── REAL-TIME STORE STATUS ──
   const fetchStoreData = async () => {
-    if (!sessionStorage.getItem('staff_store_id')) return;
+    if (!staffStoreId) return;
     try {
-      const res = await api.get(`/api/stores/${sessionStorage.getItem('staff_store_id')}`);
+      const res = await api.get(`/api/stores/${staffStoreId}`);
       if (res.data.success) {
         setIsOpen(res.data.store.is_open !== false);
         setMenuItems(res.data.menu.map(m => ({ id: m._id, ...m })));
@@ -45,9 +47,9 @@ const StoreDashboard = () => {
   };
 
   const toggleStoreStatus = async () => {
-    if (!sessionStorage.getItem('staff_store_id')) return;
+    if (!staffStoreId) return;
     const newStatus = !isOpen;
-    await api.post('/api/admin/stores', { id: sessionStorage.getItem('staff_store_id'), is_open: newStatus });
+    await api.post('/api/admin/stores', { id: staffStoreId, is_open: newStatus });
     fetchStoreData();
   };
 
@@ -92,12 +94,12 @@ const StoreDashboard = () => {
   };
 
   useEffect(() => {
-    if (!isLoggedIn) return;
+    if (!isLoggedIn || !staffStoreId) return;
     fetchOrders();
     fetchStoreData();
     const interval = setInterval(fetchOrders, 10000);
     return () => clearInterval(interval);
-  }, [isLoggedIn]);
+  }, [isLoggedIn, staffStoreId]);
 
   const getDateObj = (val) => {
     if (!val) return new Date(0);
@@ -219,8 +221,8 @@ const StoreDashboard = () => {
   const [editingMenuId, setEditingMenuId] = useState(null);
 
   const saveMenuItem = async () => {
-    if (!menuForm.name || !menuForm.price) return;
-    const data = { ...menuForm, price: Number(menuForm.price), is_available: true, store_id: sessionStorage.getItem('staff_store_id') };
+    if (!menuForm.name || !menuForm.price || !staffStoreId) return;
+    const data = { ...menuForm, price: Number(menuForm.price), is_available: true, store_id: staffStoreId };
     if (editingMenuId) data.id = editingMenuId;
 
     await api.post('/api/admin/menu', data);

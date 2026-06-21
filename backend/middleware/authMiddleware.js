@@ -18,7 +18,7 @@ const authMiddleware = async (req, res, next) => {
     };
 
     let role = 'user';
-    const dbUser = await User.findOne({ uid: decodedToken.uid });
+    const dbUser = await User.findById(decodedToken.uid);
     
     if (dbUser) {
       if (dbUser.blocked) {
@@ -31,6 +31,7 @@ const authMiddleware = async (req, res, next) => {
     if (role !== 'admin') {
       try {
         const staffDoc = await admin.firestore().collection('staff').doc(decodedToken.uid).get();
+        if (staffDoc.exists) {
           role = staffDoc.data().role || role; // 'store_owner' or 'delivery'
           req.user.staff_store_id = staffDoc.data().store_id;
           req.user.staff_college_id = staffDoc.data().college_id;

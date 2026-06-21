@@ -26,6 +26,8 @@ router.get('/', async (req, res) => {
     const orders = await Order.find(query).sort({ created_at: -1 });
     res.json({ success: true, orders: orders.map(o => {
       const orderObj = { id: o._id, ...o.toObject() };
+      // Flag for frontend to know if OTP is required
+      orderObj.requires_otp = !!orderObj.delivery_otp;
       // Secure OTP: only admins or the order owner (customer) can see the OTP in the list response
       if (req.user.role !== 'admin' && req.user.uid !== orderObj.user_id) {
         delete orderObj.delivery_otp;

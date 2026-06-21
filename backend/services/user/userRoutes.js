@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const User = require('../../models/User');
 
+// GET staff info safely
+router.get('/me/staff', async (req, res) => {
+  res.json({
+    success: true,
+    role: req.user.role,
+    store_id: req.user.staff_store_id,
+    college_id: req.user.staff_college_id
+  });
+});
+
 // Middleware to ensure a user only accesses/modifies their own profile (unless admin)
 router.use('/:uid', (req, res, next) => {
   if (req.user.uid !== req.params.uid && req.user.role !== 'admin') {

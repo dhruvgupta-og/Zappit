@@ -9,6 +9,16 @@ const Config = require('../../models/Config');
 
 const generateId = () => new mongoose.Types.ObjectId().toString();
 
+// --- PUBLIC ROUTES (No Admin required) ---
+router.get('/config/:key', async (req, res) => {
+  try {
+    const config = await Config.findById(req.params.key);
+    res.json({ success: true, data: config || null });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Route Guard
 router.use((req, res, next) => {
   const allowedRoles = ['admin', 'store_owner'];
@@ -150,15 +160,6 @@ router.post('/menu', async (req, res) => {
 });
 
 // --- CONFIG / FEES ---
-router.get('/config/:key', async (req, res) => {
-  try {
-    const config = await Config.findById(req.params.key);
-    res.json({ success: true, data: config || null });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
-
 router.post('/config/:key', async (req, res) => {
   try {
     const updated = await Config.findByIdAndUpdate(
