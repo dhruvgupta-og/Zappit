@@ -178,6 +178,7 @@ router.post('/create-order', async (req, res) => {
       const storeDiscount = validCoupon ? Math.round((storeSubtotal * validCoupon.discount_percent) / 100) : 0;
       
       const newOrder = new Order({
+        _id: new mongoose.Types.ObjectId().toString(),
         user_id: req.user?.uid || 'guest_user',
         college_id: college_id || 'unknown',
         store_id: storeId,
