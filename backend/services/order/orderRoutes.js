@@ -112,6 +112,28 @@ router.patch('/:id/status', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Forbidden: Order not to your college' });
     }
 
+    const validTransitions = {
+      pending: ['confirmed', 'cancelled'],
+      confirmed: ['preparing', 'cancelled'],
+      preparing: ['ready', 'cancelled'],
+      ready: ['out_for_delivery', 'picked_up', 'cancelled'],
+      out_for_delivery: ['delivered', 'cancelled'],
+      picked_up: ['delivered', 'cancelled'],
+      delivered: [],
+      cancelled: []
+    };
+
+    // Skip validation for admin to allow overriding
+    if (req.user.role !== 'admin') {
+      const allowedNextStates = validTransitions[order.order_status] || [];
+      if (!allowedNextStates.includes(order_status)) {
+        return res.status(400).json({ 
+          success: false, 
+          error: `Invalid status transition from ${order.order_status} to ${order_status}` 
+        });
+      }
+    }
+
     order.order_status = order_status;
     const updatedOrder = await order.save();
 

@@ -179,24 +179,8 @@ const CheckoutPage = () => {
                 // Group items by store to get storeNames
                 const itemsByStore = {};
                 cartItems.forEach(item => {
-                  if (!itemsByStore[item.storeId]) itemsByStore[item.storeId] = [];
-                  itemsByStore[item.storeId].push(item);
-                });
-                const storeNames = Object.values(itemsByStore).map(items => items[0].storeName || 'Campus Store');
-
                 await api.post('/api/send-order-email', {
-                  email: auth.currentUser?.email || '',
-                  orderIds: orderIds,
-                  storeNames: storeNames,
-                  items: cartItems,
-                  totalAmount: data.amount / 100, // True amount from backend Razorpay response
-                  deliveryOtp: deliveryOtp,
-                  address: address,
-                  fees: fees,
-                  appliedCoupon: appliedCoupon ? {
-                    code: appliedCoupon.code,
-                    discount_percent: appliedCoupon.discount_percent
-                  } : null
+                  orderIds: orderIds
                 });
                 console.log('[Zappit] Order confirmation email requested successfully.');
               } catch (emailErr) {

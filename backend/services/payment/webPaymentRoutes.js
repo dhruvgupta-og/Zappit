@@ -34,14 +34,24 @@ router.post('/send-status-notification', async (req, res) => {
       return res.status(400).json({ success: false, error: `Unknown status: ${status}` });
     }
 
-    // Update the order status in MongoDB
-    await Order.findByIdAndUpdate(orderId, { order_status: status });
-
-    // 1. Fetch order to get user_id
+    // 1. Fetch order to get user_id and verify ownership
     const order = await Order.findById(orderId);
     if (!order) {
       return res.status(404).json({ success: false, error: 'Order not found' });
     }
+
+    // Security check: Only staff can send notifications, and they must own the store/college
+    const isStaff = ['admin', 'store_owner', 'delivery'].includes(req.user?.role);
+    if (!isStaff) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Staff only' });
+    }
+    if (req.user.role === 'store_owner' && order.store_id !== req.user.staff_store_id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Order not from your store' });
+    }
+    if (req.user.role === 'delivery' && order.college_id !== req.user.staff_college_id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Order not to your college' });
+    }
+
     const userId = order.user_id;
 
     if (!userId) {
@@ -278,13 +288,37 @@ router.post('/verify-payment', async (req, res) => {
 // POST /api/send-order-email
 router.post('/send-order-email', async (req, res) => {
   try {
-    const { email, orderIds, storeNames, items, totalAmount, deliveryOtp, address, fees, appliedCoupon } = req.body;
+    const { orderIds } = req.body;
 
-    if (!email || !orderIds || !items || totalAmount === undefined || !deliveryOtp) {
-      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    if (!orderIds || !Array.isArray(orderIds) || orderIds.length === 0) {
+      return res.status(400).json({ success: false, error: 'orderIds array is required' });
     }
 
+    // Fetch orders securely from the database
+    const orders = await Order.find({ _id: { $in: orderIds } });
+    if (orders.length === 0) {
+      return res.status(404).json({ success: false, error: 'Orders not found' });
+    }
+
+    // Verify ownership
+    if (orders[0].user_id !== req.user?.uid && req.user?.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Forbidden: You do not own these orders' });
+    }
+
+    const email = req.user?.email;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Authenticated user has no email address' });
+    }
+
+    // Reconstruct payload from trusted DB records
+    const items = orders.map(o => o.items).flat();
     const subtotal = items.reduce((sum, item) => sum + (Number(item.price) * Number(item.qty)), 0);
+    const totalAmount = orders.reduce((sum, o) => sum + o.total_amount, 0);
+    const discountAmount = orders.reduce((sum, o) => sum + o.discount_amount, 0);
+    const deliveryOtp = orders[0].delivery_otp;
+    const address = orders[0].address;
+    const appliedCoupon = orders.find(o => o.coupon_applied)?.coupon_applied;
+    const calculatedFees = Math.max(0, totalAmount + discountAmount - subtotal);
 
     const itemsHtml = items.map(item => `
       <tr style="border-bottom: 1px solid #f3f4f6;">
@@ -298,22 +332,21 @@ router.post('/send-order-email', async (req, res) => {
     `).join('');
 
     let feesHtml = '';
-    if (fees && Array.isArray(fees)) {
-      feesHtml = fees.map(f => `
+    if (calculatedFees > 0) {
+      feesHtml = `
         <tr>
-          <td colspan="2" style="padding: 6px 0; font-size: 14px; color: #4b5563;">${f.name}</td>
-          <td style="padding: 6px 0; font-size: 14px; color: #4b5563; text-align: right;">₹${f.value}</td>
+          <td colspan="2" style="padding: 6px 0; font-size: 14px; color: #4b5563;">Taxes & Platform Fees</td>
+          <td style="padding: 6px 0; font-size: 14px; color: #4b5563; text-align: right;">₹${calculatedFees}</td>
         </tr>
-      `).join('');
+      `;
     }
 
     let discountHtml = '';
-    if (appliedCoupon) {
-      const discountVal = Math.round((subtotal * Number(appliedCoupon.discount_percent)) / 100);
+    if (discountAmount > 0) {
       discountHtml = `
         <tr style="color: #10b981;">
-          <td colspan="2" style="padding: 6px 0; font-size: 14px; font-weight: 500;">Discount (${appliedCoupon.code} - ${appliedCoupon.discount_percent}%)</td>
-          <td style="padding: 6px 0; font-size: 14px; text-align: right; font-weight: 600;">-₹${discountVal}</td>
+          <td colspan="2" style="padding: 6px 0; font-size: 14px; font-weight: 500;">Discount ${appliedCoupon ? `(${appliedCoupon})` : ''}</td>
+          <td style="padding: 6px 0; font-size: 14px; text-align: right; font-weight: 600;">-₹${discountAmount}</td>
         </tr>
       `;
     }
@@ -603,6 +636,9 @@ router.post('/verify-coupon', async (req, res) => {
 // POST /api/save-coupon - MongoDB only
 router.post('/save-coupon', async (req, res) => {
   try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Forbidden: Admins only' });
+    }
     const { id, code, discount_percent, college_id, once_per_user, active } = req.body;
     if (!code || discount_percent === undefined) {
       return res.status(400).json({ success: false, error: 'code and discount_percent are required' });
@@ -630,6 +666,9 @@ router.post('/save-coupon', async (req, res) => {
 // POST /api/delete-coupon - MongoDB only
 router.post('/delete-coupon', async (req, res) => {
   try {
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Forbidden: Admins only' });
+    }
     const { id } = req.body;
     if (!id) {
       return res.status(400).json({ success: false, error: 'id is required' });
