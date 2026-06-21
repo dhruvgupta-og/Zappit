@@ -1,0 +1,17 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /privacy-policy
+
+Disallow: /checkout
+Disallow: /profile
+Disallow: /orders
+Disallow: /track/
+Disallow: /onboarding
+Disallow: /store-dashboard
+Disallow: /delivery-dashboard
+Disallow: /admin-secure-dashboard
+Disallow: /staff-login
+Disallow: /payment-callback
+
+Sitemap: https://www.zappit.shop/sitemap.xml
