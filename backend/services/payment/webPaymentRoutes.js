@@ -96,48 +96,119 @@ router.post('/send-status-notification', async (req, res) => {
 // POST /api/create-order
 router.post('/create-order', async (req, res) => {
   try {
-    const { amount, receipt } = req.body;
+    const { items, coupon_code, address, college_id } = req.body;
 
-    if (amount === undefined) {
-      return res.status(400).json({ success: false, error: 'Amount is required' });
+    if (!items || !items.length) {
+      return res.status(400).json({ success: false, error: 'Items are required' });
     }
 
-    const amountInPaise = Math.round(Number(amount));
+    const MenuItem = require('../../models/MenuItem');
+    const Config = require('../../models/Config');
 
-    if (amountInPaise < 100) {
-      return res.status(400).json({ success: false, error: 'Minimum payment amount is 100 paise (₹1)' });
-    }
+    // 1. Calculate subtotal securely from DB
+    let subtotal = 0;
+    const itemsByStore = {};
+    for (const item of items) {
+      const dbItem = await MenuItem.findById(item.id || item._id);
+      if (!dbItem) {
+        return res.status(400).json({ success: false, error: `Item not found: ${item.name}` });
+      }
+      const itemPrice = dbItem.price;
+      subtotal += itemPrice * item.qty;
 
-    if (!razorpay) {
-      return res.status(503).json({
-        success: false,
-        error: 'Payment service is currently unavailable (Razorpay keys missing)'
+      // Group for DB order creation
+      if (!itemsByStore[dbItem.store_id]) itemsByStore[dbItem.store_id] = [];
+      itemsByStore[dbItem.store_id].push({
+        ...item,
+        price: itemPrice // Secure price override
       });
     }
 
+    // 2. Apply coupon securely
+    let discount = 0;
+    let validCoupon = null;
+    if (coupon_code) {
+      const c = await Coupon.findOne({ code: coupon_code.toUpperCase(), active: true });
+      if (c) {
+         if (c.once_per_user && req.user) {
+            const user = await User.findById(req.user.uid);
+            if (!user.used_coupons.includes(c.code)) {
+               discount = Math.round((subtotal * c.discount_percent) / 100);
+               validCoupon = c;
+            }
+         } else {
+            discount = Math.round((subtotal * c.discount_percent) / 100);
+            validCoupon = c;
+         }
+      }
+    }
+
+    // 3. Add Config fees
+    let totalFees = 0;
+    const feesConfig = await Config.findById('fees');
+    if (feesConfig && feesConfig.list) {
+       totalFees = feesConfig.list.reduce((sum, f) => sum + Number(f.value), 0);
+    }
+
+    const amountToPay = Math.max(1, Math.round(subtotal - discount + totalFees));
+    const amountInPaise = amountToPay * 100;
+
+    if (!razorpay) {
+      return res.status(503).json({ success: false, error: 'Payment service unavailable' });
+    }
+
+    // 4. Create Razorpay Order
     const options = {
       amount: amountInPaise,
       currency: "INR",
-      receipt: receipt || `order_${Date.now()}`,
+      receipt: `order_${Date.now()}`,
     };
 
-    const order = await razorpay.orders.create(options);
+    const razorpayOrder = await razorpay.orders.create(options);
+
+    // 5. Create Pending Orders in MongoDB immediately
+    const orderIds = [];
+    const deliveryOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    let isFirstStore = true;
+    for (const [storeId, storeItems] of Object.entries(itemsByStore)) {
+      const storeName = storeItems[0].storeName || 'Campus Store';
+      const storeSubtotal = storeItems.reduce((sum, i) => sum + (i.price * i.qty), 0);
+      const storeTotalFees = isFirstStore ? totalFees : 0; // Assign fees to first order only
+      const storeDiscount = validCoupon ? Math.round((storeSubtotal * validCoupon.discount_percent) / 100) : 0;
+      
+      const newOrder = new Order({
+        user_id: req.user?.uid || 'guest_user',
+        college_id: college_id || 'unknown',
+        store_id: storeId,
+        store_name: storeName,
+        items: storeItems,
+        total_amount: Math.max(0, storeSubtotal + storeTotalFees - storeDiscount),
+        discount_amount: storeDiscount,
+        coupon_applied: validCoupon ? validCoupon.code : null,
+        address: address || '',
+        payment_status: 'pending',
+        order_status: 'pending',
+        delivery_otp: deliveryOtp,
+        razorpay_order_id: razorpayOrder.id, // Link for verify-payment
+        created_at: new Date().toISOString()
+      });
+      await newOrder.save();
+      orderIds.push(newOrder._id);
+      isFirstStore = false;
+    }
 
     res.status(200).json({
       success: true,
-      order_id: order.id,
-      amount: order.amount,
-      currency: order.currency,
-      key_id: process.env.RAZORPAY_KEY_ID
+      order_id: razorpayOrder.id,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency,
+      key_id: process.env.RAZORPAY_KEY_ID,
+      db_order_ids: orderIds
     });
   } catch (err) {
-    console.error('Razorpay Create Order Error:', err);
-    // Handle auth failure (return 401)
-    if (err.statusCode === 401 || err.status === 401) {
-      return res.status(401).json({ success: false, error: 'Razorpay authentication failed' });
-    }
-    // Handle other Razorpay API/internal errors (return 500)
-    res.status(500).json({ success: false, error: err.message || 'Razorpay API Error' });
+    console.error('Create Order Error:', err);
+    res.status(500).json({ success: false, error: err.message || 'Error creating order' });
   }
 });
 
@@ -155,15 +226,48 @@ router.post('/verify-payment', async (req, res) => {
       return res.status(503).json({ success: false, error: 'Razorpay secret not configured' });
     }
 
+    // 1. Verify HMAC Signature
     const hmac = crypto.createHmac('sha256', secret);
     hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
     const generated_signature = hmac.digest('hex');
 
-    if (generated_signature === razorpay_signature) {
-      res.status(200).json({ success: true, verified: true });
-    } else {
-      res.status(400).json({ success: false, verified: false, error: 'Signature mismatch' });
+    if (generated_signature !== razorpay_signature) {
+      return res.status(400).json({ success: false, verified: false, error: 'Signature mismatch' });
     }
+
+    // 2. Fetch payment from Razorpay to confirm capture and amount
+    const payment = await razorpay.payments.fetch(razorpay_payment_id);
+    if (payment.status !== 'captured') {
+      // Flag the order if payment not captured
+      await Order.updateMany(
+        { razorpay_order_id: razorpay_order_id },
+        { payment_status: 'flagged', payment_transaction_id: razorpay_payment_id }
+      );
+      return res.status(400).json({ success: false, verified: false, error: 'Payment not captured by Razorpay' });
+    }
+
+    // 3. Mark orders as paid securely server-side
+    const updatedOrders = await Order.updateMany(
+      { razorpay_order_id: razorpay_order_id },
+      { 
+        payment_status: 'paid', 
+        order_status: 'confirmed',
+        payment_transaction_id: razorpay_payment_id 
+      }
+    );
+
+    // Fetch the updated orders to return to frontend
+    const verifiedOrders = await Order.find({ razorpay_order_id: razorpay_order_id });
+    const orderIds = verifiedOrders.map(o => o._id);
+    const deliveryOtp = verifiedOrders.length > 0 ? verifiedOrders[0].delivery_otp : null;
+
+    res.status(200).json({ 
+      success: true, 
+      verified: true, 
+      updatedCount: updatedOrders.modifiedCount,
+      orderIds: orderIds,
+      deliveryOtp: deliveryOtp
+    });
   } catch (err) {
     console.error('Razorpay Verification Error:', err);
     res.status(500).json({ success: false, error: err.message });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/api';
 import { onAuthStateChanged } from 'firebase/auth';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { auth, storage } from '../firebase';
@@ -111,10 +111,10 @@ const AdminDashboard = () => {
   const loadAllData = async () => {
     try {
       const [storesRes, collegesRes, bannersRes, feesRes] = await Promise.all([
-        axios.get('/api/stores'),
-        axios.get('/api/admin/colleges'),
-        axios.get('/api/admin/banners'),
-        axios.get('/api/admin/config/fees').catch(() => ({ data: { data: null } }))
+        api.get('/api/stores'),
+        api.get('/api/admin/colleges'),
+        api.get('/api/admin/banners'),
+        api.get('/api/admin/config/fees').catch(() => ({ data: { data: null } }))
       ]);
       if (storesRes.data.success) setStores(storesRes.data.stores);
       if (collegesRes.data.success) setColleges(collegesRes.data.colleges);
@@ -122,7 +122,7 @@ const AdminDashboard = () => {
       if (feesRes.data.data?.list) setLocalFees(feesRes.data.data.list);
       
       try {
-        const couponsRes = await axios.get('/api/get-coupons');
+        const couponsRes = await api.get('/api/get-coupons');
         if (couponsRes.data.success) {
           setCoupons(couponsRes.data.coupons);
         }
@@ -137,9 +137,9 @@ const AdminDashboard = () => {
   // ── REAL-TIME DATA (orders only — must be live for admin tracking) ──────────
   const fetchOrders = async () => {
     try {
-      const res = await axios.get('/api/orders?admin=true');
+      const res = await api.get('/api/orders?admin=true');
       if (res.data.success) {
-        setOrders(res.data.orders.filter(o => o.payment_status === 'paid' || o.payment_status === 'completed' || o.payment_status === 'pending')); // Admin tracking all orders
+        setOrders(res.data.orders); // Admin sees ALL orders including flagged
       }
     } catch (err) {
       console.warn('[Admin] Orders fetch error:', err.message);
@@ -150,11 +150,23 @@ const AdminDashboard = () => {
     let intervalId;
     
     // Wait for Firebase Auth to initialize before fetching
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
+    const unsubAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        loadAllData();
-        fetchOrders();
-        intervalId = setInterval(fetchOrders, 10000); // 10s polling
+        try {
+          const tokenResult = await user.getIdTokenResult();
+          const res = await axios.get(`/api/users/${user.uid}`);
+          if (res.data.success && res.data.user?.role === 'admin') {
+            loadAllData();
+            fetchOrders();
+            intervalId = setInterval(fetchOrders, 10000); // 10s polling
+          } else {
+            alert('Unauthorized: Admins only');
+            window.location.href = '/';
+          }
+        } catch (err) {
+          console.error('Auth verification failed', err);
+          window.location.href = '/';
+        }
       } else {
         // User not logged in, clear data
         setOrders([]);
@@ -456,9 +468,9 @@ const AdminDashboard = () => {
 
   const updateOrderStatus = async (orderId, status) => {
     try {
-      await axios.patch(`/api/orders/${orderId}/status`, { order_status: status });
+      await api.patch(`/api/orders/${orderId}/status`, { order_status: status });
       // Call status notification endpoint
-      await axios.post('/api/send-status-notification', { orderId, status });
+      await api.post('/api/send-status-notification', { orderId, status });
       fetchOrders();
     } catch (err) {
       console.error('Failed to update order status or send push notification:', err);
@@ -668,16 +680,35 @@ const AdminDashboard = () => {
         {activeTab === 'orders' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[...orders].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).map(o => (
-              <div key={o.id} style={{ background: 'white', borderRadius: 12, padding: 14, boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+              <div key={o.id} style={{
+                background: 'white',
+                borderRadius: 12,
+                padding: 14,
+                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+                border: o.payment_status === 'flagged' ? '2px solid #DC2626' : '1px solid transparent'
+              }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <div>
-                    <div style={{ fontWeight: 700 }}>#{o.id.slice(-6).toUpperCase()}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontWeight: 700 }}>#{o.id.slice(-6).toUpperCase()}</div>
+                      {o.payment_status === 'flagged' && (
+                        <span style={{ background: '#FEE2E2', color: '#DC2626', fontSize: '0.65rem', fontWeight: 800, padding: '2px 8px', borderRadius: 8, letterSpacing: '0.05em' }}>🚩 FLAGGED PAYMENT</span>
+                      )}
+                    </div>
                     <div style={{ fontSize: '0.75rem', color: '#94A3B8' }}>{o.store_name} · {o.address}</div>
                     <div style={{ fontSize: '0.65rem', color: '#64748B', marginTop: 2 }}>
                       📅 {o.created_at ? new Date(o.created_at).toLocaleDateString() : ''} · 🕒 {o.created_at ? new Date(o.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                     </div>
+                    {o.payment_status === 'flagged' && (
+                      <div style={{ fontSize: '0.65rem', color: '#DC2626', marginTop: 3, fontWeight: 600 }}>⚠️ Payment not captured by Razorpay — manual review needed</div>
+                    )}
                   </div>
-                  <div style={{ fontWeight: 700, color: '#0F172A' }}>₹{o.total_amount}</div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 700, color: '#0F172A' }}>₹{o.total_amount}</div>
+                    <div style={{ fontSize: '0.7rem', marginTop: 2, color: o.payment_status === 'paid' || o.payment_status === 'completed' ? '#059669' : o.payment_status === 'flagged' ? '#DC2626' : '#94A3B8', fontWeight: 600 }}>
+                      {o.payment_status}
+                    </div>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   {['confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'].map(status => (

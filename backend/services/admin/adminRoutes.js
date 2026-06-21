@@ -9,6 +9,14 @@ const Config = require('../../models/Config');
 
 const generateId = () => new mongoose.Types.ObjectId().toString();
 
+// Enforce admin role for all routes in this service
+router.use((req, res, next) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Forbidden: Admins only' });
+  }
+  next();
+});
+
 // --- COLLEGES ---
 router.get('/colleges', async (req, res) => {
   try {

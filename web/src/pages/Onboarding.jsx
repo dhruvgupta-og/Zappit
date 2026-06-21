@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import api from '../utils/api';
 import { auth } from '../firebase';
 import {
   EmailAuthProvider,
@@ -81,7 +81,7 @@ const OnboardingPage = () => {
 
   useEffect(() => {
     // Fetch colleges from public MongoDB API
-    axios.get('/api/stores/colleges/all').then(res => {
+    api.get('/api/stores/colleges/all').then(res => {
       if (res.data.success) setColleges(res.data.colleges);
     }).catch(() => {});
 
@@ -175,7 +175,7 @@ const OnboardingPage = () => {
       const selectedCollege = colleges.find(c => c.id === college);
       const collegeName = selectedCollege ? selectedCollege.name : college;
 
-      await axios.post(`/api/users/${user.uid}`, {
+      await api.post(`/api/users/${user.uid}`, {
         uid: user.uid,
         email: user.email || '',
         name: name.trim(),
@@ -197,7 +197,7 @@ const OnboardingPage = () => {
 
       // Send welcome email
       try {
-        await axios.post('/api/send-welcome-email', {
+        await api.post('/api/send-welcome-email', {
           email: user.email || '',
           name: name.trim(),
           college: collegeName,

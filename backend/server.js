@@ -68,30 +68,60 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
     console.log(`[Keep-Alive] Self-ping scheduled every 14 minutes → ${keepAliveUrl}`);
   }
 
-  app.use(cors());
+  // ── CORS Configuration ──
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:5174',
+    'https://zappit.shop',
+    'https://www.zappit.shop',
+    'https://zappit-dun.vercel.app'
+  ];
+
+  app.use(cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true
+  }));
   app.use(express.json());
 
-  // DEBUG: Log all incoming requests
+  // DEBUG: Log all incoming requests (Disable body logging in production for security)
   app.use((req, res, next) => {
-    console.log(`[DEBUG] ${req.method} ${req.url} - Body:`, JSON.stringify(req.body));
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[DEBUG] ${req.method} ${req.url} - Body:`, JSON.stringify(req.body));
+    } else {
+      console.log(`[REQ] ${req.method} ${req.url}`);
+    }
     next();
   });
 
-// API GATEWAY: Rate Limiting (disabled in development)
+// API GATEWAY: Rate Limiting
 if (process.env.NODE_ENV === 'production') {
+  // Global limiter: 100 requests per 15 minutes
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 3000, // Temporarily increased to prevent blocking during development/testing
-    message: 'Too many requests from this IP, please try again after 15 minutes'
+    max: 100, 
+    message: { success: false, error: 'Too many requests from this IP, please try again after 15 minutes' }
   });
   app.use('/api/', apiLimiter);
+
+  // Strict limiter for payments and coupons: 10 requests per 15 minutes
+  const strictLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    message: { success: false, error: 'Too many payment/coupon attempts. Please try again later.' }
+  });
+  app.use('/api/create-order', strictLimiter);
+  app.use('/api/verify-payment', strictLimiter);
+  app.use('/api/verify-coupon', strictLimiter);
 }
 
-// Auth Check Middleware (Mock for now, would verify JWT/Firebase Token)
-const authCheck = (req, res, next) => {
-  // Authentication logic goes here
-  next();
-};
+// Auth Check Middleware
+const authCheck = require('./middleware/authMiddleware');
 
 // SERVICE ROUTERS
 // const authService = require('./services/auth/authRoutes');

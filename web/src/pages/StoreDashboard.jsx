@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, doc, updateDoc, addDoc, query, deleteDoc } from 'firebase/firestore';
 import { Package, Clock, IndianRupee, ShoppingBag, Plus, Edit2, Trash2, Bell } from 'lucide-react';
-import axios from 'axios';
+import api from '../utils/api';
 
 const TAB_ORDERS = 'orders';
 const TAB_MENU = 'menu';
@@ -21,7 +21,7 @@ const StoreDashboard = () => {
   const fetchStoreData = async () => {
     if (!selectedStore) return;
     try {
-      const res = await axios.get(`/api/stores/${selectedStore.id}`);
+      const res = await api.get(`/api/stores/${selectedStore.id}`);
       if (res.data.success) {
         setIsOpen(res.data.store.is_open !== false);
         setMenuItems(res.data.menu.map(m => ({ id: m._id, ...m })));
@@ -38,7 +38,7 @@ const StoreDashboard = () => {
   const toggleStoreStatus = async () => {
     if (!selectedStore) return;
     const newStatus = !isOpen;
-    await axios.post('/api/admin/stores', { id: selectedStore.id, is_open: newStatus });
+    await api.post('/api/admin/stores', { id: selectedStore.id, is_open: newStatus });
     fetchStoreData();
   };
 
@@ -57,7 +57,7 @@ const StoreDashboard = () => {
     try {
       // For Store Dashboard we fetch all orders, but our backend can take admin=true to get everything
       // then we filter. A more optimal way would be to pass store_id in query, but admin=true works.
-      const res = await axios.get('/api/orders?admin=true');
+      const res = await api.get('/api/orders?admin=true');
       if (res.data.success) {
         const ordersData = res.data.orders
           .filter(o => o.store_id === selectedStore.id && (o.payment_status === 'completed' || o.payment_status === 'paid' || o.payment_status === 'pending'));
@@ -171,8 +171,8 @@ const StoreDashboard = () => {
     // Optimistic local update: immediately move the order in the UI
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, order_status: status } : o));
     try {
-      await axios.patch(`/api/orders/${orderId}/status`, { order_status: status });
-      await axios.post('/api/send-status-notification', { orderId, status });
+      await api.patch(`/api/orders/${orderId}/status`, { order_status: status });
+      await api.post('/api/send-status-notification', { orderId, status });
       fetchOrders();
     } catch (err) {
       console.error('Failed to update order status:', err);
@@ -216,7 +216,7 @@ const StoreDashboard = () => {
     const data = { ...menuForm, price: Number(menuForm.price), is_available: true, store_id: selectedStore.id };
     if (editingMenuId) data.id = editingMenuId;
 
-    await axios.post('/api/admin/menu', data);
+    await api.post('/api/admin/menu', data);
     setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
     setEditingMenuId(null);
     setShowMenuForm(false);
@@ -225,13 +225,13 @@ const StoreDashboard = () => {
 
   const deleteMenuItem = async (id) => {
     if (window.confirm('Delete this item?')) {
-      await axios.post('/api/admin/delete', { collection: 'menu', id });
+      await api.post('/api/admin/delete', { collection: 'menu', id });
       fetchStoreData();
     }
   };
 
   const toggleAvailability = async (item) => {
-    await axios.post('/api/admin/menu', { id: item.id, is_available: !item.is_available });
+    await api.post('/api/admin/menu', { id: item.id, is_available: !item.is_available });
     fetchStoreData();
   };
 

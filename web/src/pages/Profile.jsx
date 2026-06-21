@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { auth } from '../firebase';
-import axios from 'axios';
+import api from '../utils/api';
 import { User, MapPin, Package, LogOut, ChevronRight, Phone, School, Edit2, CheckCircle, X } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 
@@ -36,7 +36,7 @@ const ProfilePage = () => {
     if (!currentUser) { setLoading(false); return; }
     const fetchProfile = async () => {
       try {
-        const res = await axios.get(`/api/users/${currentUser.uid}`);
+        const res = await api.get(`/api/users/${currentUser.uid}`);
         if (res.data.success && res.data.exists) {
           const data = res.data.user;
           setProfile(data);
@@ -59,7 +59,7 @@ const ProfilePage = () => {
     if (!currentUser) return;
     const fetchOrders = async () => {
       try {
-        const res = await axios.get(`/api/orders?user_id=${currentUser.uid}`);
+        const res = await api.get(`/api/orders?user_id=${currentUser.uid}`);
         if (res.data.success) {
           const data = [...res.data.orders];
           data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
@@ -84,7 +84,7 @@ const ProfilePage = () => {
     }
     setSaving(true);
     try {
-      await axios.post(`/api/users/${currentUser.uid}`, {
+      await api.post(`/api/users/${currentUser.uid}`, {
         name: editForm.name.trim(),
         phone: editForm.phone.trim(),
         email: currentUser.email || '',

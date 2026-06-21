@@ -2,6 +2,14 @@ const express = require('express');
 const router = express.Router();
 const User = require('../../models/User');
 
+// Middleware to ensure a user only accesses/modifies their own profile (unless admin)
+router.use('/:uid', (req, res, next) => {
+  if (req.user.uid !== req.params.uid && req.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Forbidden: You can only access your own profile' });
+  }
+  next();
+});
+
 // GET user profile by UID
 router.get('/:uid', async (req, res) => {
   try {
@@ -18,8 +26,20 @@ router.get('/:uid', async (req, res) => {
 // POST save/update user profile
 router.post('/:uid', async (req, res) => {
   try {
-    const data = { ...req.body };
+    let data = { ...req.body };
     delete data._id; // prevent overwrite of _id via body
+
+    // Prevent mass assignment: non-admins cannot change role or blocked status
+    if (req.user.role !== 'admin') {
+      const allowedFields = ['uid', 'email', 'name', 'phone', 'college_id', 'college', 'college_name', 'address', 'profile_complete', 'auth_method', 'fcmToken', 'updated_at'];
+      const filteredData = {};
+      for (const key of Object.keys(data)) {
+        if (allowedFields.includes(key)) {
+          filteredData[key] = data[key];
+        }
+      }
+      data = filteredData;
+    }
 
     const user = await User.findByIdAndUpdate(
       req.params.uid,

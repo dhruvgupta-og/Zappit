@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
-import axios from 'axios';
+import api from '../utils/api';
 import { ArrowLeft, MapPin, CreditCard, CheckCircle, Trash2, Plus, Minus, ShoppingBag, Tag } from 'lucide-react';
 import { auth } from '../firebase';
 import { useCart } from '../CartContext';
@@ -28,7 +28,7 @@ const CheckoutPage = () => {
       const codeToQuery = couponCode.toUpperCase().trim();
 
       // Use backend API only (MongoDB)
-      const res = await axios.post('/api/verify-coupon', { code: codeToQuery });
+      const res = await api.post('/api/verify-coupon', { code: codeToQuery });
       const coupon = res.data.success ? res.data.coupon : null;
 
       if (!coupon) {
@@ -53,7 +53,7 @@ const CheckoutPage = () => {
 
         // Single-use check via MongoDB user data
         if (coupon.once_per_user !== false && auth.currentUser) {
-          const userRes = await axios.get(`/api/users/${auth.currentUser.uid}`);
+          const userRes = await api.get(`/api/users/${auth.currentUser.uid}`);
           if (userRes.data.success && userRes.data.exists) {
             const usedCoupons = userRes.data.user.used_coupons || [];
             if (usedCoupons.includes(coupon.code)) {
@@ -90,7 +90,7 @@ const CheckoutPage = () => {
   const [fees, setFees] = useState([]);
 
   useEffect(() => {
-    axios.get('/api/admin/config/fees')
+    api.get('/api/admin/config/fees')
       .then(res => {
         if (res.data?.data?.list) {
           setFees(res.data.data.list);
@@ -123,7 +123,7 @@ const CheckoutPage = () => {
     });
   };
 
-  const handlePayment = async () => {
+    const handlePayment = async () => {
     setPaymentProcessing(true);
     
     try {
@@ -134,14 +134,13 @@ const CheckoutPage = () => {
         return;
       }
 
-      // 1. Create order on backend
-      const discount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount_percent) / 100) : 0;
-      const amountToPay = Math.max(1, Math.round(subtotal + totalFees - discount));
-      const amountInPaise = amountToPay * 100;
-
-      const { data } = await axios.post('/api/create-order', {
-        amount: amountInPaise,
-        receipt: `order_${Date.now()}`
+      // 1. Create order on backend (Backend now calculates true price and creates DB Orders)
+      const userCollegeId = localStorage.getItem('userCollegeId') || '';
+      const { data } = await api.post('/api/create-order', {
+        items: cartItems,
+        coupon_code: appliedCoupon ? appliedCoupon.code : null,
+        address: address,
+        college_id: userCollegeId
       });
 
       if (!data.success) {
@@ -149,16 +148,6 @@ const CheckoutPage = () => {
       }
 
       console.log('[Zappit] Order API response:', data);
-
-      // Save pending order data so PaymentCallback can retrieve it after redirect
-      localStorage.setItem('pendingOrderData', JSON.stringify({
-        cartItems,
-        address,
-        appliedCoupon,
-        subtotal,
-        deliveryFee: fees.find(f => f.name.toLowerCase().includes('delivery'))?.value || 0,
-        platformFee: fees.find(f => f.name.toLowerCase().includes('platform'))?.value || 0,
-      }));
 
       // 2. Open Razorpay Checkout
       const options = {
@@ -172,15 +161,63 @@ const CheckoutPage = () => {
         redirect: true,
         handler: async function (response) {
           try {
-            // 3. Verify Payment Signature
-            const verifyRes = await axios.post('/api/verify-payment', {
+            // 3. Verify Payment Signature (Backend verifies with Razorpay and marks orders as paid)
+            const verifyRes = await api.post('/api/verify-payment', {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature
             });
 
             if (verifyRes.data.success) {
-              await finalizeOrder(response.razorpay_payment_id);
+              const { orderIds, deliveryOtp } = verifyRes.data;
+
+              // Send Order Confirmation Email via Resend
+              try {
+                const discountAmount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount_percent) / 100) : 0;
+                const totalAmount = Math.max(1, Math.round(subtotal + totalFees - discountAmount));
+
+                // Group items by store to get storeNames
+                const itemsByStore = {};
+                cartItems.forEach(item => {
+                  if (!itemsByStore[item.storeId]) itemsByStore[item.storeId] = [];
+                  itemsByStore[item.storeId].push(item);
+                });
+                const storeNames = Object.values(itemsByStore).map(items => items[0].storeName || 'Campus Store');
+
+                await api.post('/api/send-order-email', {
+                  email: auth.currentUser?.email || '',
+                  orderIds: orderIds,
+                  storeNames: storeNames,
+                  items: cartItems,
+                  totalAmount: data.amount / 100, // True amount from backend Razorpay response
+                  deliveryOtp: deliveryOtp,
+                  address: address,
+                  fees: fees,
+                  appliedCoupon: appliedCoupon ? {
+                    code: appliedCoupon.code,
+                    discount_percent: appliedCoupon.discount_percent
+                  } : null
+                });
+                console.log('[Zappit] Order confirmation email requested successfully.');
+              } catch (emailErr) {
+                console.error('[Zappit] Failed to send order confirmation email:', emailErr);
+              }
+
+              const combinedStoreNames = cartItems.map(i => i.storeName).filter((v, i, a) => a.indexOf(v) === i).join(', ');
+
+              setPaymentProcessing(false);
+              clearCart();
+              setPaymentSuccess(true);
+              setAnimationPhase(1);
+
+              setTimeout(() => setAnimationPhase(2), 1500);
+              setTimeout(() => setAnimationPhase(3), 2500);
+              setTimeout(() => setAnimationPhase(4), 3500);
+              
+              setTimeout(() => {
+                navigate(`/track/${orderIds.join(',')}`, { state: { storeName: combinedStoreNames, address } });
+              }, 5500);
+
             } else {
               alert('Payment verification failed');
               setPaymentProcessing(false);
@@ -222,121 +259,6 @@ const CheckoutPage = () => {
       console.error(err);
       const errMsg = err.response?.data?.error || err.message || 'Unknown error';
       alert('Payment initialization failed: ' + errMsg);
-      setPaymentProcessing(false);
-    }
-  };
-
-  const finalizeOrder = async (paymentTransactionId) => {
-    try {
-      // Generate a 6-digit delivery OTP
-      const deliveryOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
-        // Get user phone from MongoDB
-        let userPhone = '';
-        let userCollegeId = localStorage.getItem('userCollegeId') || '';
-        if (auth.currentUser?.uid) {
-          try {
-            const userRes = await axios.get(`/api/users/${auth.currentUser.uid}`);
-            if (userRes.data.success && userRes.data.exists) {
-              userPhone = userRes.data.user.phone || '';
-              userCollegeId = userRes.data.user.college_id || userCollegeId;
-            }
-          } catch (e) { /* use localStorage fallback */ }
-        }
-        
-        if (!userCollegeId) {
-          throw new Error('Campus identity missing. Please go to Profile and re-select your college.');
-        }
-
-        // Group items by store
-        const itemsByStore = {};
-        cartItems.forEach(item => {
-          if (!itemsByStore[item.storeId]) itemsByStore[item.storeId] = [];
-          itemsByStore[item.storeId].push(item);
-        });
-
-        const orderIds = [];
-        const storeNames = [];
-
-        for (const [storeId, items] of Object.entries(itemsByStore)) {
-          const storeName = items[0].storeName || 'Campus Store';
-          storeNames.push(storeName);
-          
-          const storeSubtotal = items.reduce((sum, i) => sum + (i.price * i.qty), 0);
-          const isFirst = orderIds.length === 0;
-          const storeTotal = storeSubtotal + (isFirst ? totalFees : 0);
-
-          const discount = appliedCoupon ? Math.round((storeSubtotal * appliedCoupon.discount_percent) / 100) : 0;
-
-          // Save order to MongoDB via API
-          const orderResponse = await axios.post('/api/orders', {
-            user_id: auth.currentUser?.uid || 'guest_user',
-            user_name: auth.currentUser?.displayName || localStorage.getItem('userName') || 'Campus User',
-            user_phone: userPhone,
-            college_id: userCollegeId,
-            store_id: storeId,
-            store_name: storeName,
-            items: items,
-            total_amount: Math.max(0, storeTotal - discount),
-            discount_amount: discount,
-            coupon_applied: appliedCoupon ? appliedCoupon.code : null,
-            address: address,
-            payment_status: 'completed',
-            payment_transaction_id: paymentTransactionId,
-            order_status: 'confirmed',
-            delivery_otp: deliveryOtp,
-            created_at: new Date().toISOString()
-          });
-          orderIds.push(orderResponse.data.order?.id || orderResponse.data.order?._id);
-        }
-
-        // Track coupon usage in MongoDB
-        if (appliedCoupon && appliedCoupon.once_per_user !== false && auth.currentUser) {
-          await axios.post(`/api/users/${auth.currentUser.uid}/track-coupon`, { code: appliedCoupon.code });
-        }
-
-        // Send Order Confirmation Email via Resend
-      try {
-        const discountAmount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount_percent) / 100) : 0;
-        const totalAmount = Math.max(1, Math.round(subtotal + totalFees - discountAmount));
-
-        await axios.post('/api/send-order-email', {
-          email: auth.currentUser?.email || '',
-          orderIds,
-          storeNames,
-          items: cartItems,
-          totalAmount,
-          deliveryOtp,
-          address,
-          fees,
-          appliedCoupon: appliedCoupon ? {
-            code: appliedCoupon.code,
-            discount_percent: appliedCoupon.discount_percent
-          } : null
-        });
-        console.log('[Zappit] Order confirmation email requested successfully.');
-      } catch (emailErr) {
-        console.error('[Zappit] Failed to send order confirmation email:', emailErr);
-      }
-      
-      const combinedStoreNames = storeNames.join(', ');
-
-      setPaymentProcessing(false);
-      clearCart();
-      setPaymentSuccess(true);
-      setAnimationPhase(1);
-
-      setTimeout(() => setAnimationPhase(2), 1500);
-      setTimeout(() => setAnimationPhase(3), 2500);
-      setTimeout(() => setAnimationPhase(4), 3500);
-      
-      setTimeout(() => {
-        navigate(`/track/${orderIds.join(',')}`, { state: { storeName: combinedStoreNames, address } });
-      }, 5500);
-      
-    } catch (err) {
-      console.error(err);
-      alert('Failed to finalize order');
       setPaymentProcessing(false);
     }
   };
