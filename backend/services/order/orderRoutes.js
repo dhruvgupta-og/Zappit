@@ -12,13 +12,26 @@ router.get('/', async (req, res) => {
     if (!isStaff) {
       // Non-staff can ONLY fetch their own orders
       query.user_id = req.user.uid;
+    } else if (req.user.role === 'store_owner') {
+      // Store owners only see orders for their assigned store
+      query.store_id = req.user.staff_store_id;
+    } else if (req.user.role === 'delivery') {
+      // Delivery partners only see orders for their assigned college
+      query.college_id = req.user.staff_college_id;
     } else if (req.query.user_id) {
-      // Admins/Staff can fetch specific user's orders if requested
+      // Admins can fetch specific user's orders if requested
       query.user_id = req.query.user_id;
     }
 
     const orders = await Order.find(query).sort({ created_at: -1 });
-    res.json({ success: true, orders: orders.map(o => ({ id: o._id, ...o.toObject() })) });
+    res.json({ success: true, orders: orders.map(o => {
+      const orderObj = { id: o._id, ...o.toObject() };
+      // Secure OTP: only admins or the order owner (customer) can see the OTP in the list response
+      if (req.user.role !== 'admin' && req.user.uid !== orderObj.user_id) {
+        delete orderObj.delivery_otp;
+      }
+      return orderObj;
+    }) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -47,6 +60,36 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Verify OTP and Mark Delivered
+router.post('/:id/verify-otp', async (req, res) => {
+  try {
+    const isStaff = ['admin', 'delivery'].includes(req.user.role);
+    if (!isStaff) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Delivery staff only' });
+    }
+    
+    const { otp } = req.body;
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+    
+    // Check college authorization for delivery staff
+    if (req.user.role === 'delivery' && order.college_id !== req.user.staff_college_id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Order not assigned to your college' });
+    }
+
+    if (order.delivery_otp !== otp) {
+      return res.status(400).json({ success: false, error: 'Invalid OTP' });
+    }
+
+    order.order_status = 'delivered';
+    const updatedOrder = await order.save();
+    
+    res.json({ success: true, order: updatedOrder });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Update Order Status (Store/Admin/Delivery Dashboard)
 router.patch('/:id/status', async (req, res) => {
   try {
@@ -56,7 +99,20 @@ router.patch('/:id/status', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Forbidden: Staff only' });
     }
     const { order_status } = req.body;
-    const updatedOrder = await Order.findByIdAndUpdate(req.params.id, { order_status }, { new: true });
+
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ success: false, error: 'Order not found' });
+
+    if (req.user.role === 'store_owner' && order.store_id !== req.user.staff_store_id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Order not from your store' });
+    }
+    if (req.user.role === 'delivery' && order.college_id !== req.user.staff_college_id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Order not to your college' });
+    }
+
+    order.order_status = order_status;
+    const updatedOrder = await order.save();
+
     res.json({ success: true, order: updatedOrder });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

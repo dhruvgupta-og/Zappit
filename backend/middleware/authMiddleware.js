@@ -31,9 +31,9 @@ const authMiddleware = async (req, res, next) => {
     if (role !== 'admin') {
       try {
         const staffDoc = await admin.firestore().collection('staff').doc(decodedToken.uid).get();
-        if (staffDoc.exists) {
           role = staffDoc.data().role || role; // 'store_owner' or 'delivery'
           req.user.staff_store_id = staffDoc.data().store_id;
+          req.user.staff_college_id = staffDoc.data().college_id;
         }
       } catch (err) {
         console.error('Firestore staff fetch error:', err.message);

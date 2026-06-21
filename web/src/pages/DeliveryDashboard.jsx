@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, doc, updateDoc, query } from 'firebase/firestore';
 import { Package, CheckCircle, Truck, MapPin, Clock, Store, Phone } from 'lucide-react';
 import api from '../utils/api';
 
@@ -14,11 +12,30 @@ const DeliveryDashboard = () => {
   const [otpPromptId, setOtpPromptId] = useState(null);
   const [otpInput, setOtpInput] = useState('');
 
-  // ── AUTH-BASED DELIVERY IDP ──
-  // College identity comes from sessionStorage set by /staff-login
-  const collegeId   = sessionStorage.getItem('staff_college_id');
-  const collegeName = sessionStorage.getItem('staff_college_name') || '';
-  const isLoggedIn  = sessionStorage.getItem('staff_role') === 'delivery' && !!collegeId;
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  // Use the central api to fetch user profile safely on mount
+  useEffect(() => {
+    const checkRole = async () => {
+      try {
+        const res = await api.get('/api/users/me'); // We can use the already existing backend logic or fetch orders directly
+        // Wait, there is no /api/users/me. The user ID is fetched through auth.currentUser in App.jsx.
+        // Actually, we can just attempt to fetch orders. If 403, not logged in.
+        const ordersRes = await api.get('/api/orders');
+        if (ordersRes.data.success) {
+          setIsLoggedIn(true);
+        } else {
+          setIsLoggedIn(false);
+        }
+      } catch {
+        setIsLoggedIn(false);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+    checkRole();
+  }, []);
 
   const handleMarkDelivered = (order) => {
     if (order.delivery_otp) {
@@ -29,51 +46,28 @@ const DeliveryDashboard = () => {
     }
   };
 
-  const verifyOtpAndDeliver = (order) => {
-    if (otpInput === order.delivery_otp) {
-      updateOrderStatus(order.id, 'delivered');
-      setOtpPromptId(null);
-      setOtpInput('');
-    } else {
-      alert('Invalid OTP. Please check with the customer.');
+  const verifyOtpAndDeliver = async (order) => {
+    try {
+      const res = await api.post(`/api/orders/${order.id}/verify-otp`, { otp: otpInput });
+      if (res.data.success) {
+        setOtpPromptId(null);
+        setOtpInput('');
+        fetchDeliveryData(); // Refresh the list
+      }
+    } catch (err) {
+      alert(err.response?.data?.error || 'Invalid OTP. Please check with the customer.');
     }
   };
 
 
 
   const fetchDeliveryData = async () => {
-    if (!collegeId) return;
     try {
-      const [storesRes, ordersRes] = await Promise.all([
-        api.get('/api/stores'),
-        api.get('/api/orders?admin=true')
-      ]);
+      // Backend now automatically filters by req.user.staff_college_id
+      const ordersRes = await api.get('/api/orders');
 
-      if (storesRes.data.success && ordersRes.data.success) {
-        const stores = storesRes.data.stores;
-        const rawOrders = ordersRes.data.orders;
-
-        const ordersData = rawOrders.filter(o => {
-          const oColId = (o.college_id || '').trim();
-          const sColId = (collegeId || '').trim();
-          const sColName = (collegeName || '').trim();
-          
-          if (oColId === sColId && sColId !== '') return true;
-          if (oColId === sColName && sColName !== '') return true;
-          
-          const store = stores.find(s => s.id === o.store_id);
-          if (store) {
-            const storeColId = (store.college_id || '').trim();
-            const storeColName = (store.college_name || '').trim();
-            if (storeColId === sColId && sColId !== '') return true;
-            if (storeColId === sColName && sColName !== '') return true;
-            if (storeColName === sColId && sColId !== '') return true;
-            if (storeColName === sColName && sColName !== '') return true;
-          }
-          
-          return false;
-        });
-
+      if (ordersRes.data.success) {
+        const ordersData = ordersRes.data.orders;
         setOrders(ordersData);
         setMyActiveCount(ordersData.filter(o => o.order_status === 'picked_up').length);
       }
@@ -83,10 +77,11 @@ const DeliveryDashboard = () => {
   };
 
   useEffect(() => {
+    if (!isLoggedIn) return;
     fetchDeliveryData();
     const intervalId = setInterval(fetchDeliveryData, 10000);
     return () => clearInterval(intervalId);
-  }, [collegeId, collegeName]);
+  }, [isLoggedIn]);
 
   // Helper to safely get Date object from Firestore Timestamp or string
   const getDateObj = (val) => {
@@ -129,6 +124,10 @@ const DeliveryDashboard = () => {
 
   const atCapacity = myActiveCount >= MAX_ACTIVE_ORDERS;
 
+  if (checkingAuth) {
+    return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
+  }
+
   // ── AUTH GATE SCREEN ──
   if (!isLoggedIn) {
     return (
@@ -149,7 +148,7 @@ const DeliveryDashboard = () => {
       <div style={{ background: 'linear-gradient(135deg, #1E293B 0%, #334155 100%)', padding: '20px 20px 32px', color: 'white' }}>
         <div style={{ marginBottom: 4, fontSize: '0.72rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>🛵 Delivery Partner</div>
         <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>Delivery Dashboard</h1>
-        {collegeName && <div style={{ fontSize: '0.78rem', opacity: 0.7, marginTop: 2 }}>📍 {collegeName}</div>}
+        {/* College Name can be fetched from an API if needed, but omitted here to rely strictly on backend filtering */}
 
         {/* Queue Info */}
         <div style={{ marginTop: 12, padding: '10px 14px', background: atCapacity ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.1)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

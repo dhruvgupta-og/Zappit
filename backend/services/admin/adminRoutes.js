@@ -9,11 +9,21 @@ const Config = require('../../models/Config');
 
 const generateId = () => new mongoose.Types.ObjectId().toString();
 
-// Enforce admin role for all routes in this service
+// Route Guard
 router.use((req, res, next) => {
-  if (req.user?.role !== 'admin') {
-    return res.status(403).json({ success: false, error: 'Forbidden: Admins only' });
+  const allowedRoles = ['admin', 'store_owner'];
+  if (!allowedRoles.includes(req.user?.role)) {
+    return res.status(403).json({ success: false, error: 'Forbidden: Admins/Store Owners only' });
   }
+  
+  // Restrict store_owner from accessing anything other than stores, menu, and delete
+  if (req.user.role === 'store_owner') {
+    const allowedPaths = ['/stores', '/menu', '/delete'];
+    if (!allowedPaths.includes(req.path)) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Store Owners can only manage their own stores and menu' });
+    }
+  }
+  
   next();
 });
 
@@ -47,6 +57,17 @@ router.post('/colleges', async (req, res) => {
 router.post('/delete', async (req, res) => {
   try {
     const { collection, id } = req.body;
+    
+    if (req.user.role === 'store_owner') {
+      if (collection !== 'menu') {
+        return res.status(403).json({ success: false, error: 'Forbidden: Store Owners can only delete menu items' });
+      }
+      const item = await MenuItem.findById(id);
+      if (!item || item.store_id !== req.user.staff_store_id) {
+        return res.status(403).json({ success: false, error: 'Forbidden: Item does not belong to your store' });
+      }
+    }
+
     if (collection === 'colleges') await College.findByIdAndDelete(id);
     if (collection === 'banners') await Banner.findByIdAndDelete(id);
     if (collection === 'stores') await Store.findByIdAndDelete(id);
@@ -91,6 +112,10 @@ router.post('/stores', async (req, res) => {
     if (!data.id && !data._id) data._id = generateId();
     else if (data.id) data._id = data.id;
 
+    if (req.user.role === 'store_owner' && data._id !== req.user.staff_store_id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You can only update your own store' });
+    }
+
     const updateData = { ...data };
     delete updateData._id;
     delete updateData.id;
@@ -108,6 +133,10 @@ router.post('/menu', async (req, res) => {
     const data = { ...req.body };
     if (!data.id && !data._id) data._id = generateId();
     else if (data.id) data._id = data.id;
+
+    if (req.user.role === 'store_owner' && data.store_id !== req.user.staff_store_id) {
+      return res.status(403).json({ success: false, error: 'Forbidden: You can only update menu items for your own store' });
+    }
 
     const updateData = { ...data };
     delete updateData._id;

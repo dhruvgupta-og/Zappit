@@ -1,6 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { db } from '../firebase';
-import { collection, onSnapshot, doc, updateDoc, addDoc, query, deleteDoc } from 'firebase/firestore';
 import { Package, Clock, IndianRupee, ShoppingBag, Plus, Edit2, Trash2, Bell } from 'lucide-react';
 import api from '../utils/api';
 
@@ -11,17 +9,32 @@ const TAB_ANALYTICS = 'analytics';
 const StoreDashboard = () => {
   const [isOpen, setIsOpen] = useState(true);
 
-  // ── AUTH-BASED STORE ID ──
-  const storeId   = sessionStorage.getItem('staff_store_id');
-  const storeName = sessionStorage.getItem('staff_store_name') || 'My Store';
-  const isLoggedIn = sessionStorage.getItem('staff_role') === 'store_owner' && !!storeId;
-  const selectedStore = isLoggedIn ? { id: storeId, name: storeName } : null;
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    const checkRole = async () => {
+      try {
+        const res = await api.get('/api/orders');
+        if (res.data.success) {
+          setIsLoggedIn(true);
+        } else {
+          setIsLoggedIn(false);
+        }
+      } catch {
+        setIsLoggedIn(false);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+    checkRole();
+  }, []);
 
   // ── REAL-TIME STORE STATUS ──
   const fetchStoreData = async () => {
-    if (!selectedStore) return;
+    if (!sessionStorage.getItem('staff_store_id')) return;
     try {
-      const res = await api.get(`/api/stores/${selectedStore.id}`);
+      const res = await api.get(`/api/stores/${sessionStorage.getItem('staff_store_id')}`);
       if (res.data.success) {
         setIsOpen(res.data.store.is_open !== false);
         setMenuItems(res.data.menu.map(m => ({ id: m._id, ...m })));
@@ -31,14 +44,10 @@ const StoreDashboard = () => {
     }
   };
 
-  useEffect(() => {
-    fetchStoreData();
-  }, [selectedStore]);
-
   const toggleStoreStatus = async () => {
-    if (!selectedStore) return;
+    if (!sessionStorage.getItem('staff_store_id')) return;
     const newStatus = !isOpen;
-    await api.post('/api/admin/stores', { id: selectedStore.id, is_open: newStatus });
+    await api.post('/api/admin/stores', { id: sessionStorage.getItem('staff_store_id'), is_open: newStatus });
     fetchStoreData();
   };
 
@@ -53,15 +62,12 @@ const StoreDashboard = () => {
 
   // ── REAL-TIME ORDERS ──
   const fetchOrders = async () => {
-    if (!selectedStore) return;
     try {
-      // For Store Dashboard we fetch all orders, but our backend can take admin=true to get everything
-      // then we filter. A more optimal way would be to pass store_id in query, but admin=true works.
-      const res = await api.get('/api/orders?admin=true');
+      const res = await api.get('/api/orders');
       if (res.data.success) {
         const ordersData = res.data.orders
-          .filter(o => o.store_id === selectedStore.id && (o.payment_status === 'completed' || o.payment_status === 'paid' || o.payment_status === 'pending'));
-
+          .filter(o => o.payment_status === 'completed' || o.payment_status === 'paid' || o.payment_status === 'pending');
+        setOrders(ordersData);
         const newCount = ordersData.filter(o => o.order_status === 'confirmed').length;
         if (newCount > prevOrderCount.current && prevOrderCount.current >= 0) {
           setNotification('🔔 New Order Received!');
@@ -79,7 +85,6 @@ const StoreDashboard = () => {
           } catch (e) { /* audio blocked */ }
         }
         prevOrderCount.current = newCount;
-        setOrders(ordersData);
       }
     } catch (err) {
       console.error(err);
@@ -87,10 +92,12 @@ const StoreDashboard = () => {
   };
 
   useEffect(() => {
+    if (!isLoggedIn) return;
     fetchOrders();
-    const intervalId = setInterval(fetchOrders, 10000);
-    return () => clearInterval(intervalId);
-  }, [selectedStore]);
+    fetchStoreData();
+    const interval = setInterval(fetchOrders, 10000);
+    return () => clearInterval(interval);
+  }, [isLoggedIn]);
 
   const getDateObj = (val) => {
     if (!val) return new Date(0);
@@ -212,8 +219,8 @@ const StoreDashboard = () => {
   const [editingMenuId, setEditingMenuId] = useState(null);
 
   const saveMenuItem = async () => {
-    if (!menuForm.name || !menuForm.price || !selectedStore) return;
-    const data = { ...menuForm, price: Number(menuForm.price), is_available: true, store_id: selectedStore.id };
+    if (!menuForm.name || !menuForm.price) return;
+    const data = { ...menuForm, price: Number(menuForm.price), is_available: true, store_id: sessionStorage.getItem('staff_store_id') };
     if (editingMenuId) data.id = editingMenuId;
 
     await api.post('/api/admin/menu', data);
@@ -235,7 +242,8 @@ const StoreDashboard = () => {
     fetchStoreData();
   };
 
-  if (!selectedStore) {
+  if (checkingAuth) return null;
+  if (!isLoggedIn) {
     return (
       <div style={{ minHeight: '100vh', background: 'linear-gradient(160deg, #0B132B 0%, #1E293B 100%)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
         <div style={{ fontSize: '3rem', marginBottom: 12 }}>🔒</div>
@@ -262,8 +270,9 @@ const StoreDashboard = () => {
       <div style={{ background: 'var(--primary-gradient)', padding: '20px', color: 'white' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <p style={{ margin: 0, fontSize: '0.7rem', opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Store Dashboard</p>
-            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>{selectedStore.name}</h1>
+            <div style={{ marginBottom: 4, fontSize: '0.72rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>🏪 Store Partner</div>
+            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800 }}>Store Dashboard</h1>
+            {sessionStorage.getItem('staff_store_name') && <div style={{ fontSize: '0.78rem', opacity: 0.7, marginTop: 2 }}>{sessionStorage.getItem('staff_store_name')}</div>}
           </div>
           <button onClick={toggleStoreStatus} style={{ background: isOpen ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.3)', border: 'none', borderRadius: 20, padding: '8px 16px', color: 'white', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ width: 10, height: 10, borderRadius: '50%', background: isOpen ? '#86EFAC' : '#FCA5A5', display: 'inline-block' }} />
