@@ -26,7 +26,7 @@ const ProfilePage = () => {
 
   // Fetch colleges (public route, no auth needed)
   useEffect(() => {
-    axios.get('/api/stores/colleges/all').then(res => {
+    api.get('/api/stores/colleges/all').then(res => {
       if (res.data.success) setColleges(res.data.colleges);
     }).catch(() => {});
   }, []);
