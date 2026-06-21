@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { auth, db } from '../firebase';
 import {
   GoogleAuthProvider,
@@ -349,7 +349,7 @@ const LoginPage = () => {
           By continuing, you agree to Zappit's{' '}
           <span style={{ textDecoration: 'underline', cursor: 'pointer' }}>Terms of Service</span>
           {' '}and{' '}
-          <span style={{ textDecoration: 'underline', cursor: 'pointer' }}>Privacy Policy</span>.
+          <Link to="/privacy-policy" style={{ textDecoration: 'underline', cursor: 'pointer', color: 'inherit' }}>Privacy Policy</Link>.
         </p>
       </div>
 
