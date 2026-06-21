@@ -19,13 +19,14 @@ import AdminDashboard from './pages/AdminDashboard';
 import OnboardingPage from './pages/Onboarding';
 import StaffLogin from './pages/StaffLogin';
 import PaymentCallback from './pages/PaymentCallback';
+import PrivacyPolicy from './pages/PrivacyPolicy';
 
 const DASHBOARD_PATHS = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin-secure-dashboard', '/onboarding', '/staff-login', '/payment-callback'];
 
 // ── Auth Guard: redirects to login if not authenticated, onboarding if profile incomplete
 const AuthGuard = ({ children, user, profileComplete, checkingAuth }) => {
   const location = useLocation();
-  const publicPaths = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin-secure-dashboard', '/staff-login'];
+  const publicPaths = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin-secure-dashboard', '/staff-login', '/privacy-policy'];
 
   if (checkingAuth) {
     return (
@@ -139,6 +140,7 @@ function App() {
                 <Route path="/staff-login" element={<StaffLogin />} />
                 <Route path="/admin-secure-dashboard" element={<AdminDashboard />} />
                 <Route path="/payment-callback" element={<PaymentCallback />} />
+                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
               </Routes>
             </AuthGuard>
           </div>

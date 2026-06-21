@@ -397,6 +397,29 @@ const HomePage = () => {
           to { bottom: 100px; opacity: 1; }
         }
       `}</style>
+      {/* Footer */}
+      <div style={{ textAlign: 'center', padding: '16px 24px 8px', marginTop: 8 }}>
+        <Link
+          to="/privacy-policy"
+          style={{
+            color: 'var(--text-muted)',
+            fontSize: '0.8rem',
+            textDecoration: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 5,
+            opacity: 0.7,
+            transition: 'opacity 0.2s',
+          }}
+          onMouseOver={e => e.currentTarget.style.opacity = 1}
+          onMouseOut={e => e.currentTarget.style.opacity = 0.7}
+        >
+          🔒 Privacy Policy
+        </Link>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', margin: '0 10px', opacity: 0.4 }}>·</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', opacity: 0.5 }}>© 2026 Zappit</span>
+      </div>
+
     </div>
   );
 };
