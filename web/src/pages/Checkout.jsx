@@ -173,15 +173,7 @@ const CheckoutPage = () => {
 
               // Send Order Confirmation Email via Resend
               try {
-                const discountAmount = appliedCoupon ? Math.round((subtotal * appliedCoupon.discount_percent) / 100) : 0;
-                const totalAmount = Math.max(1, Math.round(subtotal + totalFees - discountAmount));
-
-                // Group items by store to get storeNames
-                const itemsByStore = {};
-                cartItems.forEach(item => {
-                await api.post('/api/send-order-email', {
-                  orderIds: orderIds
-                });
+                await api.post('/api/send-order-email', { orderIds: orderIds });
                 console.log('[Zappit] Order confirmation email requested successfully.');
               } catch (emailErr) {
                 console.error('[Zappit] Failed to send order confirmation email:', emailErr);
