@@ -6,7 +6,7 @@ const mongoose = require('mongoose');
 // Get all orders for a specific user (or all if admin/staff)
 router.get('/', async (req, res) => {
   try {
-    let query = {};
+    let query = { order_status: { $ne: 'pending' } };
     const isStaff = ['admin', 'store_owner', 'delivery'].includes(req.user.role);
 
     if (!isStaff) {
