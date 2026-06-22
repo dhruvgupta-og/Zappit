@@ -80,7 +80,7 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
 
   app.use(cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || origin.includes('razorpay.com') || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
@@ -89,6 +89,7 @@ if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
     credentials: true
   }));
   app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
 
   // DEBUG: Log all incoming requests (Disable body logging in production for security)
   app.use((req, res, next) => {

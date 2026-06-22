@@ -33,6 +33,11 @@ const withTimeout = (promise, ms, label) => {
 };
 
 const authMiddleware = async (req, res, next) => {
+  // Bypass auth for Razorpay redirect webhook
+  if (req.originalUrl && req.originalUrl.includes('/verify-payment-redirect')) {
+    return next();
+  }
+
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
