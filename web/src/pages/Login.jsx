@@ -114,10 +114,16 @@ const LoginPage = () => {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithRedirect(auth, provider);
-      // It redirects the page, so no code runs after this
+      const result = await signInWithPopup(auth, provider);
+      await handlePostLogin(result.user);
     } catch (err) {
-      setError(friendlyError(err));
+      if (err.code === 'auth/popup-blocked') {
+        setError('Popup blocked by browser. Please open in Safari/Chrome.');
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        setError('Sign-in cancelled. Please try again.');
+      } else {
+        setError(friendlyError(err));
+      }
     } finally {
       setLoading(false);
     }
