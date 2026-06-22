@@ -4,8 +4,6 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const compression = require('compression');
-const cluster = require('cluster');
-const os = require('os');
 
 // Catch-all for uncaught exceptions to prevent silent crashes
 process.on('uncaughtException', (err) => {
@@ -13,30 +11,10 @@ process.on('uncaughtException', (err) => {
   process.exit(1);
 });
 
-// Load Balancer & Clustering implementation (Sharding across CPUs)
-const useClustering = process.env.NODE_ENV === 'production';
-if (useClustering && (cluster.isPrimary || cluster.isMaster)) {
-  const numCPUs = os.cpus().length;
-  console.log(`Master process ${process.pid} is running`);
-  console.log(`Setting up ${numCPUs} worker processes for load balancing...`);
+// Database Setup
+require('./database/mongodb');
 
-  // Fork workers.
-  for (let i = 0; i < numCPUs; i++) {
-    cluster.fork();
-  }
-
-  // Handle worker failure and respawn to prevent downtime (zero casualty)
-  cluster.on('exit', (worker, code, signal) => {
-    console.error(`Worker ${worker.process.pid} died. Respawning a new worker to maintain capacity...`);
-    cluster.fork();
-  });
-} else {
-  // Database and Cache Setup
-  // Using Firebase Admin as the database layer to avoid local MongoDB installation issues
-  require('./database/mongodb'); 
-  // require('./cache/redis');
-
-  const app = express();
+const app = express();
 
   // Trust Render's reverse proxy so rate limiting works correctly
   app.set('trust proxy', 1);
@@ -174,7 +152,7 @@ app.use('/api', authCheck, webPaymentService);
   process.on('SIGINT', shutdown);
 
   process.on('unhandledRejection', (err) => {
-    console.error(`Worker ${process.pid}: UNHANDLED REJECTION! Shutting down...`, err);
+    console.error(`[Zappit] UNHANDLED REJECTION! Shutting down...`, err);
     shutdown();
   });
-}
+
