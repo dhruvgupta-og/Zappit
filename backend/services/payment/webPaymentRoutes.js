@@ -285,6 +285,62 @@ router.post('/verify-payment', async (req, res) => {
   }
 });
 
+// POST /api/verify-payment-redirect (For Mobile Browser Redirects)
+router.post('/verify-payment-redirect', async (req, res) => {
+  try {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    const frontendUrl = process.env.FRONTEND_URL || 'https://www.zappit.shop';
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.redirect(`${frontendUrl}/payment-callback?error=Missing+payment+fields`);
+    }
+
+    const secret = process.env.RAZORPAY_KEY_SECRET;
+    if (!secret) {
+      return res.redirect(`${frontendUrl}/payment-callback?error=Server+misconfigured`);
+    }
+
+    // 1. Verify HMAC Signature
+    const hmac = crypto.createHmac('sha256', secret);
+    hmac.update(razorpay_order_id + "|" + razorpay_payment_id);
+    const generated_signature = hmac.digest('hex');
+
+    if (generated_signature !== razorpay_signature) {
+      return res.redirect(`${frontendUrl}/payment-callback?error=Signature+mismatch`);
+    }
+
+    // 2. Fetch payment from Razorpay
+    const payment = await razorpay.payments.fetch(razorpay_payment_id);
+    if (payment.status !== 'captured') {
+      await Order.updateMany(
+        { razorpay_order_id: razorpay_order_id },
+        { payment_status: 'flagged', payment_transaction_id: razorpay_payment_id }
+      );
+      return res.redirect(`${frontendUrl}/payment-callback?error=Payment+not+captured`);
+    }
+
+    // 3. Mark orders as paid securely server-side
+    await Order.updateMany(
+      { razorpay_order_id: razorpay_order_id },
+      { 
+        payment_status: 'paid', 
+        order_status: 'confirmed',
+        payment_transaction_id: razorpay_payment_id 
+      }
+    );
+
+    const verifiedOrders = await Order.find({ razorpay_order_id: razorpay_order_id });
+    const orderIds = verifiedOrders.map(o => o._id).join(',');
+
+    return res.redirect(`${frontendUrl}/payment-callback?verified=true&transactionId=${razorpay_payment_id}&orderIds=${orderIds}`);
+
+  } catch (err) {
+    console.error('Razorpay Redirect Verification Error:', err);
+    const frontendUrl = process.env.FRONTEND_URL || 'https://www.zappit.shop';
+    return res.redirect(`${frontendUrl}/payment-callback?error=Verification+failed`);
+  }
+});
+
 // POST /api/send-order-email
 router.post('/send-order-email', async (req, res) => {
   try {

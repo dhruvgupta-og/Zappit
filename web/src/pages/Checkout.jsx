@@ -149,6 +149,8 @@ const CheckoutPage = () => {
 
       console.log('[Zappit] Order API response:', data);
 
+      const backendUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.MODE === 'production' ? 'https://zappit-backend.onrender.com' : 'http://localhost:5000');
+
       // 2. Open Razorpay Checkout
       const options = {
         key: data.key_id || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_T0gdDL6JAF6MCI',
@@ -157,7 +159,7 @@ const CheckoutPage = () => {
         name: 'Zappit',
         description: 'Campus Delivery',
         order_id: data.order_id,
-        callback_url: window.location.origin + '/api/verify-payment',
+        callback_url: `${backendUrl}/api/verify-payment-redirect`,
         redirect: true,
         handler: async function (response) {
           try {

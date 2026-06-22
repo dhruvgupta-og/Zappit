@@ -17,6 +17,7 @@ const PaymentCallback = () => {
       const transactionId = searchParams.get('transactionId');
       const isVerified = searchParams.get('verified') === 'true';
       const errorMsg = searchParams.get('error');
+      const orderIdsParam = searchParams.get('orderIds');
       
       if (errorMsg) {
         setStatus('failure');
@@ -24,31 +25,40 @@ const PaymentCallback = () => {
         return;
       }
 
-      if (!merchantOrderId) {
+      if (!isVerified) {
         setStatus('failure');
-        setError('Missing Order ID');
+        setError('Payment verification failed');
         return;
       }
 
       try {
-        if (isVerified) {
-          // Finalize order in Firestore
-          await finalizeOrder(transactionId || merchantOrderId);
-          setStatus('success');
-          
-          // Clear cart
-          localStorage.removeItem('zappit_cart');
-          localStorage.removeItem('zappit_cart_storeId');
-          localStorage.removeItem('zappit_cart_storeName');
+        setStatus('success');
+        
+        // Clear cart
+        localStorage.removeItem('zappit_cart');
+        localStorage.removeItem('zappit_cart_storeId');
+        localStorage.removeItem('zappit_cart_storeName');
 
-          // Redirect to home/orders after delay
+        // Parse order IDs
+        const orderIds = orderIdsParam ? orderIdsParam.split(',') : [];
+
+        if (orderIds.length > 0) {
+          // Send Order Confirmation Email
+          try {
+            await api.post('/api/send-order-email', { orderIds: orderIds });
+          } catch (err) {
+            console.error('[Zappit] Failed to send email on callback', err);
+          }
+          
           setTimeout(() => {
-             navigate('/');
-          }, 4000);
+             navigate(`/track/${orderIds.join(',')}`);
+          }, 3000);
         } else {
-          setStatus('failure');
-          setError('Payment verification failed');
+          setTimeout(() => {
+             navigate('/orders');
+          }, 3000);
         }
+
       } catch (err) {
         console.error(err);
         setStatus('failure');
@@ -58,68 +68,6 @@ const PaymentCallback = () => {
 
     verifyPayment();
   }, [searchParams, navigate]);
-
-  const finalizeOrder = async (paymentTransactionId) => {
-    const pendingData = JSON.parse(localStorage.getItem('pendingOrderData'));
-    if (!pendingData) return;
-
-    const { cartItems, address, appliedCoupon, subtotal, deliveryFee, platformFee } = pendingData;
-    const deliveryOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
-    let userPhone = '';
-    let userCollegeId = localStorage.getItem('userCollegeId') || '';
-    if (auth.currentUser?.uid) {
-      const userSnap = await getDoc(doc(db, 'users', auth.currentUser.uid));
-      if (userSnap.exists()) {
-        userPhone = userSnap.data().phone || '';
-        userCollegeId = userSnap.data().college_id || userCollegeId;
-      }
-    }
-
-    const itemsByStore = {};
-    cartItems.forEach(item => {
-      if (!itemsByStore[item.storeId]) itemsByStore[item.storeId] = [];
-      itemsByStore[item.storeId].push(item);
-    });
-
-    const orderIds = [];
-    for (const [storeId, items] of Object.entries(itemsByStore)) {
-      const storeName = items[0].storeName || 'Campus Store';
-      const storeSubtotal = items.reduce((sum, i) => sum + (i.price * i.qty), 0);
-      const isFirst = orderIds.length === 0;
-      const storeTotal = storeSubtotal + (isFirst ? deliveryFee + platformFee : 0);
-      const discount = appliedCoupon ? Math.round((storeSubtotal * appliedCoupon.discount_percent) / 100) : 0;
-
-      const docRef = await addDoc(collection(db, 'orders'), {
-        user_id: auth.currentUser?.uid || 'guest_user',
-        user_name: auth.currentUser?.displayName || 'Campus User',
-        user_phone: userPhone,
-        college_id: userCollegeId,
-        store_id: storeId,
-        store_name: storeName,
-        items: items,
-        total_amount: Math.max(0, storeTotal - discount),
-        discount_amount: discount,
-        coupon_applied: appliedCoupon ? appliedCoupon.code : null,
-        address: address,
-        payment_status: 'completed',
-        payment_transaction_id: paymentTransactionId,
-        order_status: 'confirmed',
-        delivery_otp: deliveryOtp,
-        created_at: serverTimestamp()
-      });
-      orderIds.push(docRef.id);
-    }
-
-    if (appliedCoupon && auth.currentUser) {
-      await updateDoc(doc(db, 'users', auth.currentUser.uid), {
-        used_coupons: arrayUnion(appliedCoupon.code)
-      });
-    }
-
-    localStorage.removeItem('pendingOrderData');
-    return orderIds;
-  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-6 text-center">
