@@ -10,6 +10,7 @@ import {
   createUserWithEmailAndPassword,
 } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
+import api from '../utils/api';
 import { Eye, EyeOff, Mail, Lock, ArrowRight, Zap } from 'lucide-react';
 
 // ── Reusable input with icon ──────────────────────────────────────────────────
@@ -77,15 +78,35 @@ const LoginPage = () => {
 
   // ── Post-login: check if profile complete → route accordingly ──
   const handlePostLogin = async (user) => {
-    const userDoc = await getDoc(doc(db, 'users', user.uid));
-    if (userDoc.exists() && userDoc.data().profile_complete) {
-      localStorage.setItem('userName', userDoc.data().name || user.displayName || '');
-      localStorage.setItem('userCollegeName', userDoc.data().college_name || '');
-      navigate('/');
-    } else {
+    try {
+      const res = await api.get(`/api/users/${user.uid}`);
+      if (res.data.success && res.data.exists && res.data.user.profile_complete) {
+        localStorage.setItem('userName', res.data.user.name || user.displayName || '');
+        localStorage.setItem('userCollegeName', res.data.user.college_name || '');
+        navigate('/');
+      } else {
+        navigate('/onboarding');
+      }
+    } catch (err) {
+      console.error('Failed to fetch user profile post-login', err);
       navigate('/onboarding');
     }
   };
+
+  // If user is already logged in, redirect away from login page
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged(user => {
+      if (user) {
+        // Only auto-redirect if there's no pending redirect result, to avoid race conditions
+        getRedirectResult(auth).then(res => {
+          if (!res) {
+             handlePostLogin(user);
+          }
+        }).catch(() => {});
+      }
+    });
+    return () => unsub();
+  }, []);
 
   // ── Google Sign-In ──
   const handleGoogleLogin = async () => {

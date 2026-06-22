@@ -91,7 +91,7 @@ const OnboardingPage = () => {
       if (!user) return;
 
       try {
-        const res = await axios.get(`/api/users/${user.uid}`);
+        const res = await api.get(`/api/users/${user.uid}`);
         if (res.data.success && res.data.exists && res.data.user?.profile_complete === true) {
           window.location.href = '/';
           return;
