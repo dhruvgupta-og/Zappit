@@ -7,10 +7,16 @@ import { auth } from '../firebase';
 
 const HomePage = () => {
   const navigate = useNavigate();
-  const [allStores, setAllStores] = useState([]);
-  const [banners, setBanners] = useState([]);
+  const [allStores, setAllStores] = useState(() => {
+    const cached = localStorage.getItem('zappit_stores');
+    return cached ? JSON.parse(cached) : [];
+  });
+  const [banners, setBanners] = useState(() => {
+    const cached = localStorage.getItem('zappit_banners');
+    return cached ? JSON.parse(cached) : [];
+  });
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !localStorage.getItem('zappit_stores'));
   const [wakingUp, setWakingUp] = useState(false);
   const [showToast, setShowToast] = useState(null); // { message, type }
   const [searchQuery, setSearchQuery] = useState('');
@@ -53,9 +59,12 @@ const HomePage = () => {
 
         if (storesRes.data.success) {
           setAllStores(storesRes.data.stores);
+          localStorage.setItem('zappit_stores', JSON.stringify(storesRes.data.stores));
         }
         if (bannersRes.data.success) {
-          setBanners(bannersRes.data.banners.filter(b => b.active !== false));
+          const activeBanners = bannersRes.data.banners.filter(b => b.active !== false);
+          setBanners(activeBanners);
+          localStorage.setItem('zappit_banners', JSON.stringify(activeBanners));
         }
       } catch (err) {
         console.error('Failed to fetch home data:', err.message);
