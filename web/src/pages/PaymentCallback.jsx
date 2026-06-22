@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { db, auth } from '../firebase';
-import { collection, addDoc, serverTimestamp, doc, getDoc, updateDoc, arrayUnion } from 'firebase/firestore';
 import api from '../utils/api';
 import { CheckCircle, XCircle, Loader2, ShoppingBag } from 'lucide-react';
 

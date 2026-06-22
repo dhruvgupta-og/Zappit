@@ -33,8 +33,11 @@ const withTimeout = (promise, ms, label) => {
 };
 
 const authMiddleware = async (req, res, next) => {
-  // Bypass auth for Razorpay redirect webhook
-  if (req.originalUrl && req.originalUrl.includes('/verify-payment-redirect')) {
+  // Bypass auth only for specific public routes (exact path match)
+  const rawPath = (req.originalUrl || '').split('?')[0]; // strip query params
+  const PUBLIC_PATHS = ['/api/verify-payment-redirect'];
+  const isTrackingPath = /^\/api\/track\/[^/]+$/.test(rawPath);
+  if (PUBLIC_PATHS.includes(rawPath) || isTrackingPath) {
     return next();
   }
 

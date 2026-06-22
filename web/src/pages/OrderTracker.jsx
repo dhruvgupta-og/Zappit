@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
-import { db } from '../firebase';
-import { doc, onSnapshot } from 'firebase/firestore';
+import api from '../utils/api';
 import { CheckCircle, Clock, ChefHat, Truck, Home, ArrowLeft, Package } from 'lucide-react';
 
 const ORDER_STEPS = [
@@ -25,20 +24,35 @@ const OrderTracker = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (orderIds.length === 0) return;
+    if (orderIds.length === 0) {
+      setLoading(false);
+      return;
+    }
 
-    const unsubs = orderIds.map(id => 
-      onSnapshot(doc(db, 'orders', id), (snap) => {
-        if (snap.exists()) {
-          setOrdersMap(prev => ({ ...prev, [id]: { id: snap.id, ...snap.data() } }));
+    let isSubscribed = true;
+
+    const fetchOrders = async () => {
+      try {
+        const res = await api.get(`/api/track/${orderId}`);
+        if (res.data.success && isSubscribed) {
+          const map = {};
+          res.data.orders.forEach(o => map[o.id] = o);
+          setOrdersMap(map);
         }
-      })
-    );
+      } catch (err) {
+        console.error("Tracker poll error:", err);
+      } finally {
+        if (isSubscribed) setLoading(false);
+      }
+    };
 
-    // Give it a tiny bit of time to fetch initial data
-    setTimeout(() => setLoading(false), 800);
+    fetchOrders(); // Initial fetch
+    const intervalId = setInterval(fetchOrders, 5000); // Poll every 5 seconds
 
-    return () => unsubs.forEach(unsub => unsub());
+    return () => {
+      isSubscribed = false;
+      clearInterval(intervalId);
+    };
   }, [orderId]);
 
   const order = ordersMap[activeOrderId];

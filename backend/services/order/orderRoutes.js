@@ -39,28 +39,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Create Order (Moved checkout logic here for DB creation)
-router.post('/', async (req, res) => {
-  try {
-    const orderData = { ...req.body };
-    if (!orderData._id) {
-      orderData._id = new mongoose.Types.ObjectId().toString();
-    }
-    
-    // Enforce user_id to match the authenticated user
-    orderData.user_id = req.user.uid;
-
-    // Ensure default statuses if not provided by frontend
-    if (!orderData.payment_status) orderData.payment_status = 'pending';
-    if (!orderData.order_status) orderData.order_status = 'pending';
-
-    const newOrder = new Order(orderData);
-    const savedOrder = await newOrder.save();
-    res.status(201).json({ success: true, order: savedOrder });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
 // Verify OTP and Mark Delivered
 router.post('/:id/verify-otp', async (req, res) => {

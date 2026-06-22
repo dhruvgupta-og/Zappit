@@ -69,18 +69,5 @@ router.post('/:uid', async (req, res) => {
   }
 });
 
-// POST track coupon usage (single-use coupons)
-router.post('/:uid/track-coupon', async (req, res) => {
-  try {
-    const { code } = req.body;
-    await User.findByIdAndUpdate(
-      req.params.uid,
-      { $addToSet: { used_coupons: code } }
-    );
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
-});
 
 module.exports = router;

@@ -144,8 +144,18 @@ router.post('/menu', async (req, res) => {
     if (!data.id && !data._id) data._id = generateId();
     else if (data.id) data._id = data.id;
 
-    if (req.user.role === 'store_owner' && data.store_id !== req.user.staff_store_id) {
-      return res.status(403).json({ success: false, error: 'Forbidden: You can only update menu items for your own store' });
+    if (req.user.role === 'store_owner') {
+      if (data.store_id !== req.user.staff_store_id) {
+        return res.status(403).json({ success: false, error: 'Forbidden: You can only update menu items for your own store' });
+      }
+
+      // Prevent hijacking existing items from other stores by checking the database first
+      if (data._id) {
+        const existingItem = await MenuItem.findById(data._id);
+        if (existingItem && existingItem.store_id !== req.user.staff_store_id) {
+           return res.status(403).json({ success: false, error: 'Forbidden: Cannot hijack menu item from another store' });
+        }
+      }
     }
 
     const updateData = { ...data };

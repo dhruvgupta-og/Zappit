@@ -269,6 +269,16 @@ router.post('/verify-payment', async (req, res) => {
 
     // Fetch the updated orders to return to frontend
     const verifiedOrders = await Order.find({ razorpay_order_id: razorpay_order_id });
+    
+    // Enforce once_per_user coupon tracking
+    if (verifiedOrders.length > 0) {
+      const userId = verifiedOrders[0].user_id;
+      const couponApplied = verifiedOrders[0].coupon_applied;
+      if (userId && userId !== 'guest_user' && couponApplied) {
+        await User.findByIdAndUpdate(userId, { $addToSet: { used_coupons: couponApplied } });
+      }
+    }
+
     const orderIds = verifiedOrders.map(o => o._id);
     const deliveryOtp = verifiedOrders.length > 0 ? verifiedOrders[0].delivery_otp : null;
 
@@ -330,6 +340,16 @@ router.post('/verify-payment-redirect', async (req, res) => {
     );
 
     const verifiedOrders = await Order.find({ razorpay_order_id: razorpay_order_id });
+    
+    // Enforce once_per_user coupon tracking
+    if (verifiedOrders.length > 0) {
+      const userId = verifiedOrders[0].user_id;
+      const couponApplied = verifiedOrders[0].coupon_applied;
+      if (userId && userId !== 'guest_user' && couponApplied) {
+        await User.findByIdAndUpdate(userId, { $addToSet: { used_coupons: couponApplied } });
+      }
+    }
+
     const orderIds = verifiedOrders.map(o => o._id).join(',');
 
     return res.redirect(`${frontendUrl}/payment-callback?verified=true&transactionId=${razorpay_payment_id}&orderIds=${orderIds}`);
@@ -738,6 +758,25 @@ router.post('/delete-coupon', async (req, res) => {
   } catch (err) {
     console.error('[Zappit Coupon] delete-coupon error:', err);
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/track/:orderIds (Public tracking)
+router.get('/track/:orderIds', async (req, res) => {
+  try {
+    const orderIds = req.params.orderIds.split(',');
+    
+    // Select specific fields to ensure we don't leak user phone number or private data publicly
+    const orders = await Order.find({ _id: { $in: orderIds } })
+                              .select('-user_phone -user_id');
+                              
+    res.json({ 
+      success: true, 
+      orders: orders.map(o => ({ id: o._id, ...o.toObject() })) 
+    });
+  } catch (err) {
+    console.error('Order Tracking Error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
