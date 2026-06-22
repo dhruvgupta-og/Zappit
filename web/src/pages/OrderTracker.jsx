@@ -36,18 +36,22 @@ const OrderTracker = () => {
         const res = await api.get(`/api/track/${orderId}`);
         if (res.data.success && isSubscribed) {
           const map = {};
-          res.data.orders.forEach(o => map[o.id] = o);
+          res.data.orders.forEach(o => {
+            // Normalize: MongoDB returns _id as ObjectId — convert to string for map key
+            const key = (o.id || o._id || '').toString();
+            map[key] = { ...o, id: key };
+          });
           setOrdersMap(map);
         }
       } catch (err) {
-        console.error("Tracker poll error:", err);
+        console.error("Tracker poll error:", err.response?.status, err.message);
       } finally {
         if (isSubscribed) setLoading(false);
       }
     };
 
-    fetchOrders(); // Initial fetch
-    const intervalId = setInterval(fetchOrders, 5000); // Poll every 5 seconds
+    fetchOrders();
+    const intervalId = setInterval(fetchOrders, 5000);
 
     return () => {
       isSubscribed = false;
@@ -55,7 +59,9 @@ const OrderTracker = () => {
     };
   }, [orderId]);
 
-  const order = ordersMap[activeOrderId];
+  // Normalize activeOrderId to string too
+  const normalizedActiveId = (activeOrderId || '').toString();
+  const order = ordersMap[normalizedActiveId] || Object.values(ordersMap)[0];
 
   if (loading) {
     return (
