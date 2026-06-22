@@ -5,6 +5,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   getRedirectResult,
+  signInWithRedirect,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
 } from 'firebase/auth';
@@ -92,8 +93,8 @@ const LoginPage = () => {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      await handlePostLogin(result.user);
+      await signInWithRedirect(auth, provider);
+      // It redirects the page, so no code runs after this
     } catch (err) {
       setError(friendlyError(err));
     } finally {
