@@ -1,6 +1,6 @@
 import { getToken, onMessage } from 'firebase/messaging';
-import { doc, setDoc } from 'firebase/firestore';
-import { messaging, db } from '../firebase';
+import { messaging } from '../firebase';
+import api from './api';
 
 const VAPID_KEY = 'BOFAZK4xsc9kN_LOFdGf2E3o-k8jEnVrTPnjmmpmdljXMrBFQPV5-IhUwkX88GkEErxyMrEQjPxEVbfXLcJAoQ4';
 
@@ -21,14 +21,12 @@ export const initFcm = async (userId) => {
       if (token) {
         console.log('[FCM] Token generated:', token);
 
-        // 3. Save the token — use setDoc with merge so it works for both
-        //    new email/password users (doc may not fully exist) and Google users
-        const userRef = doc(db, 'users', userId);
-        await setDoc(userRef, {
+        // 3. Save the token via our API so it goes to MongoDB
+        await api.post(`/api/users/${userId}`, {
           fcmToken: token,
-          fcmUpdatedAt: new Date().toISOString(),
-        }, { merge: true });
-        console.log('[FCM] Token successfully registered in Firestore.');
+          updated_at: new Date().toISOString()
+        });
+        console.log('[FCM] Token successfully registered in MongoDB.');
       } else {
         console.warn('[FCM] No registration token available.');
       }

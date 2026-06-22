@@ -155,14 +155,12 @@ const LoginPage = () => {
     setLoading(true);
     try {
       const result = await createUserWithEmailAndPassword(auth, email.trim(), password);
-      // Save a partial user doc — onboarding will complete it
-      await setDoc(doc(db, 'users', result.user.uid), {
-        uid: result.user.uid,
+      // Save a partial user doc to MongoDB — onboarding will complete it
+      await api.post(`/api/users/${result.user.uid}`, {
         email: email.trim(),
         profile_complete: false,
-        created_at: new Date().toISOString(),
         auth_method: 'email',
-      }, { merge: true });
+      });
       navigate('/onboarding');
     } catch (err) {
       setError(friendlyError(err));

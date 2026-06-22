@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Star, Clock, Plus, Minus, Info } from 'lucide-react';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
-import { db } from '../firebase';
 import { useCart } from '../CartContext';
-import axios from 'axios';
+import api from '../utils/api';
 
 const StorePage = () => {
   const { id } = useParams();
@@ -16,7 +14,7 @@ const StorePage = () => {
   useEffect(() => {
     const fetchStoreAndMenu = async () => {
       try {
-        const res = await axios.get(`/api/stores/${id}`);
+        const res = await api.get(`/api/stores/${id}`);
         if (res.data.success) {
           setStore(res.data.store);
           setMenu(res.data.menu || []);

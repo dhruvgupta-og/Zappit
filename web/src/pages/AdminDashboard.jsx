@@ -47,7 +47,7 @@ const AdminDashboard = () => {
     }
 
     try {
-      await axios.post('/api/admin/config/fees', { list: localFees });
+      await api.post('/api/admin/config/fees', { list: localFees });
       alert('Fees updated successfully!');
     } catch (err) {
       alert('Failed to save fees: ' + err.message);
@@ -154,7 +154,7 @@ const AdminDashboard = () => {
       if (user) {
         try {
           const tokenResult = await user.getIdTokenResult();
-          const res = await axios.get(`/api/users/${user.uid}`);
+          const res = await api.get(`/api/users/${user.uid}`);
           if (res.data.success && res.data.user?.role === 'admin') {
             loadAllData();
             fetchOrders();
@@ -183,7 +183,7 @@ const AdminDashboard = () => {
   const loadMenuData = async () => {
     if (!selectedStoreId) { setMenuItems([]); return; }
     try {
-      const s = await axios.get(`/api/stores/${selectedStoreId}`);
+      const s = await api.get(`/api/stores/${selectedStoreId}`);
       if (s.data.success) setMenuItems(s.data.menu.map(m => ({ id: m._id, ...m })));
     } catch (err) {
       console.warn('[Admin] Menu fetch error:', err.message);
@@ -271,9 +271,9 @@ const AdminDashboard = () => {
       if (editingStoreId) {
         storeData.id = editingStoreId;
         // Assume update is handled by the same POST route with upsert logic, or we ignore it for now as per minimal rewrite
-        await axios.post('/api/admin/stores', storeData); 
+        await api.post('/api/admin/stores', storeData); 
       } else {
-        await axios.post('/api/admin/stores', storeData);
+        await api.post('/api/admin/stores', storeData);
       }
 
       setStoreForm({ name: '', image: '', rating: '4.5', delivery_time_mins: '15-20', tags: '', college_id: '' });
@@ -310,7 +310,7 @@ const AdminDashboard = () => {
       const data = { ...collegeForm, created_at: new Date().toISOString() };
       if (editingCollegeId) data.id = editingCollegeId;
 
-      await axios.post('/api/admin/colleges', data);
+      await api.post('/api/admin/colleges', data);
 
       setCollegeForm({ name: '', city: '' });
       setShowCollegeForm(false);
@@ -322,7 +322,7 @@ const AdminDashboard = () => {
   };
 
   const toggleStoreStatus = async (store) => {
-    await axios.post('/api/admin/stores', { id: store.id, is_open: !store.is_open });
+    await api.post('/api/admin/stores', { id: store.id, is_open: !store.is_open });
     await loadAllData();
   };
 
@@ -347,7 +347,7 @@ const AdminDashboard = () => {
     }
 
     try {
-      await axios.post('/api/save-coupon', data);
+      await api.post('/api/save-coupon', data);
 
       setCouponForm({ code: '', discount: '', college_id: 'all', once_per_user: true });
       setShowCouponForm(false);
@@ -361,7 +361,7 @@ const AdminDashboard = () => {
   const deleteCoupon = async (id) => {
     if (window.confirm('Delete this coupon?')) {
       try {
-        await axios.post('/api/delete-coupon', { id });
+        await api.post('/api/delete-coupon', { id });
         await loadAllData();
       } catch (err) {
         alert('Error deleting coupon: ' + (err.response?.data?.error || err.message));
@@ -389,7 +389,7 @@ const AdminDashboard = () => {
     if (editingBannerId) data.id = editingBannerId;
 
     try {
-      await axios.post('/api/admin/banners', data);
+      await api.post('/api/admin/banners', data);
 
       setBannerForm({ image: '', link: '' });
       setShowBannerForm(false);
@@ -423,7 +423,7 @@ const AdminDashboard = () => {
     if (editingMenuId) menuData.id = editingMenuId;
 
     try {
-      await axios.post('/api/admin/menu', menuData);
+      await api.post('/api/admin/menu', menuData);
 
       setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true, image: '' });
       setShowMenuForm(false);
@@ -449,20 +449,20 @@ const AdminDashboard = () => {
 
   const deleteItem = async (col, id) => {
     if (window.confirm('Delete?')) {
-      await axios.post('/api/admin/delete', { collection: col, id });
+      await api.post('/api/admin/delete', { collection: col, id });
       await loadAllData();
     }
   };
 
   const deleteMenuItem = async (id) => {
     if (window.confirm('Delete menu item?')) {
-      await axios.post('/api/admin/delete', { collection: 'menu', id });
+      await api.post('/api/admin/delete', { collection: 'menu', id });
       await loadMenuData();
     }
   };
 
   const toggleMenuAvailability = async (item) => {
-    await axios.post('/api/admin/menu', { id: item.id, is_available: !item.is_available });
+    await api.post('/api/admin/menu', { id: item.id, is_available: !item.is_available });
     await loadMenuData();
   };
 
@@ -504,9 +504,9 @@ const AdminDashboard = () => {
   const handleExportData = async () => {
     try {
       setIsExporting(true);
-      const ordersRes = await axios.get('/api/orders?admin=true');
-      const storesRes = await axios.get('/api/stores');
-      const collegesRes = await axios.get('/api/admin/colleges');
+      const ordersRes = await api.get('/api/orders?admin=true');
+      const storesRes = await api.get('/api/stores');
+      const collegesRes = await api.get('/api/admin/colleges');
       
       const ordersArr = ordersRes.data.orders || [];
       const storesArr = storesRes.data.stores || [];
