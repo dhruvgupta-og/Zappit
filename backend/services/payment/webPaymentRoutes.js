@@ -7,6 +7,7 @@ const { admin } = require('../../firebase');
 const Coupon = require('../../models/Coupon');
 const Order = require('../../models/Order');
 const User = require('../../models/User');
+const Store = require('../../models/Store');
 const mongoose = require('mongoose');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
@@ -187,10 +188,15 @@ router.post('/create-order', async (req, res) => {
       const storeTotalFees = isFirstStore ? totalFees : 0; // Assign fees to first order only
       const storeDiscount = validCoupon ? Math.round((storeSubtotal * validCoupon.discount_percent) / 100) : 0;
       
+      const store = await Store.findById(storeId);
+      const actualCollegeId = store && store.college_id ? store.college_id : (college_id || 'unknown');
+      const actualCollegeName = store && store.college_name ? store.college_name : '';
+      
       const newOrder = new Order({
         _id: new mongoose.Types.ObjectId().toString(),
         user_id: req.user?.uid || 'guest_user',
-        college_id: college_id || 'unknown',
+        college_id: actualCollegeId,
+        college_name: actualCollegeName,
         store_id: storeId,
         store_name: storeName,
         items: storeItems,
