@@ -19,11 +19,8 @@ const DeliveryDashboard = () => {
   useEffect(() => {
     const checkRole = async () => {
       try {
-        const res = await api.get('/api/users/me'); // We can use the already existing backend logic or fetch orders directly
-        // Wait, there is no /api/users/me. The user ID is fetched through auth.currentUser in App.jsx.
-        // Actually, we can just attempt to fetch orders. If 403, not logged in.
-        const ordersRes = await api.get('/api/orders');
-        if (ordersRes.data.success) {
+        const res = await api.get('/api/users/me/staff');
+        if (res.data.success && res.data.role === 'delivery') {
           setIsLoggedIn(true);
         } else {
           setIsLoggedIn(false);
