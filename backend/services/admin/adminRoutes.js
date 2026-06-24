@@ -82,7 +82,14 @@ router.post('/delete', async (req, res) => {
 
     if (collection === 'colleges') await College.findByIdAndDelete(id);
     if (collection === 'banners') await Banner.findByIdAndDelete(id);
-    if (collection === 'stores') await Store.findByIdAndDelete(id);
+    if (collection === 'stores') {
+      // Delete the store
+      await Store.findByIdAndDelete(id);
+      // Also delete all menu items for this store
+      await MenuItem.deleteMany({ store_id: id });
+      // Also delete the Staff profile linked to this store
+      await Staff.deleteMany({ store_id: id });
+    }
     if (collection === 'menu') await MenuItem.findByIdAndDelete(id);
     res.json({ success: true });
   } catch (err) {
