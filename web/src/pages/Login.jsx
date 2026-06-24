@@ -80,11 +80,14 @@ const LoginPage = () => {
   const handlePostLogin = async (user) => {
     try {
       const res = await api.get(`/api/users/${user.uid}`);
-      if (res.data.success && res.data.exists && res.data.user.profile_complete) {
+      if (res.data.success && res.data.exists && res.data.user?.profile_complete) {
+        // Profile complete — store in localStorage and go home
         localStorage.setItem('userName', res.data.user.name || user.displayName || '');
         localStorage.setItem('userCollegeName', res.data.user.college_name || '');
+        localStorage.setItem('userCollegeId', res.data.user.college_id || '');
         navigate('/');
       } else {
+        // Profile incomplete or not found — go to onboarding
         navigate('/onboarding');
       }
     } catch (err) {
@@ -156,14 +159,31 @@ const LoginPage = () => {
     try {
       const result = await createUserWithEmailAndPassword(auth, email.trim(), password);
       // Save a partial user doc to MongoDB — onboarding will complete it
-      await api.post(`/api/users/${result.user.uid}`, {
-        email: email.trim(),
-        profile_complete: false,
-        auth_method: 'email',
-      });
+      try {
+        await api.post(`/api/users/${result.user.uid}`, {
+          email: email.trim(),
+          profile_complete: false,
+          auth_method: 'email',
+        });
+      } catch (dbErr) {
+        // MongoDB save failed — not fatal; onboarding will retry saving
+        console.error('[Zappit] Partial profile save failed:', dbErr);
+      }
       navigate('/onboarding');
     } catch (err) {
-      setError(friendlyError(err));
+      if (err.code === 'auth/email-already-in-use') {
+        // Account already exists — try to log them in instead
+        try {
+          const result = await signInWithEmailAndPassword(auth, email.trim(), password);
+          await handlePostLogin(result.user);
+        } catch (loginErr) {
+          // Password was wrong or other issue — just show a helpful message
+          setError('An account with this email already exists. Please sign in with your password.');
+          setTab('login');
+        }
+      } else {
+        setError(friendlyError(err));
+      }
     } finally {
       setLoading(false);
     }
