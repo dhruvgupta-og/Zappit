@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db } from '../firebase';
+import { auth } from '../firebase';
 import { Eye, EyeOff, LogIn } from 'lucide-react';
+import api from '../utils/api';
 
 const StaffLogin = () => {
   const navigate = useNavigate();
@@ -28,16 +28,19 @@ const StaffLogin = () => {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const uid = cred.user.uid;
 
-      // Fetch the staff profile from Firestore
-      const snap = await getDoc(doc(db, 'staff', uid));
-      if (!snap.exists()) {
+      // Wait a tiny bit to ensure Firebase token is ready for API call
+      await cred.user.getIdToken(true);
+
+      // Fetch the staff profile from backend (MongoDB)
+      const res = await api.get('/api/users/me/staff');
+      if (!res.data.success || !['store_owner', 'delivery'].includes(res.data.role)) {
         await signOut(auth);
         setError('No staff profile found for this account. Contact your admin.');
         setLoading(false);
         return;
       }
 
-      const profile = snap.data();
+      const profile = res.data;
       const expectedRole = isStore ? 'store_owner' : 'delivery';
 
       if (profile.role !== expectedRole) {

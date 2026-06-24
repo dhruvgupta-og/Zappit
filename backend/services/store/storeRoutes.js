@@ -9,7 +9,19 @@ const Banner = require('../../models/Banner');
 router.get('/', async (req, res) => {
   try {
     const stores = await Store.find();
-    res.json({ success: true, stores: stores.map(s => ({ id: s._id, ...s.toObject() })) });
+    // Fetch all menu items to support dish-level searching on the frontend
+    const menuItems = await MenuItem.find();
+    
+    const storesWithSearchInfo = stores.map(s => {
+      const storeObj = { id: s._id, ...s.toObject() };
+      // Find all menu items belonging to this store and map their names to lowercase
+      storeObj.menuItemsForSearch = menuItems
+        .filter(m => m.store_id === s._id.toString() || m.store_id === s._id)
+        .map(m => m.name.toLowerCase());
+      return storeObj;
+    });
+
+    res.json({ success: true, stores: storesWithSearchInfo });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

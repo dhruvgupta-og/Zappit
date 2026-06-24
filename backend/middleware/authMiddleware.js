@@ -1,25 +1,6 @@
 const { admin } = require('../firebase');
 const User = require('../models/User');
-
-// Short-lived in-memory cache for staff role lookups (Firestore).
-// Staff assignment doesn't change second-to-second, so caching for a
-// short window removes a network round trip from the hot path on
-// almost every authenticated request, which was the source of the
-// per-request slowdown.
-const staffCache = new Map(); // uid -> { data, expiresAt }
-const STAFF_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-
-const getCachedStaffDoc = async (uid) => {
-  const cached = staffCache.get(uid);
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.data;
-  }
-
-  const staffDoc = await admin.firestore().collection('staff').doc(uid).get();
-  const data = staffDoc.exists ? staffDoc.data() : null;
-  staffCache.set(uid, { data, expiresAt: Date.now() + STAFF_CACHE_TTL_MS });
-  return data;
-};
+const Staff = require('../models/Staff');
 
 // Wrap a promise so a slow/hanging network call (Firebase/Firestore)
 // fails fast instead of hanging the whole request for tens of seconds.
@@ -59,15 +40,10 @@ const authMiddleware = async (req, res, next) => {
       email: decodedToken.email
     };
 
-    // Mongo lookup and Firestore staff lookup don't depend on each other
-    // (both only need decodedToken.uid), so run them in parallel instead
-    // of serially.
+    // Run MongoDB queries in parallel
     const [dbUser, staffData] = await Promise.all([
       User.findById(decodedToken.uid),
-      getCachedStaffDoc(decodedToken.uid).catch((err) => {
-        console.error('Firestore staff fetch error:', err.message);
-        return null;
-      })
+      Staff.findById(decodedToken.uid)
     ]);
 
     if (dbUser && dbUser.blocked) {
@@ -80,6 +56,10 @@ const authMiddleware = async (req, res, next) => {
       role = staffData.role || role;
       req.user.staff_store_id = staffData.store_id;
       req.user.staff_college_id = staffData.college_id;
+      // Add extra staff data so userRoutes.js can return it for login
+      req.user.staff_name = staffData.name;
+      req.user.staff_store_name = staffData.store_name;
+      req.user.staff_college_name = staffData.college_name;
     }
 
     req.user.role = role;

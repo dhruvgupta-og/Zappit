@@ -221,15 +221,26 @@ const StoreDashboard = () => {
   const [editingMenuId, setEditingMenuId] = useState(null);
 
   const saveMenuItem = async () => {
-    if (!menuForm.name || !menuForm.price || !staffStoreId) return;
+    if (!menuForm.name || !menuForm.price || !staffStoreId) {
+      alert('Missing details: make sure Name, Price are filled and you are logged in.');
+      return;
+    }
     const data = { ...menuForm, price: Number(menuForm.price), is_available: true, store_id: staffStoreId };
     if (editingMenuId) data.id = editingMenuId;
 
-    await api.post('/api/admin/menu', data);
-    setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
-    setEditingMenuId(null);
-    setShowMenuForm(false);
-    fetchStoreData();
+    try {
+      const res = await api.post('/api/admin/menu', data);
+      if (!res.data.success) {
+        alert('Error: ' + (res.data.error || 'Unknown error from server'));
+        return;
+      }
+      setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
+      setEditingMenuId(null);
+      setShowMenuForm(false);
+      fetchStoreData();
+    } catch (err) {
+      alert('Failed to save menu item: ' + (err.response?.data?.error || err.message));
+    }
   };
 
   const deleteMenuItem = async (id) => {

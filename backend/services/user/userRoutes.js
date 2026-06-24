@@ -8,7 +8,10 @@ router.get('/me/staff', async (req, res) => {
     success: true,
     role: req.user.role,
     store_id: req.user.staff_store_id,
-    college_id: req.user.staff_college_id
+    store_name: req.user.staff_store_name,
+    college_id: req.user.staff_college_id,
+    college_name: req.user.staff_college_name,
+    name: req.user.staff_name
   });
 });
 
