@@ -15,6 +15,26 @@ router.get('/me/staff', async (req, res) => {
   });
 });
 
+const Staff = require('../../models/Staff');
+router.get('/force-create-staff', async (req, res) => {
+  try {
+    const newStaff = await Staff.findOneAndUpdate(
+      { _id: 'TJY7LojeWiTJHgwvtMEWzdPIenG2' },
+      {
+        role: 'store_owner',
+        name: 'Biryani Store Owner',
+        email: 'biryani@zappit.shop',
+        store_id: 'store_biryani_001',
+        store_name: 'Biryani'
+      },
+      { upsert: true, new: true }
+    );
+    res.json({ success: true, staff: newStaff });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Middleware to ensure a user only accesses/modifies their own profile (unless admin)
 router.use('/:uid', (req, res, next) => {
   if (req.user.uid !== req.params.uid && req.user.role !== 'admin') {

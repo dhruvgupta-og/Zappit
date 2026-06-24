@@ -15,7 +15,7 @@ const addStaff = async () => {
   }
 
   try {
-    await mongoose.connect('mongodb+srv://dhruv:dhruvgupta@cluster0.bnd0n.mongodb.net/zappit?retryWrites=true&w=majority&appName=Cluster0');
+    await mongoose.connect(process.env.MONGO_URI);
     console.log('Connected to MongoDB.');
 
     const newStaff = await Staff.findOneAndUpdate(
