@@ -1,1 +1,9 @@
-const mongoose = require('mongoose'); const Order = require('./models/Order'); const Store = require('./models/Store'); mongoose.connect('mongodb+srv://dheerajparihar:mJ35q7Y5T3o46l5I@cluster0.e8njy.mongodb.net/zappit?retryWrites=true&w=majority&appName=Cluster0').then(async () => { const orders = await Order.find({ order_status: { $in: ['ready', 'out_for_delivery', 'picked_up'] } }); let count = 0; for (let o of orders) { const s = await Store.findById(o.store_id); if (s && o.college_id !== s.college_id) { o.college_id = s.college_id; o.college_name = s.college_name || ''; await o.save(); count++; } } console.log('Updated', count, 'orders'); process.exit(0); });
+const mongoose = require('mongoose');
+require('dotenv').config();
+const Order = require('./models/Order');
+
+mongoose.connect(process.env.MONGO_URI).then(async () => {
+  const orders = await Order.find({order_status: { $nin: ['delivered', 'cancelled', 'pending'] }}); 
+  console.log('Active orders:', orders.map(o => ({id: o._id, status: o.order_status, college: o.college_id})));
+  mongoose.disconnect();
+});
