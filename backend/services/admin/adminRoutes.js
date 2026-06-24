@@ -6,6 +6,8 @@ const Banner = require('../../models/Banner');
 const Store = require('../../models/Store');
 const MenuItem = require('../../models/MenuItem');
 const Config = require('../../models/Config');
+const { admin } = require('../../firebase');
+const Staff = require('../../models/Staff');
 
 const generateId = () => new mongoose.Types.ObjectId().toString();
 
@@ -116,6 +118,52 @@ router.post('/banners', async (req, res) => {
 });
 
 // --- STORES ---
+router.post('/create-store-owner', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, error: 'Email and password are required' });
+    }
+
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Forbidden: Admins only' });
+    }
+
+    // 1. Create Firebase Auth User
+    let userRecord;
+    try {
+      userRecord = await admin.auth().createUser({
+        email,
+        password,
+      });
+    } catch (authErr) {
+      return res.status(400).json({ success: false, error: authErr.message });
+    }
+
+    // 2. Create Store in MongoDB
+    const storeName = email.split('@')[0];
+    const storeId = generateId();
+    const newStore = await Store.create({
+      _id: storeId,
+      name: storeName,
+    });
+
+    // 3. Create Staff profile
+    const newStaff = await Staff.create({
+      _id: userRecord.uid,
+      role: 'store_owner',
+      name: storeName + ' Owner',
+      email: email,
+      store_id: storeId,
+      store_name: storeName
+    });
+
+    res.json({ success: true, store: newStore, staff: newStaff });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 router.post('/stores', async (req, res) => {
   try {
     const data = { ...req.body };

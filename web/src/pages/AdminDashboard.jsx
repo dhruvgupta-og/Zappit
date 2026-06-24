@@ -253,30 +253,39 @@ const AdminDashboard = () => {
   // ── STORE MANAGEMENT ──
   const [showStoreForm, setShowStoreForm] = useState(false);
   const [editingStoreId, setEditingStoreId] = useState(null);
-  const [storeForm, setStoreForm] = useState({ name: '', image: '', rating: '4.5', delivery_time_mins: '15-20', tags: '', college_id: '' });
+  const [storeForm, setStoreForm] = useState({ name: '', image: '', rating: '4.5', delivery_time_mins: '15-20', tags: '', college_id: '', email: '', password: '' });
   
   const saveStore = async () => {
-    if (!storeForm.name || !storeForm.college_id) return;
-    
-    const collegeName = colleges.find(c => c.id === storeForm.college_id)?.name || '';
-    const storeData = { 
-      ...storeForm, 
-      rating: Number(storeForm.rating), 
-      tags: storeForm.tags.split(',').map(t => t.trim()).filter(t => t), 
-      is_open: true,
-      college_name: collegeName
-    };
-
     try {
       if (editingStoreId) {
-        storeData.id = editingStoreId;
-        // Assume update is handled by the same POST route with upsert logic, or we ignore it for now as per minimal rewrite
+        if (!storeForm.name || !storeForm.college_id) {
+          alert('Name and College are required.');
+          return;
+        }
+        const collegeName = colleges.find(c => c.id === storeForm.college_id)?.name || '';
+        const storeData = { 
+          name: storeForm.name,
+          image: storeForm.image,
+          college_id: storeForm.college_id,
+          rating: Number(storeForm.rating), 
+          tags: storeForm.tags ? storeForm.tags.split(',').map(t => t.trim()).filter(t => t) : [], 
+          is_open: true,
+          college_name: collegeName,
+          id: editingStoreId
+        };
         await api.post('/api/admin/stores', storeData); 
       } else {
-        await api.post('/api/admin/stores', storeData);
+        if (!storeForm.email || !storeForm.password) {
+          alert('Email and Password are required.');
+          return;
+        }
+        await api.post('/api/admin/create-store-owner', {
+          email: storeForm.email,
+          password: storeForm.password
+        });
       }
 
-      setStoreForm({ name: '', image: '', rating: '4.5', delivery_time_mins: '15-20', tags: '', college_id: '' });
+      setStoreForm({ name: '', image: '', rating: '4.5', delivery_time_mins: '15-20', tags: '', college_id: '', email: '', password: '' });
       setShowStoreForm(false);
       setEditingStoreId(null);
       await loadAllData();
@@ -726,52 +735,57 @@ const AdminDashboard = () => {
         {/* ════ STORES ════ */}
         {activeTab === 'stores' && (
           <>
-            <button onClick={() => { setEditingStoreId(null); setStoreForm({ name: '', image: '', rating: '4.5', delivery_time_mins: '15-20', tags: '', college_id: '' }); setShowStoreForm(true); }} style={{ width: '100%', padding: '13px', borderRadius: 12, border: '2px dashed #94A3B8', background: 'rgba(0,0,0,0.02)', color: '#475569', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 14 }}>
-              <Plus size={18} /> Add Store
+            <button onClick={() => { setEditingStoreId(null); setStoreForm({ name: '', image: '', rating: '4.5', delivery_time_mins: '15-20', tags: '', college_id: '', email: '', password: '' }); setShowStoreForm(true); }} style={{ width: '100%', padding: '13px', borderRadius: 12, border: '2px dashed #94A3B8', background: 'rgba(0,0,0,0.02)', color: '#475569', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 14 }}>
+              <Plus size={18} /> Add New Store
             </button>
             {showStoreForm && (
               <div style={{ background: 'white', borderRadius: 12, padding: 16, marginBottom: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-                <h3 style={{ margin: '0 0 12px 0' }}>{editingStoreId ? 'Edit Store' : 'Add Store'}</h3>
-                <input placeholder="Store Name" value={storeForm.name} onChange={e => setStoreForm(p => ({ ...p, name: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', marginBottom: 8, borderRadius: 8, border: '1px solid #E2E8F0', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                <h3 style={{ margin: '0 0 12px 0' }}>{editingStoreId ? 'Edit Store Config' : 'Create New Store Owner'}</h3>
                 
-                <div style={{ marginBottom: 12 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>Store Image</label>
-                    <button onClick={() => toggleMode('store')} style={{ border: 'none', background: 'none', color: '#3B82F6', fontSize: '0.65rem', cursor: 'pointer', fontWeight: 600 }}>
-                      {useUrlMode.store ? '📷 Use File Upload' : '🔗 Use Image Link'}
-                    </button>
-                  </div>
-                  
-                  {useUrlMode.store ? (
-                    <input placeholder="Paste Image URL" value={storeForm.image} onChange={e => setStoreForm(p => ({ ...p, image: e.target.value }))}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #E2E8F0', outline: 'none', fontSize: '0.8rem', boxSizing: 'border-box' }} />
-                  ) : (
-                    <>
-                      <input type="file" accept="image/*" onChange={async (e) => {
-                        const url = await handleImageUpload(e.target.files[0], 'stores');
-                        if (url) setStoreForm(p => ({ ...p, image: url }));
-                      }} style={{ fontSize: '0.8rem' }} />
-                      {storeForm.image && <div style={{ fontSize: '0.7rem', color: '#10B981', marginTop: 4 }}>✓ Image ready</div>}
-                    </>
-                  )}
-                </div>
+                {!editingStoreId ? (
+                  <>
+                    <input type="email" placeholder="Store Owner Email (e.g. store@gmail.com)" value={storeForm.email} onChange={e => setStoreForm(p => ({ ...p, email: e.target.value }))}
+                      style={{ width: '100%', padding: '10px 12px', marginBottom: 8, borderRadius: 8, border: '1px solid #E2E8F0', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                    <input type="password" placeholder="Password" value={storeForm.password} onChange={e => setStoreForm(p => ({ ...p, password: e.target.value }))}
+                      style={{ width: '100%', padding: '10px 12px', marginBottom: 12, borderRadius: 8, border: '1px solid #E2E8F0', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                  </>
+                ) : (
+                  <>
+                    <input placeholder="Store Name" value={storeForm.name} onChange={e => setStoreForm(p => ({ ...p, name: e.target.value }))}
+                      style={{ width: '100%', padding: '10px 12px', marginBottom: 8, borderRadius: 8, border: '1px solid #E2E8F0', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                    
+                    <div style={{ display: 'flex', gap: 10, marginBottom: 8, alignItems: 'center' }}>
+                      {useUrlMode.store ? (
+                        <input placeholder="Image URL" value={storeForm.image} onChange={e => setStoreForm(p => ({ ...p, image: e.target.value }))}
+                          style={{ flex: 1, padding: '10px 12px', borderRadius: 8, border: '1px solid #E2E8F0', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                      ) : (
+                        <>
+                          <input type="file" accept="image/*" onChange={async (e) => {
+                            const url = await handleImageUpload(e.target.files[0], 'stores');
+                            if (url) setStoreForm(p => ({ ...p, image: url }));
+                          }} style={{ fontSize: '0.8rem' }} />
+                          {storeForm.image && <div style={{ fontSize: '0.7rem', color: '#10B981', marginTop: 4 }}>✓ Image ready</div>}
+                        </>
+                      )}
+                    </div>
 
-                {[{ key: 'rating', label: 'Rating (1-5)' }, { key: 'delivery_time_mins', label: 'Delivery Time (e.g. 15-20)' }, { key: 'tags', label: 'Tags (comma separated)' }].map(f => (
-                  <input key={f.key} placeholder={f.label} value={storeForm[f.key]} onChange={e => setStoreForm(p => ({ ...p, [f.key]: e.target.value }))}
-                    style={{ width: '100%', padding: '10px 12px', marginBottom: 8, borderRadius: 8, border: '1px solid #E2E8F0', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box' }} />
-                ))}
-                
-                <select 
-                  value={storeForm.college_id} 
-                  onChange={e => setStoreForm(p => ({ ...p, college_id: e.target.value }))}
-                  style={{ width: '100%', padding: '10px 12px', marginBottom: 12, borderRadius: 8, border: '1px solid #E2E8F0', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box' }}
-                >
-                  <option value="">-- Select College Campus --</option>
-                  {colleges.map(c => (
-                    <option key={c.id} value={c.id}>{c.name} {c.city ? `(${c.city})` : ''}</option>
-                  ))}
-                </select>
+                    {[{ key: 'rating', label: 'Rating (1-5)' }, { key: 'delivery_time_mins', label: 'Delivery Time (e.g. 15-20)' }, { key: 'tags', label: 'Tags (comma separated)' }].map(f => (
+                      <input key={f.key} placeholder={f.label} value={storeForm[f.key]} onChange={e => setStoreForm(p => ({ ...p, [f.key]: e.target.value }))}
+                        style={{ width: '100%', padding: '10px 12px', marginBottom: 8, borderRadius: 8, border: '1px solid #E2E8F0', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box' }} />
+                    ))}
+                    
+                    <select 
+                      value={storeForm.college_id} 
+                      onChange={e => setStoreForm(p => ({ ...p, college_id: e.target.value }))}
+                      style={{ width: '100%', padding: '10px 12px', marginBottom: 12, borderRadius: 8, border: '1px solid #E2E8F0', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box' }}
+                    >
+                      <option value="">-- Select College Campus --</option>
+                      {colleges.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} {c.city ? `(${c.city})` : ''}</option>
+                      ))}
+                    </select>
+                  </>
+                )}
 
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button 
