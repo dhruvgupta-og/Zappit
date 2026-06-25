@@ -11,6 +11,7 @@ import * as XLSX from 'xlsx';
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview');
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [orders, setOrders] = useState([]);
   const [isExporting, setIsExporting] = useState(false);
   const [stores, setStores] = useState([]);
@@ -159,6 +160,7 @@ const AdminDashboard = () => {
             loadAllData();
             fetchOrders();
             intervalId = setInterval(fetchOrders, 10000); // 10s polling
+            setCheckingAuth(false);
           } else {
             alert('Unauthorized: Admins only');
             window.location.href = '/';
@@ -168,9 +170,8 @@ const AdminDashboard = () => {
           window.location.href = '/';
         }
       } else {
-        // User not logged in, clear data
-        setOrders([]);
-        if (intervalId) clearInterval(intervalId);
+        // User not logged in, redirect
+        window.location.href = '/';
       }
     });
 
@@ -565,6 +566,17 @@ const AdminDashboard = () => {
       setIsExporting(false);
     }
   };
+
+  // Block render until Firebase auth + role check resolves (prevents UI flash for non-admins)
+  if (checkingAuth) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', flexDirection: 'column', gap: 16, background: '#F1F5F9' }}>
+        <div style={{ width: 44, height: 44, border: '4px solid #E2E8F0', borderTop: '4px solid #0F172A', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+        <p style={{ color: '#64748B', margin: 0, fontWeight: 600 }}>Verifying access...</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#F1F5F9', paddingBottom: 40 }}>

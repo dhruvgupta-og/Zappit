@@ -786,14 +786,17 @@ router.post('/delete-coupon', async (req, res) => {
   }
 });
 
-// GET /api/track/:orderIds (Public tracking)
+// GET /api/track/:orderIds (Public tracking — OTP intentionally excluded)
 router.get('/track/:orderIds', async (req, res) => {
   try {
     const orderIds = req.params.orderIds.split(',');
     
-    // Select specific fields to ensure we don't leak user phone number or private data publicly
+    // Exclude delivery_otp (and other private fields) from the public tracker.
+    // Customers receive the OTP via the authenticated /api/orders response and
+    // the confirmation email — re-exposing it here lets anyone with the bare URL
+    // steal and use the OTP without ever touching the food.
     const orders = await Order.find({ _id: { $in: orderIds } })
-                              .select('-user_phone -user_id');
+                              .select('-user_phone -user_id -delivery_otp');
                               
     res.json({ 
       success: true, 
