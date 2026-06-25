@@ -58,7 +58,9 @@ const app = express();
 
   app.use(cors({
     origin: function (origin, callback) {
-      if (!origin || origin.includes('razorpay.com') || allowedOrigins.includes(origin)) {
+      // Anchored check: only allow exact razorpay.com or *.razorpay.com subdomains (Fix #4)
+      const isRazorpay = /^https:\/\/([a-z0-9-]+\.)*razorpay\.com$/.test(origin);
+      if (!origin || isRazorpay || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));

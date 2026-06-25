@@ -12,6 +12,17 @@ const mongoose = require('mongoose');
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
+// Escape HTML special chars before interpolating into email templates
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
 // Status → notification message map
 const STATUS_MESSAGES = {
   preparing:        { title: '⚡ Order Accepted!',         body: 'Your order at Zappit is now being prepared by the store. Hang tight!' },
@@ -127,11 +138,14 @@ router.post('/create-order', async (req, res) => {
       const itemPrice = dbItem.price;
       subtotal += itemPrice * item.qty;
 
-      // Group for DB order creation
+      // Group for DB order creation — use trusted DB values only (Fix: XSS #3a)
       if (!itemsByStore[dbItem.store_id]) itemsByStore[dbItem.store_id] = [];
       itemsByStore[dbItem.store_id].push({
-        ...item,
-        price: itemPrice // Secure price override
+        id: dbItem._id.toString(),
+        name: dbItem.name,          // from DB, not client
+        price: itemPrice,           // from DB, not client
+        qty: Number(item.qty),
+        storeName: dbItem.store_name || item.storeName || 'Campus Store'
       });
     }
 
@@ -405,10 +419,10 @@ router.post('/send-order-email', async (req, res) => {
     const itemsHtml = items.map(item => `
       <tr style="border-bottom: 1px solid #f3f4f6;">
         <td style="padding: 12px 0; font-size: 15px; color: #1f2937;">
-          <span style="font-weight: 600;">${item.name}</span>
-          <span style="color: #6b7280; margin-left: 6px;">x${item.qty}</span>
+          <span style="font-weight: 600;">${escapeHtml(item.name)}</span>
+          <span style="color: #6b7280; margin-left: 6px;">x${escapeHtml(item.qty)}</span>
         </td>
-        <td style="padding: 12px 0; font-size: 14px; color: #6b7280; text-align: center;">${item.storeName || 'Store'}</td>
+        <td style="padding: 12px 0; font-size: 14px; color: #6b7280; text-align: center;">${escapeHtml(item.storeName || 'Store')}</td>
         <td style="padding: 12px 0; font-size: 15px; color: #1f2937; text-align: right; font-weight: 500;">₹${Number(item.price) * Number(item.qty)}</td>
       </tr>
     `).join('');
@@ -488,7 +502,7 @@ router.post('/send-order-email', async (req, res) => {
             <tr>
               <td style="width: 50%; vertical-align: top; padding-right: 15px;">
                 <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; margin-bottom: 4px;">Delivery Address</div>
-                <div style="font-size: 14px; color: #374151; line-height: 1.5; font-weight: 500;">${address}</div>
+                <div style="font-size: 14px; color: #374151; line-height: 1.5; font-weight: 500;">${escapeHtml(address)}</div>
               </td>
               <td style="width: 50%; vertical-align: top;">
                 <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #9ca3af; margin-bottom: 4px;">Order ID</div>
@@ -547,11 +561,16 @@ router.post('/send-order-email', async (req, res) => {
 // POST /api/send-welcome-email
 router.post('/send-welcome-email', async (req, res) => {
   try {
-    const { email, name, college } = req.body;
-
-    if (!email || !name || !college) {
-      return res.status(400).json({ success: false, error: 'Missing required fields' });
+    // Fix #2: Ignore client-supplied email/name/college — pull from authenticated user + MongoDB
+    const email = req.user?.email;
+    if (!email) {
+      return res.status(400).json({ success: false, error: 'Authenticated user has no email address' });
     }
+
+    // Fetch trusted profile from MongoDB
+    const userProfile = await User.findById(req.user.uid);
+    const name = userProfile?.name || req.user?.name || 'there';
+    const college = userProfile?.college_name || userProfile?.college || '';
 
     const htmlContent = `
 <!DOCTYPE html>
@@ -574,9 +593,9 @@ router.post('/send-welcome-email', async (req, res) => {
 
       <!-- Content -->
       <div style="padding: 40px 30px;">
-        <h2 style="color: #111827; font-size: 22px; font-weight: 700; margin-top: 0; margin-bottom: 12px;">Hi ${name},</h2>
+        <h2 style="color: #111827; font-size: 22px; font-weight: 700; margin-top: 0; margin-bottom: 12px;">Hi ${escapeHtml(name)},</h2>
         <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin: 0 0 24px 0;">
-          We are thrilled to welcome you to the Zappit family! Zappit brings your favorite campus cafes, stores, and snacks directly to you at <strong>${college}</strong>.
+          We are thrilled to welcome you to the Zappit family! Zappit brings your favorite campus cafes, stores, and snacks directly to you at <strong>${escapeHtml(college)}</strong>.
         </p>
 
         <!-- Feature Cards -->
