@@ -123,6 +123,18 @@ router.post('/create-order', async (req, res) => {
     if (!items || !items.length) {
       return res.status(400).json({ success: false, error: 'Items are required' });
     }
+    // H1: Cap cart size to prevent DoS via sequential DB lookups
+    if (items.length > 50) {
+      return res.status(400).json({ success: false, error: 'Cart cannot exceed 50 items' });
+    }
+    // M2: Cap address length
+    if (address && address.length > 500) {
+      return res.status(400).json({ success: false, error: 'Address too long (max 500 chars)' });
+    }
+    // M1: Cap coupon code length
+    if (coupon_code && coupon_code.length > 30) {
+      return res.status(400).json({ success: false, error: 'Invalid coupon code' });
+    }
 
     const MenuItem = require('../../models/MenuItem');
     const Config = require('../../models/Config');
@@ -135,8 +147,13 @@ router.post('/create-order', async (req, res) => {
       if (!dbItem) {
         return res.status(400).json({ success: false, error: `Item not found: ${item.name}` });
       }
+      // H2: Validate qty — must be positive integer, max 100 per item
+      const qty = Number(item.qty);
+      if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
+        return res.status(400).json({ success: false, error: `Invalid quantity for item: must be between 1 and 100` });
+      }
       const itemPrice = dbItem.price;
-      subtotal += itemPrice * item.qty;
+      subtotal += itemPrice * qty;
 
       // Group for DB order creation — use trusted DB values only (Fix: XSS #3a)
       if (!itemsByStore[dbItem.store_id]) itemsByStore[dbItem.store_id] = [];
@@ -144,7 +161,7 @@ router.post('/create-order', async (req, res) => {
         id: dbItem._id.toString(),
         name: dbItem.name,          // from DB, not client
         price: itemPrice,           // from DB, not client
-        qty: Number(item.qty),
+        qty: qty,
         storeName: dbItem.store_name || item.storeName || 'Campus Store'
       });
     }
@@ -790,6 +807,11 @@ router.post('/delete-coupon', async (req, res) => {
 router.get('/track/:orderIds', async (req, res) => {
   try {
     const orderIds = req.params.orderIds.split(',');
+
+    // H4: Cap to 10 IDs — prevents DoS via 500-ID lookup on a public unauthenticated route
+    if (orderIds.length > 10) {
+      return res.status(400).json({ success: false, error: 'Too many order IDs' });
+    }
     
     // Exclude delivery_otp (and other private fields) from the public tracker.
     // Customers receive the OTP via the authenticated /api/orders response and

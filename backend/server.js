@@ -68,8 +68,8 @@ const app = express();
     },
     credentials: true
   }));
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  app.use(express.json({ limit: '2mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
   // DEBUG: Log all incoming requests (Disable body logging in production for security)
   app.use((req, res, next) => {
@@ -100,6 +100,15 @@ if (process.env.NODE_ENV === 'production') {
   app.use('/api/create-order', strictLimiter);
   app.use('/api/verify-payment', strictLimiter);
   app.use('/api/verify-coupon', strictLimiter);
+
+  // Email relay limiter: 5 emails per hour per IP (anti-spam)
+  const emailLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000,
+    max: 5,
+    message: { success: false, error: 'Too many email requests. Please try again later.' }
+  });
+  app.use('/api/send-welcome-email', emailLimiter);
+  app.use('/api/send-order-email', emailLimiter);
 }
 
 // Auth Check Middleware

@@ -225,8 +225,13 @@ router.post('/menu', async (req, res) => {
 });
 
 // --- CONFIG / FEES ---
+const ALLOWED_CONFIG_KEYS = ['fees'];
 router.post('/config/:key', async (req, res) => {
   try {
+    // M3: Only allow known config keys — prevent arbitrary key creation/overwrite
+    if (!ALLOWED_CONFIG_KEYS.includes(req.params.key)) {
+      return res.status(400).json({ success: false, error: `Unknown config key: ${req.params.key}` });
+    }
     const updated = await Config.findByIdAndUpdate(
       req.params.key,
       { _id: req.params.key, ...req.body },
