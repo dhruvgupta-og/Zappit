@@ -154,6 +154,7 @@ const LoginPage = () => {
     setError('');
     if (!email.trim() || !password || !confirmPassword) { setError('Please fill in all fields.'); return; }
     if (password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    if (password.length > 128) { setError('Password too long (max 128 characters).'); return; }
     if (password !== confirmPassword) { setError('Passwords do not match.'); return; }
     setLoading(true);
     try {
@@ -310,6 +311,7 @@ const LoginPage = () => {
               placeholder="••••••••"
               value={password}
               onChange={e => setPassword(e.target.value)}
+              maxLength={128}
               rightElement={eyeBtn(showPass, () => setShowPass(v => !v))}
             />
           </div>

@@ -280,6 +280,14 @@ const AdminDashboard = () => {
           alert('Email and Password are required.');
           return;
         }
+        if (storeForm.password.length < 6) {
+          alert('Password must be at least 6 characters.');
+          return;
+        }
+        if (storeForm.password.length > 128) {
+          alert('Password too long (max 128 characters).');
+          return;
+        }
         await api.post('/api/admin/create-store-owner', {
           email: storeForm.email,
           password: storeForm.password
@@ -758,7 +766,8 @@ const AdminDashboard = () => {
                   <>
                     <input type="email" placeholder="Store Owner Email (e.g. store@gmail.com)" value={storeForm.email} onChange={e => setStoreForm(p => ({ ...p, email: e.target.value }))}
                       style={{ width: '100%', padding: '10px 12px', marginBottom: 8, borderRadius: 8, border: '1px solid #E2E8F0', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box' }} />
-                    <input type="password" placeholder="Password" value={storeForm.password} onChange={e => setStoreForm(p => ({ ...p, password: e.target.value }))}
+                    <input type="password" placeholder="Password (min 6 chars)" value={storeForm.password} onChange={e => setStoreForm(p => ({ ...p, password: e.target.value }))}
+                      minLength={6} maxLength={128}
                       style={{ width: '100%', padding: '10px 12px', marginBottom: 12, borderRadius: 8, border: '1px solid #E2E8F0', outline: 'none', fontSize: '0.9rem', boxSizing: 'border-box' }} />
                   </>
                 ) : (
