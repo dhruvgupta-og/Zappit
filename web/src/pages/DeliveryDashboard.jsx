@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Package, CheckCircle, Truck, MapPin, Clock, Store, Phone } from 'lucide-react';
 import api from '../utils/api';
 
-const MAX_ACTIVE_ORDERS = 3;
 
 const DeliveryDashboard = () => {
   const [orders, setOrders] = useState([]);
@@ -119,7 +118,7 @@ const DeliveryDashboard = () => {
     { key: 'completed', label: 'Completed',    count: completedOrders.length, icon: <CheckCircle size={14} /> },
   ];
 
-  const atCapacity = myActiveCount >= MAX_ACTIVE_ORDERS;
+  const atCapacity = false;
 
   if (checkingAuth) {
     return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
@@ -150,7 +149,7 @@ const DeliveryDashboard = () => {
         {/* Queue Info */}
         <div style={{ marginTop: 12, padding: '10px 14px', background: atCapacity ? 'rgba(239,68,68,0.25)' : 'rgba(255,255,255,0.1)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Active Orders</span>
-          <span style={{ fontWeight: 800, fontSize: '1.1rem' }}>{myActiveCount} / {MAX_ACTIVE_ORDERS}</span>
+          <span style={{ fontWeight: 800, fontSize: '1.1rem' }}>{myActiveCount}</span>
         </div>
         {atCapacity && (
           <div style={{ marginTop: 8, padding: '8px 12px', background: 'rgba(239,68,68,0.2)', borderRadius: 8, fontSize: '0.8rem', color: '#FCA5A5', fontWeight: 600 }}>
