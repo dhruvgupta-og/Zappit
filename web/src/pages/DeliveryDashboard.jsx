@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Package, CheckCircle, Truck, MapPin, Clock, Store, Phone } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Package, CheckCircle, Truck, MapPin, Clock, Store, Phone, Bell } from 'lucide-react';
 import api from '../utils/api';
 
 
@@ -13,6 +13,9 @@ const DeliveryDashboard = () => {
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+
+  const [notification, setNotification] = useState(null);
+  const prevNewOrderCount = useRef(-1);
 
   // Use the central api to fetch user profile safely on mount
   useEffect(() => {
@@ -66,6 +69,24 @@ const DeliveryDashboard = () => {
         const ordersData = ordersRes.data.orders;
         setOrders(ordersData);
         setMyActiveCount(ordersData.filter(o => o.order_status === 'picked_up').length);
+
+        const newCount = ordersData.filter(o => o.order_status === 'ready' || o.order_status === 'out_for_delivery').length;
+        if (newCount > prevNewOrderCount.current && prevNewOrderCount.current !== -1) {
+          setNotification('🔔 New Order Ready for Pickup!');
+          setTimeout(() => setNotification(null), 4000);
+          try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.setValueAtTime(880, ctx.currentTime);
+            osc.frequency.setValueAtTime(660, ctx.currentTime + 0.15);
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+            osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5);
+          } catch (e) { /* audio blocked */ }
+        }
+        prevNewOrderCount.current = newCount;
       }
     } catch (err) {
       console.error(err);
@@ -140,6 +161,13 @@ const DeliveryDashboard = () => {
 
   return (
     <div style={{ minHeight: '100vh', background: '#F9FAFB', paddingBottom: 20 }}>
+      {/* ── NOTIFICATION TOAST ── */}
+      {notification && (
+        <div style={{ position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, background: '#1E293B', color: 'white', padding: '12px 24px', borderRadius: 12, fontWeight: 700, fontSize: '1rem', boxShadow: '0 8px 24px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Bell size={18} /> {notification}
+        </div>
+      )}
+
       {/* ── HEADER ── */}
       <div style={{ background: 'linear-gradient(135deg, #1E293B 0%, #334155 100%)', padding: '20px 20px 32px', color: 'white' }}>
         <div style={{ marginBottom: 4, fontSize: '0.72rem', opacity: 0.7, textTransform: 'uppercase', letterSpacing: '0.05em' }}>🛵 Delivery Partner</div>

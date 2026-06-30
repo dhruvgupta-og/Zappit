@@ -60,7 +60,7 @@ const StoreDashboard = () => {
   const [notification, setNotification] = useState(null);
   const [timeFilter, setTimeFilter] = useState('all');
   const [ordersDateFilter, setOrdersDateFilter] = useState('today'); // 'today' | 'all'
-  const prevOrderCount = useRef(0);
+  const prevOrderCount = useRef(-1);
 
   // ── REAL-TIME ORDERS ──
   const fetchOrders = async () => {
@@ -71,7 +71,7 @@ const StoreDashboard = () => {
           .filter(o => o.payment_status === 'completed' || o.payment_status === 'paid' || o.payment_status === 'pending');
         setOrders(ordersData);
         const newCount = ordersData.filter(o => o.order_status === 'confirmed').length;
-        if (newCount > prevOrderCount.current && prevOrderCount.current >= 0) {
+        if (newCount > prevOrderCount.current && prevOrderCount.current !== -1) {
           setNotification('🔔 New Order Received!');
           setTimeout(() => setNotification(null), 4000);
           try {
