@@ -19,6 +19,8 @@ import { typography, spacing, radius } from '../theme/typography';
 
 WebBrowser.maybeCompleteAuthSession();
 
+// TODO: Replace this placeholder with your REAL Firebase OAuth 2.0 Web Client ID
+// (Found in Firebase Console -> Authentication -> Sign-in method -> Google)
 const GOOGLE_CLIENT_ID = '12406084456-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.apps.googleusercontent.com';
 
 const LoginScreen = ({ navigation }: any) => {

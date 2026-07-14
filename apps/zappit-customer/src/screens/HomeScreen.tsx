@@ -23,6 +23,7 @@ const HomeScreen = ({ navigation }: any) => {
   const [activeCategory, setActiveCategory] = useState('All');
   const [address, setAddress] = useState('Engineering Block A');
   const [collegeName, setCollegeName] = useState('Campus');
+  const [collegeId, setCollegeId] = useState('');
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
 
   const bannerTimer = useRef<NodeJS.Timeout | null>(null);
@@ -49,6 +50,7 @@ const HomeScreen = ({ navigation }: any) => {
     // Load persisted address
     AsyncStorage.getItem('userAddress').then((v) => v && setAddress(v));
     AsyncStorage.getItem('userCollegeName').then((v) => v && setCollegeName(v));
+    AsyncStorage.getItem('userCollegeId').then((v) => v && setCollegeId(v));
   }, []);
 
   // Banner auto-scroll
@@ -66,9 +68,11 @@ const HomeScreen = ({ navigation }: any) => {
         store.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory =
         activeCategory === 'All' || (store.tags && store.tags.includes(activeCategory));
-      return matchesSearch && matchesCategory;
+      const matchesCollege = 
+        !collegeId || !store.college_id || store.college_id === collegeId;
+      return matchesSearch && matchesCategory && matchesCollege;
     });
-  }, [stores, searchQuery, activeCategory]);
+  }, [stores, searchQuery, activeCategory, collegeId]);
 
   const onRefresh = () => {
     setRefreshing(true);

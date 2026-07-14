@@ -82,8 +82,6 @@ const StorePage = () => {
           </div>
         </div>
       </div>
- 
- 
       {store.is_open === false && (
         <div style={{ margin: '20px', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', color: '#EF4444', borderRadius: '12px', textAlign: 'center', fontWeight: 700, border: '1px solid rgba(239, 68, 68, 0.2)', fontSize: '0.9rem' }}>
           This store is currently not accepting orders.
