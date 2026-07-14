@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, ScrollView, Image, TouchableOpacity,
   Platform,
@@ -41,6 +41,15 @@ const StoreDetailScreen = () => {
     };
     fetchStore();
   }, [storeId]);
+
+  const groupedMenu = useMemo(() => {
+    return menu.reduce((acc, item) => {
+      const category = item.category || 'Other';
+      if (!acc[category]) acc[category] = [];
+      acc[category].push(item);
+      return acc;
+    }, {} as Record<string, MenuItem[]>);
+  }, [menu]);
 
   if (loading) {
     return (
@@ -123,58 +132,62 @@ const StoreDetailScreen = () => {
 
         {/* Menu Section */}
         <View style={styles.menuContainer}>
-          <Text style={styles.menuTitle}>Menu</Text>
-          {menu.map((item) => {
-            const itemId = item.id || item._id;
-            const sId = store.id || store._id;
-            const inCart = cartItems[`${sId}_${itemId}`];
+          {Object.entries(groupedMenu).map(([category, items]) => (
+            <View key={category} style={{ marginBottom: spacing.xl }}>
+              <Text style={styles.menuTitle}>{category}</Text>
+              {items.map((item) => {
+                const itemId = item.id || item._id;
+                const sId = store.id || store._id;
+                const inCart = cartItems[`${sId}_${itemId}`];
 
-            return (
-              <View
-                key={itemId}
-                style={[styles.menuItem, !store.is_open && { opacity: 0.6 }]}
-              >
-                <View style={styles.menuItemInfo}>
-                  {/* Veg/Non-veg indicator */}
-                  <View style={[styles.vegIndicator, { borderColor: item.isVeg ? colors.vegGreen : colors.nonVegRed }]}>
-                    <View style={[styles.vegDot, { backgroundColor: item.isVeg ? colors.vegGreen : colors.nonVegRed }]} />
-                  </View>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemPrice}>₹{item.price}</Text>
-                  <Text style={styles.itemDesc} numberOfLines={2}>{item.desc || item.description}</Text>
-                </View>
-                <View style={styles.menuItemRight}>
-                  <Image source={{ uri: item.image }} style={styles.itemImage} />
-                  <View style={styles.actionContainer}>
-                    {store.is_open ? (
-                      inCart ? (
-                        <View style={styles.qtyControl}>
-                          <TouchableOpacity onPress={() => removeFromCart(item, sId!)} style={styles.qtyBtn}>
-                            <Text style={styles.qtyBtnText}>-</Text>
-                          </TouchableOpacity>
-                          <Text style={styles.qtyText}>{inCart.qty}</Text>
-                          <TouchableOpacity onPress={() => addToCart(item, sId!, store.name)} style={styles.qtyBtn}>
-                            <Text style={styles.qtyBtnText}>+</Text>
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        <TouchableOpacity
-                          style={styles.addBtn}
-                          onPress={() => addToCart(item, sId!, store.name)}
-                        >
-                          <Text style={styles.addBtnText}>ADD</Text>
-                        </TouchableOpacity>
-                      )
-                    ) : (
-                      <View style={styles.closedItemBadge}>
-                        <Text style={styles.closedItemText}>CLOSED</Text>
+                return (
+                  <View
+                    key={itemId}
+                    style={[styles.menuItem, !store.is_open && { opacity: 0.6 }]}
+                  >
+                    <View style={styles.menuItemInfo}>
+                      {/* Veg/Non-veg indicator */}
+                      <View style={[styles.vegIndicator, { borderColor: item.isVeg ? colors.vegGreen : colors.nonVegRed }]}>
+                        <View style={[styles.vegDot, { backgroundColor: item.isVeg ? colors.vegGreen : colors.nonVegRed }]} />
                       </View>
-                    )}
+                      <Text style={styles.itemName}>{item.name}</Text>
+                      <Text style={styles.itemPrice}>₹{item.price}</Text>
+                      <Text style={styles.itemDesc} numberOfLines={2}>{item.desc || item.description}</Text>
+                    </View>
+                    <View style={styles.menuItemRight}>
+                      <Image source={{ uri: item.image }} style={styles.itemImage} />
+                      <View style={styles.actionContainer}>
+                        {store.is_open ? (
+                          inCart ? (
+                            <View style={styles.qtyControl}>
+                              <TouchableOpacity onPress={() => removeFromCart(item, sId!)} style={styles.qtyBtn}>
+                                <Text style={styles.qtyBtnText}>-</Text>
+                              </TouchableOpacity>
+                              <Text style={styles.qtyText}>{inCart.qty}</Text>
+                              <TouchableOpacity onPress={() => addToCart(item, sId!, store.name)} style={styles.qtyBtn}>
+                                <Text style={styles.qtyBtnText}>+</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <TouchableOpacity
+                              style={styles.addBtn}
+                              onPress={() => addToCart(item, sId!, store.name)}
+                            >
+                              <Text style={styles.addBtnText}>ADD</Text>
+                            </TouchableOpacity>
+                          )
+                        ) : (
+                          <View style={styles.closedItemBadge}>
+                            <Text style={styles.closedItemText}>CLOSED</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
                   </View>
-                </View>
-              </View>
-            );
-          })}
+                );
+              })}
+            </View>
+          ))}
         </View>
       </ScrollView>
 

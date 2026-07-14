@@ -1,12 +1,18 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
+import { usersApi } from '../api/users';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 
 const ProfileScreen = () => {
-  const { profile, logout } = useAuthStore();
+  const { profile, setProfile, logout } = useAuthStore();
+
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(profile?.name || '');
+  const [phone, setPhone] = useState(profile?.phone || '');
+  const [loading, setLoading] = useState(false);
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -15,10 +21,34 @@ const ProfileScreen = () => {
     ]);
   };
 
+  const handleSave = async () => {
+    if (!profile?.uid) return;
+    setLoading(true);
+    try {
+      await usersApi.updateProfile(profile.uid, { name, phone });
+      setProfile({ ...profile, name, phone });
+      setIsEditing(false);
+      Alert.alert('Success', 'Profile updated successfully!');
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Could not update profile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Profile</Text>
+        {isEditing ? (
+          <TouchableOpacity onPress={handleSave} disabled={loading} style={styles.editBtn}>
+            {loading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.editBtnText}>Save</Text>}
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editBtnLight}>
+            <Text style={styles.editBtnTextLight}>Edit</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
@@ -26,7 +56,11 @@ const ProfileScreen = () => {
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{profile?.name?.charAt(0) || 'U'}</Text>
           </View>
-          <Text style={styles.name}>{profile?.name || 'User'}</Text>
+          {isEditing ? (
+            <TextInput style={styles.editInputName} value={name} onChangeText={setName} placeholder="Your Name" placeholderTextColor={colors.textMuted} />
+          ) : (
+            <Text style={styles.name}>{profile?.name || 'User'}</Text>
+          )}
           <Text style={styles.email}>{profile?.email}</Text>
         </View>
 
@@ -35,7 +69,11 @@ const ProfileScreen = () => {
           <View style={styles.card}>
             <View style={styles.row}>
               <Text style={styles.label}>Phone</Text>
-              <Text style={styles.value}>{profile?.phone || 'Not set'}</Text>
+              {isEditing ? (
+                <TextInput style={styles.editInput} value={phone} onChangeText={setPhone} placeholder="Phone Number" keyboardType="phone-pad" placeholderTextColor={colors.textMuted} />
+              ) : (
+                <Text style={styles.value}>{profile?.phone || 'Not set'}</Text>
+              )}
             </View>
             <View style={styles.divider} />
             <View style={styles.row}>
@@ -75,8 +113,12 @@ const ProfileScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgColor },
-  header: { padding: spacing.xl, paddingBottom: spacing.sm },
+  header: { padding: spacing.xl, paddingBottom: spacing.sm, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { ...typography.h2, color: colors.textMain },
+  editBtn: { backgroundColor: colors.primaryDark, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  editBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  editBtnLight: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  editBtnTextLight: { color: colors.textMain, fontWeight: '700', fontSize: 14 },
 
   avatarContainer: { alignItems: 'center', marginBottom: spacing.xxxl, marginTop: spacing.lg },
   avatar: {
@@ -85,6 +127,7 @@ const styles = StyleSheet.create({
   },
   avatarText: { fontSize: 36, fontWeight: '800', color: '#fff' },
   name: { ...typography.h2, color: colors.textMain, marginBottom: 4 },
+  editInputName: { ...typography.h2, color: colors.textMain, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: colors.primary, textAlign: 'center', minWidth: 200 },
   email: { fontSize: 15, color: colors.textMuted },
 
   section: { marginBottom: spacing.xxl },
@@ -97,6 +140,7 @@ const styles = StyleSheet.create({
   rowBtn: { flexDirection: 'row', justifyContent: 'space-between', padding: spacing.lg, alignItems: 'center' },
   label: { fontSize: 15, color: colors.textMuted },
   value: { fontSize: 15, color: colors.textMain, fontWeight: '500' },
+  editInput: { fontSize: 15, color: colors.textMain, fontWeight: '500', borderBottomWidth: 1, borderBottomColor: colors.primary, minWidth: 120, textAlign: 'right', padding: 0 },
   btnLabel: { fontSize: 15, color: colors.textMain },
   btnValue: { fontSize: 14, color: colors.primary, fontWeight: '600' },
   divider: { height: 1, backgroundColor: colors.borderColor },

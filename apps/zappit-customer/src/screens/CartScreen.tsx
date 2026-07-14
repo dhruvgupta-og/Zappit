@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
 } from 'react-native';
@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useCartStore } from '../store/cartStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
+import { paymentApi } from '../api/payment';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CartScreen = () => {
@@ -17,6 +18,12 @@ const CartScreen = () => {
   const addToCart = useCartStore((state) => state.addToCart);
   const removeFromCart = useCartStore((state) => state.removeFromCart);
   const clearCart = useCartStore((state) => state.clearCart);
+
+  const [deliveryFee, setDeliveryFee] = useState(0);
+
+  useEffect(() => {
+    paymentApi.getDeliveryFee().then(setDeliveryFee).catch(() => setDeliveryFee(20));
+  }, []);
 
   if (cartItems.length === 0) {
     return (
@@ -80,23 +87,25 @@ const CartScreen = () => {
 
         <View style={styles.billCard}>
           <Text style={styles.billTitle}>Bill Details</Text>
-          <View style={styles.billRow}>
+          <View style={[styles.billRow, { marginBottom: 8 }]}>
             <Text style={styles.billText}>Item Total</Text>
             <Text style={styles.billText}>₹{cartTotal}</Text>
           </View>
-          <View style={[styles.billRow, { marginTop: spacing.md }]}>
+          <View style={[styles.billRow, { marginBottom: 8 }]}>
+            <Text style={styles.billText}>Delivery Fee</Text>
+            <Text style={styles.billText}>₹{deliveryFee}</Text>
+          </View>
+          <View style={{ height: 1, backgroundColor: colors.borderColor, marginVertical: 12 }} />
+          <View style={styles.billRow}>
             <Text style={styles.billTextBold}>To Pay</Text>
-            <Text style={styles.billTextBold}>₹{cartTotal}</Text>
+            <Text style={styles.billTextBold}>₹{cartTotal + deliveryFee}</Text>
           </View>
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.checkoutBtn}
-          onPress={() => navigation.navigate('Checkout')}
-        >
-          <Text style={styles.checkoutBtnText}>Proceed to Checkout</Text>
+        <TouchableOpacity style={styles.checkoutBtn} onPress={() => navigation.navigate('Checkout')} activeOpacity={0.9}>
+          <Text style={styles.checkoutBtnText}>Proceed to Checkout • ₹{cartTotal + deliveryFee}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
