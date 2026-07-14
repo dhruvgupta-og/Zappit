@@ -1,0 +1,84 @@
+import { create } from 'zustand';
+import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
+import { auth } from '../config/firebase';
+import { usersApi } from '../api/users';
+import { User } from '../types';
+
+interface AuthState {
+  firebaseUser: FirebaseUser | null;
+  profile: User | null;
+  profileComplete: boolean;
+  isLoading: boolean;
+  isInitialized: boolean;
+
+  setFirebaseUser: (user: FirebaseUser | null) => void;
+  setProfile: (profile: User | null) => void;
+  setProfileComplete: (complete: boolean) => void;
+  setLoading: (loading: boolean) => void;
+  logout: () => Promise<void>;
+  checkProfileComplete: () => Promise<boolean>;
+}
+
+export const useAuthStore = create<AuthState>((set, get) => ({
+  firebaseUser: null,
+  profile: null,
+  profileComplete: false,
+  isLoading: true,
+  isInitialized: false,
+
+  setFirebaseUser: (user) => set({ firebaseUser: user }),
+  setProfile: (profile) => set({ profile }),
+  setProfileComplete: (complete) => set({ profileComplete: complete }),
+  setLoading: (loading) => set({ isLoading: loading }),
+
+  logout: async () => {
+    await auth.signOut();
+    set({
+      firebaseUser: null,
+      profile: null,
+      profileComplete: false,
+    });
+  },
+
+  checkProfileComplete: async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      set({ profileComplete: false });
+      return false;
+    }
+    try {
+      const { exists, user: profile } = await usersApi.getProfile(user.uid);
+      const isComplete = exists && profile?.profile_complete === true;
+      set({ profile, profileComplete: isComplete });
+      return isComplete;
+    } catch {
+      set({ profileComplete: false });
+      return false;
+    }
+  },
+}));
+
+// Listen to Firebase auth state and sync with store
+export const initAuthListener = () => {
+  return onAuthStateChanged(auth, async (firebaseUser) => {
+    const store = useAuthStore.getState();
+    store.setFirebaseUser(firebaseUser);
+
+    if (!firebaseUser) {
+      store.setProfile(null);
+      store.setProfileComplete(false);
+      store.setLoading(false);
+      useAuthStore.setState({ isInitialized: true });
+      return;
+    }
+
+    try {
+      await store.checkProfileComplete();
+    } catch {
+      store.setProfileComplete(false);
+    } finally {
+      store.setLoading(false);
+      useAuthStore.setState({ isInitialized: true });
+    }
+  });
+};
