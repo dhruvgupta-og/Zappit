@@ -8,7 +8,9 @@ import { colors } from '../theme/colors';
 
 // Screens
 import LoginScreen from '../screens/LoginScreen';
-import { StoreDashboard, DeliveryDashboard, AdminDashboard } from '../screens/Dashboards';
+import StoreDashboardScreen from '../screens/StoreDashboardScreen';
+import DeliveryDashboardScreen from '../screens/DeliveryDashboardScreen';
+import AdminDashboardScreen from '../screens/AdminDashboardScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -29,9 +31,9 @@ const AppNavigator = () => {
   }
 
   // Determine the correct dashboard based on role
-  let DashboardComponent = StoreDashboard;
-  if (profile?.role === 'admin') DashboardComponent = AdminDashboard;
-  else if (profile?.role === 'delivery') DashboardComponent = DeliveryDashboard;
+  let DashboardComponent = StoreDashboardScreen;
+  if (profile?.role === 'admin') DashboardComponent = AdminDashboardScreen;
+  else if (profile?.role === 'delivery') DashboardComponent = DeliveryDashboardScreen;
 
   return (
     <NavigationContainer>
