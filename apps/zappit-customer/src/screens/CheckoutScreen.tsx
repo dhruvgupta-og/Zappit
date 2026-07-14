@@ -17,7 +17,8 @@ const CheckoutScreen = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   
-  const cartItems = useCartStore((state) => state.getCartItems());
+  const itemsMap = useCartStore((state) => state.items);
+  const cartItems = Object.values(itemsMap);
   const cartTotal = useCartStore((state) => state.getCartTotal());
   const storeId = useCartStore((state) => state.getCartStoreId());
   const storeName = useCartStore((state) => state.getCartStoreName());

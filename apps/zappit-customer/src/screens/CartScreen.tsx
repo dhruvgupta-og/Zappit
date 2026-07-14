@@ -11,7 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 const CartScreen = () => {
   const navigation = useNavigation<any>();
-  const cartItems = useCartStore((state) => state.getCartItems());
+  const itemsMap = useCartStore((state) => state.items);
+  const cartItems = Object.values(itemsMap);
   const cartTotal = useCartStore((state) => state.getCartTotal());
   const storeName = useCartStore((state) => state.getCartStoreName());
   const storeId = useCartStore((state) => state.getCartStoreId());

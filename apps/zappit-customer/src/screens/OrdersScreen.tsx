@@ -57,7 +57,7 @@ const OrdersScreen = () => {
           </Text>
         </View>
         <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-          {item.status.toUpperCase()}
+          {(item.status || 'PENDING').toUpperCase()}
         </Text>
       </View>
       <View style={styles.divider} />
