@@ -19,6 +19,7 @@ interface AuthState {
   checkProfileComplete: () => Promise<boolean>;
 }
 
+
 export const useAuthStore = create<AuthState>((set, get) => ({
   firebaseUser: null,
   profile: null,
