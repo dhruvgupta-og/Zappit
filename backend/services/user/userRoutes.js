@@ -53,7 +53,7 @@ router.post('/:uid', async (req, res) => {
 
     // Prevent mass assignment: non-admins cannot change role or blocked status
     if (req.user.role !== 'admin') {
-      const allowedFields = ['uid', 'email', 'name', 'phone', 'college_id', 'college', 'college_name', 'address', 'profile_complete', 'auth_method', 'fcmToken', 'updated_at'];
+      const allowedFields = ['uid', 'email', 'name', 'phone', 'college_id', 'college', 'college_name', 'address', 'profile_complete', 'auth_method', 'fcmToken', 'expoPushToken', 'updated_at'];
       const filteredData = {};
       for (const key of Object.keys(data)) {
         if (allowedFields.includes(key)) {
