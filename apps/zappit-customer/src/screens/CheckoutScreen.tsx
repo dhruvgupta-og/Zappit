@@ -38,7 +38,7 @@ const CheckoutScreen = () => {
 
   useEffect(() => {
     AsyncStorage.getItem('userAddress').then((v) => v && setAddress(v));
-    paymentApi.getDeliveryFee().then(setDeliveryFee).catch(() => setDeliveryFee(20));
+    paymentApi.getDeliveryFee().then(setDeliveryFee).catch(() => setDeliveryFee(0));
   }, []);
 
   const handleApplyCoupon = async () => {

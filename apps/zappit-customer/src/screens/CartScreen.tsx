@@ -23,7 +23,7 @@ const CartScreen = () => {
   const [deliveryFee, setDeliveryFee] = useState(0);
 
   useEffect(() => {
-    paymentApi.getDeliveryFee().then(setDeliveryFee).catch(() => setDeliveryFee(20));
+    paymentApi.getDeliveryFee().then(setDeliveryFee).catch(() => setDeliveryFee(0));
   }, []);
 
   if (cartItems.length === 0) {

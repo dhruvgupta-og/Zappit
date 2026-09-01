@@ -98,4 +98,12 @@ export const adminApi = {
     const res = await apiClient.post('/api/admin/config/fees', { list });
     return res.data;
   },
+  getDeliveryFeeConfig: async () => {
+    const res = await apiClient.get('/api/admin/config/delivery_fee');
+    return res.data;
+  },
+  saveDeliveryFeeConfig: async (value: number) => {
+    const res = await apiClient.post('/api/admin/config/delivery_fee', { value });
+    return res.data;
+  },
 };

@@ -60,6 +60,10 @@ const AdminDashboardScreen = () => {
   const [notifCollege, setNotifCollege] = useState('');
   const [notifSending, setNotifSending] = useState(false);
 
+  // Delivery Fee Config
+  const [deliveryFee, setDeliveryFee] = useState('0');
+  const [savingFee, setSavingFee] = useState(false);
+
   // Modals
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('');
@@ -69,14 +73,19 @@ const AdminDashboardScreen = () => {
   // ── Fetch all data ──
   const fetchAll = useCallback(async () => {
     try {
-      const [statsRes, ordersRes, storesRes, collegesRes, bannersRes, couponsRes] = await Promise.allSettled([
+      const [statsRes, ordersRes, storesRes, collegesRes, bannersRes, couponsRes, feeRes] = await Promise.allSettled([
         adminApi.getDashboardStats(),
         adminApi.getAllOrders(),
         adminApi.getAllStores(),
         adminApi.getColleges(),
         adminApi.getBanners(),
         adminApi.getCoupons(),
+        adminApi.getDeliveryFeeConfig(),
       ]);
+
+      if (feeRes.status === 'fulfilled' && feeRes.value.success) {
+        setDeliveryFee(feeRes.value.data?.value?.toString() || '0');
+      }
 
       if (statsRes.status === 'fulfilled' && statsRes.value.success) {
         setStats({
@@ -283,6 +292,40 @@ const AdminDashboardScreen = () => {
               );
             })}
             {orders.length === 0 && <Text style={s.empty}>No orders yet</Text>}
+          </View>
+
+          <View style={s.card}>
+            <Text style={s.cardTitle}>🚚 Delivery Charges</Text>
+            <Text style={[s.rowSub, { marginBottom: spacing.md }]}>Set the flat delivery fee applied to all customer orders. Set to 0 for free delivery.</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={[s.inputWrapper, { flex: 1, marginBottom: 0 }]}>
+                <Text style={{ fontSize: 16, marginRight: 8, color: colors.textMain }}>₹</Text>
+                <TextInput
+                  style={[s.formInput, { flex: 1, paddingVertical: 12 }]}
+                  value={deliveryFee}
+                  onChangeText={setDeliveryFee}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+              <TouchableOpacity
+                style={[s.addBtn, { paddingHorizontal: 24, paddingVertical: 12, borderRadius: radius.md, marginBottom: 0 }]}
+                disabled={savingFee}
+                onPress={async () => {
+                  setSavingFee(true);
+                  try {
+                    await adminApi.saveDeliveryFeeConfig(parseInt(deliveryFee) || 0);
+                    Alert.alert('✅ Saved', 'Delivery fee updated successfully.');
+                  } catch (e: any) {
+                    Alert.alert('Error', e.message || 'Failed to save.');
+                  } finally {
+                    setSavingFee(false);
+                  }
+                }}>
+                {savingFee ? <ActivityIndicator color="#fff" /> : <Text style={s.addBtnText}>Save</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={s.card}>

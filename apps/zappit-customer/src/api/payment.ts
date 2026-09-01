@@ -29,7 +29,14 @@ export const paymentApi = {
   },
 
   getDeliveryFee: async (): Promise<number> => {
-    const res = await apiClient.get('/api/admin/config/delivery_fee');
-    return res.data.value ?? 20;
+    try {
+      const res = await apiClient.get('/api/admin/config/delivery_fee');
+      if (res.data.success && res.data.data && typeof res.data.data.value === 'number') {
+        return res.data.data.value;
+      }
+      return 0;
+    } catch {
+      return 0;
+    }
   },
 };
