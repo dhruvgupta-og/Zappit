@@ -367,7 +367,7 @@ router.post('/menu', async (req, res) => {
 });
 
 // --- CONFIG / FEES ---
-const ALLOWED_CONFIG_KEYS = ['fees'];
+const ALLOWED_CONFIG_KEYS = ['fees', 'delivery_fee'];
 router.post('/config/:key', async (req, res) => {
   try {
     // M3: Only allow known config keys — prevent arbitrary key creation/overwrite
