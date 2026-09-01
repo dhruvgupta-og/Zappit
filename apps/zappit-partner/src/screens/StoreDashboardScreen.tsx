@@ -80,7 +80,7 @@ const StoreDashboardScreen = () => {
   // ── Fetch data ──
   const fetchOrders = useCallback(async () => {
     try {
-      const res = await ordersApi.getOrders();
+      const res = await ordersApi.getOrders(staffStoreId);
       if (res.success) {
         const filtered = res.orders.filter(
           (o: any) => o.payment_status === 'completed' || o.payment_status === 'paid' || o.payment_status === 'pending'
@@ -97,7 +97,7 @@ const StoreDashboardScreen = () => {
     } catch (err) {
       console.error('Failed to fetch orders:', err);
     }
-  }, []);
+  }, [staffStoreId]);
 
   const fetchStoreData = useCallback(async () => {
     if (!staffStoreId) return;

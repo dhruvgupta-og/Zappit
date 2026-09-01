@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
-  TextInput, Alert,
+  TextInput, Alert, Animated,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { apiClient } from '../api/client';
 import { paymentApi } from '../api/payment';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
@@ -35,6 +36,9 @@ const CheckoutScreen = () => {
   
   const [processing, setProcessing] = useState(false);
   const [paymentHtml, setPaymentHtml] = useState<string | null>(null);
+  const [animationPhase, setAnimationPhase] = useState(0); // 0=none,1=placed,2=zapp,3=confirmed
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.5)).current;
 
   useEffect(() => {
     AsyncStorage.getItem('userAddress').then((v) => v && setAddress(v));
@@ -164,7 +168,29 @@ const CheckoutScreen = () => {
           
           if (verifyRes.success) {
             clearCart();
-            navigation.replace('OrderTracker', { orderIds: verifyRes.orderIds });
+            const orderIds = verifyRes.orderIds;
+
+            // Send order confirmation email (non-blocking)
+            try {
+              await apiClient.post('/api/send-order-email', { orderIds });
+            } catch (emailErr) {
+              console.warn('[Zappit] Email send failed (non-critical):', emailErr);
+            }
+
+            // Animate before navigating — mirrors web PaymentCallback.jsx
+            setPaymentHtml(null);
+            setProcessing(false);
+
+            Animated.parallel([
+              Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+              Animated.spring(scaleAnim, { toValue: 1, friction: 5, useNativeDriver: true }),
+            ]).start();
+            setAnimationPhase(1);
+            setTimeout(() => setAnimationPhase(2), 1500);
+            setTimeout(() => setAnimationPhase(3), 2800);
+            setTimeout(() => {
+              navigation.replace('OrderTracker', { orderIds });
+            }, 4500);
           } else {
             throw new Error('Verification failed on server');
           }
@@ -177,6 +203,45 @@ const CheckoutScreen = () => {
       console.error('WebView message parse error', e);
     }
   };
+
+  // ── PAYMENT SUCCESS ANIMATION SCREEN ──────────────────────────────────────
+  if (animationPhase > 0) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bgColor, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }], alignItems: 'center' }}>
+
+          {animationPhase === 1 && (
+            <>
+              <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(16,185,129,0.15)', alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderWidth: 3, borderColor: 'rgba(16,185,129,0.4)' }}>
+                <Text style={{ fontSize: 44 }}>✅</Text>
+              </View>
+              <Text style={{ fontSize: 26, fontWeight: '900', color: colors.textMain, marginBottom: 8 }}>Order Placed!</Text>
+              <Text style={{ fontSize: 15, color: colors.textMuted }}>Hang tight...</Text>
+            </>
+          )}
+
+          {animationPhase === 2 && (
+            <>
+              <Text style={{ fontSize: 96, lineHeight: 110 }}>💥</Text>
+              <Text style={{ fontSize: 48, fontWeight: '900', color: colors.primary, fontStyle: 'italic', letterSpacing: 4, textShadowColor: 'rgba(0,0,0,0.3)', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 4 }}>ZAPP!</Text>
+            </>
+          )}
+
+          {animationPhase === 3 && (
+            <>
+              <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: colors.primaryDark, alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+                <Text style={{ fontSize: 44 }}>⚡</Text>
+              </View>
+              <Text style={{ fontSize: 26, fontWeight: '900', color: colors.textMain, marginBottom: 8 }}>Confirmed!</Text>
+              <Text style={{ fontSize: 14, color: colors.textMuted }}>Redirecting to tracker...</Text>
+              <ActivityIndicator color={colors.primary} style={{ marginTop: 16 }} />
+            </>
+          )}
+
+        </Animated.View>
+      </View>
+    );
+  }
 
   if (paymentHtml) {
     return (

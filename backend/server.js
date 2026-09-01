@@ -111,10 +111,11 @@ if (process.env.NODE_ENV === 'production') {
   app.use('/api/verify-payment', strictLimiter);
   app.use('/api/verify-coupon', strictLimiter);
 
-  // Email relay limiter: 5 emails per hour per IP (anti-spam)
+  // Email relay limiter: 30 emails per hour per token (anti-spam, but generous enough for real orders)
   const emailLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
-    max: 5,
+    max: 30,
+    keyGenerator: keyGenerator,
     message: { success: false, error: 'Too many email requests. Please try again later.' }
   });
   app.use('/api/send-welcome-email', emailLimiter);

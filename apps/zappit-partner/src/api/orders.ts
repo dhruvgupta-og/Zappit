@@ -1,8 +1,9 @@
 import { apiClient } from './client';
 
 export const ordersApi = {
-  getOrders: async () => {
-    const res = await apiClient.get('/api/orders');
+  getOrders: async (storeId?: string) => {
+    const url = storeId ? `/api/orders?store_id=${storeId}` : '/api/orders';
+    const res = await apiClient.get(url);
     return res.data;
   },
 

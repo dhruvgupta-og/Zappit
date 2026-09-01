@@ -6,18 +6,31 @@ const mongoose = require('mongoose');
 // Get all orders for a specific user (or all if admin/staff)
 router.get('/', async (req, res) => {
   try {
-    let query = { order_status: { $ne: 'pending' } };
+    // For customers: exclude pending (unpaid). For staff: show all statuses.
     const isStaff = ['admin', 'store_owner', 'delivery'].includes(req.user.role);
+    let query = isStaff ? {} : { order_status: { $ne: 'pending' } };
 
     if (!isStaff) {
       // Non-staff can ONLY fetch their own orders
       query.user_id = req.user.uid;
     } else if (req.user.role === 'store_owner') {
-      // Store owners only see orders for their assigned store
-      query.store_id = req.user.staff_store_id || 'UNASSIGNED_STORE';
+      // Store owners: use explicit store_id query param OR the one from their token
+      const storeId = req.query.store_id || req.user.staff_store_id;
+      if (!storeId || storeId === 'UNASSIGNED_STORE') {
+        return res.json({ success: true, orders: [] });
+      }
+      query.store_id = storeId;
+      // Filter out truly unplaced (pending payment) orders for the store dashboard
+      query.payment_status = { $in: ['paid', 'completed', 'pending'] };
+      query.order_status = { $ne: 'pending' };
     } else if (req.user.role === 'delivery') {
       // Delivery partners only see orders for their assigned college
-      query.college_id = req.user.staff_college_id || 'UNASSIGNED_COLLEGE';
+      const collegeId = req.query.college_id || req.user.staff_college_id;
+      if (!collegeId || collegeId === 'UNASSIGNED_COLLEGE') {
+        return res.json({ success: true, orders: [] });
+      }
+      query.college_id = collegeId;
+      query.order_status = { $ne: 'pending' };
     } else if (req.query.user_id) {
       // Admins can fetch specific user's orders if requested
       query.user_id = req.query.user_id;

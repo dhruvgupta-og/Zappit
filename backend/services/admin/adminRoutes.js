@@ -231,7 +231,14 @@ router.post('/delete', async (req, res) => {
       // Also delete the Staff profile linked to this store
       await Staff.deleteMany({ store_id: id });
     }
-    if (collection === 'menu') await MenuItem.findByIdAndDelete(id);
+    if (collection === 'menu') {
+      const item = await MenuItem.findById(id);
+      if (item) {
+        await MenuItem.findByIdAndDelete(id);
+        await clearCache(`api:store:${item.store_id}`);
+        await clearCache('api:stores:all');
+      }
+    }
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -328,6 +335,8 @@ router.post('/stores', async (req, res) => {
     delete updateData.id;
 
     const newStore = await Store.findByIdAndUpdate(data._id, updateData, { upsert: true, new: true, setDefaultsOnInsert: true });
+    await clearCache(`api:store:${newStore._id}`);
+    await clearCache('api:stores:all');
     res.json({ success: true, store: newStore });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -360,6 +369,8 @@ router.post('/menu', async (req, res) => {
     delete updateData.id;
 
     const newMenuItem = await MenuItem.findByIdAndUpdate(data._id, updateData, { upsert: true, new: true, setDefaultsOnInsert: true });
+    await clearCache(`api:store:${newMenuItem.store_id}`);
+    await clearCache('api:stores:all');
     res.json({ success: true, menuItem: newMenuItem });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

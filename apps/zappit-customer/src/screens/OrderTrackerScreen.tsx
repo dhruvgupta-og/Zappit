@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,130 +7,286 @@ import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order } from '../types';
 
+// ── Status steps matching the backend exactly ──────────────────────────────
 const STATUS_STEPS = [
-  { key: 'placed', label: 'Order Placed' },
-  { key: 'accepted', label: 'Accepted' },
-  { key: 'preparing', label: 'Preparing' },
-  { key: 'out_for_delivery', label: 'Out for Delivery' },
-  { key: 'delivered', label: 'Delivered' },
+  {
+    key: 'confirmed',
+    label: 'Order Confirmed',
+    emoji: '✅',
+    desc: 'Your payment was received. Store has been notified.',
+    color: '#10B981',
+  },
+  {
+    key: 'preparing',
+    label: 'Preparing Your Food',
+    emoji: '👨‍🍳',
+    desc: 'The store is cooking your order right now.',
+    color: '#F59E0B',
+  },
+  {
+    key: 'ready',
+    label: 'Ready for Pickup',
+    emoji: '📦',
+    desc: 'Your order is packed and ready. Waiting for delivery partner.',
+    color: '#3B82F6',
+  },
+  {
+    key: 'out_for_delivery',
+    label: 'On the Way',
+    emoji: '🛵',
+    desc: 'Delivery partner is heading to you! Keep your OTP ready.',
+    color: '#8B5CF6',
+  },
+  {
+    key: 'picked_up',
+    label: 'Picked Up',
+    emoji: '🚴',
+    desc: 'Delivery partner has picked up your order.',
+    color: '#8B5CF6',
+  },
+  {
+    key: 'delivered',
+    label: 'Delivered!',
+    emoji: '🎉',
+    desc: 'Enjoy your meal! Thanks for ordering with Zappit.',
+    color: '#10B981',
+  },
 ];
+
+const statusIndex = (status: string) => {
+  const idx = STATUS_STEPS.findIndex(s => s.key === status);
+  return idx >= 0 ? idx : 0;
+};
 
 const OrderTrackerScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { orderIds } = route.params;
 
-  // For simplicity, we just track the first order if multiple were created
   const primaryOrderId = Array.isArray(orderIds) ? orderIds[0] : orderIds;
   const [order, setOrder] = useState<Order | null>(null);
-  
-  const [pulse] = useState(new Animated.Value(1));
+  const [loading, setLoading] = useState(true);
+  const pulse = useRef(new Animated.Value(1)).current;
 
+  // Animated pulse for current step
   useEffect(() => {
-    Animated.loop(
+    const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.2, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1.3, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
       ])
-    ).start();
+    );
+    loop.start();
+    return () => loop.stop();
   }, []);
 
+  const fetchOrder = async () => {
+    try {
+      const data = await ordersApi.getById(primaryOrderId);
+      if (data) setOrder(data);
+    } catch (e) {
+      console.error('OrderTracker fetch error:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchOrder = async () => {
-      try {
-        const data = await ordersApi.getById(primaryOrderId);
-        setOrder(data);
-      } catch (e) {
-        console.error(e);
-      }
-    };
-    
     fetchOrder();
-    const interval = setInterval(fetchOrder, 10000);
+    const interval = setInterval(fetchOrder, 5000); // poll every 5s like web
     return () => clearInterval(interval);
   }, [primaryOrderId]);
 
-  if (!order) {
+  if (loading) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <Text style={{ color: colors.textMuted }}>Loading order details...</Text>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Text style={{ fontSize: 32 }}>⚡</Text>
+          <Text style={{ color: colors.textMuted, marginTop: 12, fontSize: 15 }}>Loading your order...</Text>
+        </View>
       </SafeAreaView>
     );
   }
 
-  const currentStepIndex = STATUS_STEPS.findIndex(s => s.key === order.status);
-  const isCancelled = order.status === 'cancelled';
+  if (!order) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centered}>
+          <Text style={{ fontSize: 40, marginBottom: 12 }}>😕</Text>
+          <Text style={{ color: colors.textMuted, fontSize: 15 }}>Order not found</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Main', { screen: 'Home' })}
+            style={[styles.btn, { marginTop: 20, backgroundColor: colors.primary }]}
+          >
+            <Text style={{ color: '#0B132B', fontWeight: '800' }}>Back to Home</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const currentStepIdx = statusIndex(order.order_status || order.status || '');
+  const currentStep = STATUS_STEPS[currentStepIdx];
+  const isCancelled = (order.order_status || order.status) === 'cancelled';
+  const isDelivered = (order.order_status || order.status) === 'delivered';
+  // OTP from the authenticated orders API — field is delivery_otp
+  const otp = (order as any).delivery_otp;
+  const showOtp = !!otp && !isDelivered && !isCancelled;
+
+  const orderId = (order as any).id || (order as any)._id || '';
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* ── HEADER ── */}
+      <View style={[styles.header, { backgroundColor: isDelivered ? '#10B981' : colors.primaryDark }]}>
         <TouchableOpacity onPress={() => navigation.navigate('Main', { screen: 'Home' })} style={styles.backBtn}>
-          <Text style={{ fontSize: 20, color: colors.textMain }}>✕</Text>
+          <Text style={{ fontSize: 18, color: 'white' }}>✕</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>Track Order</Text>
-        <View style={{ width: 32 }} />
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>
+            Order ID
+          </Text>
+          <Text style={{ fontSize: 18, fontWeight: '800', color: 'white' }}>
+            #{orderId.slice(-6).toUpperCase()}
+          </Text>
+          <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>
+            {(order as any).store_name || ''}
+          </Text>
+        </View>
+        {/* Live status pill */}
+        <View style={styles.statusPill}>
+          {!isDelivered && (
+            <Animated.View
+              style={[styles.pulseDot, { transform: [{ scale: pulse }] }]}
+            />
+          )}
+          <Text style={{ color: 'white', fontWeight: '700', fontSize: 12 }}>
+            {isCancelled ? '❌ Cancelled' : currentStep?.label || 'Processing'}
+          </Text>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
-        {/* Status Graphic */}
-        <View style={styles.graphicContainer}>
-          <Animated.View style={[styles.pulseCircle, { transform: [{ scale: pulse }] }]} />
-          <View style={styles.iconCircle}>
-            <Text style={{ fontSize: 40 }}>
-              {isCancelled ? '❌' : order.status === 'delivered' ? '🎉' : '🚴'}
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40 }}>
+
+        {/* ── OTP CARD — most important, shown prominently when delivery is active ── */}
+        {showOtp && (
+          <View style={styles.otpCard}>
+            <Text style={styles.otpCardTitle}>🔐 Your Delivery OTP</Text>
+            <Text style={styles.otpCardSubtitle}>Share this PIN with your delivery partner to complete delivery</Text>
+            <Text style={styles.otpValue}>{otp}</Text>
+            <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '600', textAlign: 'center', marginTop: 8 }}>
+              Keep this safe — only share when your order arrives
             </Text>
           </View>
-          <Text style={styles.statusTitle}>
-            {isCancelled ? 'Order Cancelled' : STATUS_STEPS[currentStepIndex]?.label || 'Processing'}
-          </Text>
-          <Text style={styles.orderId}>ID: {order.id || order._id}</Text>
-        </View>
+        )}
 
-        {/* Timeline */}
+        {/* ── STATUS TIMELINE CARD ── */}
         {!isCancelled && (
-          <View style={styles.timelineCard}>
-            {STATUS_STEPS.map((step, index) => {
-              const isPast = index < currentStepIndex;
-              const isCurrent = index === currentStepIndex;
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Live Status</Text>
+            {STATUS_STEPS.filter(s => s.key !== 'picked_up').map((step, index) => {
+              // Map picked_up to out_for_delivery index for display purposes
+              const displayIdx = STATUS_STEPS.filter(s => s.key !== 'picked_up').indexOf(step);
+              const effectiveCurrentIdx = currentStepIdx >= STATUS_STEPS.findIndex(s => s.key === 'picked_up')
+                ? currentStepIdx - 1
+                : currentStepIdx;
+              const isDone = displayIdx <= effectiveCurrentIdx;
+              const isCurrent = displayIdx === effectiveCurrentIdx;
+              const isLast = displayIdx === STATUS_STEPS.filter(s => s.key !== 'picked_up').length - 1;
+
               return (
-                <View key={step.key} style={styles.timelineStep}>
-                  <View style={styles.timelineLeft}>
-                    <View style={[
-                      styles.dot,
-                      isPast && styles.dotPast,
-                      isCurrent && styles.dotCurrent,
+                <View key={step.key} style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                  {/* Icon + connector */}
+                  <View style={{ alignItems: 'center', width: 36, flexShrink: 0 }}>
+                    <Animated.View style={[
+                      styles.stepDot,
+                      isDone && { backgroundColor: step.color },
+                      isCurrent && {
+                        width: 36, height: 36, borderRadius: 18,
+                        borderWidth: 3, borderColor: step.color + '40',
+                      },
                     ]}>
-                      {isPast && <Text style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>✓</Text>}
-                    </View>
-                    {index < STATUS_STEPS.length - 1 && (
-                      <View style={[styles.line, isPast && styles.linePast]} />
+                      {isDone
+                        ? <Text style={{ fontSize: isCurrent ? 16 : 14 }}>{step.emoji}</Text>
+                        : <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.borderColor }} />
+                      }
+                    </Animated.View>
+                    {!isLast && (
+                      <View style={[
+                        styles.connector,
+                        { backgroundColor: isDone ? step.color : colors.borderColor },
+                      ]} />
                     )}
                   </View>
-                  <Text style={[
-                    styles.stepLabel,
-                    (isPast || isCurrent) && styles.stepLabelActive,
-                    isCurrent && { color: colors.primary, fontWeight: '800' }
-                  ]}>
-                    {step.label}
-                  </Text>
+                  {/* Labels */}
+                  <View style={{ flex: 1, paddingTop: 6, paddingBottom: isLast ? 0 : 24, paddingLeft: 12 }}>
+                    <Text style={{
+                      fontSize: 15,
+                      fontWeight: isCurrent ? '800' : isDone ? '600' : '400',
+                      color: isDone ? colors.textMain : colors.textMuted,
+                    }}>
+                      {step.label}
+                    </Text>
+                    {isCurrent && (
+                      <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 3 }}>
+                        {step.desc}
+                      </Text>
+                    )}
+                  </View>
                 </View>
               );
             })}
           </View>
         )}
 
-        {/* Details */}
-        <View style={styles.detailsCard}>
-          <Text style={styles.detailsTitle}>Delivery Details</Text>
-          <Text style={styles.detailsText}>To: {order.delivery_address || order.deliveryAddress}</Text>
-          {order.otp && (
-            <View style={styles.otpBox}>
-              <Text style={styles.otpLabel}>Delivery PIN</Text>
-              <Text style={styles.otpValue}>{order.otp}</Text>
-            </View>
-          )}
+        {isCancelled && (
+          <View style={[styles.card, { borderColor: '#EF4444', borderWidth: 1 }]}>
+            <Text style={{ fontSize: 32, textAlign: 'center', marginBottom: 8 }}>❌</Text>
+            <Text style={{ fontSize: 18, fontWeight: '800', color: '#EF4444', textAlign: 'center' }}>Order Cancelled</Text>
+            <Text style={{ fontSize: 13, color: colors.textMuted, textAlign: 'center', marginTop: 6 }}>
+              Your order has been cancelled. If payment was made, you'll receive a refund within 5-7 business days.
+            </Text>
+          </View>
+        )}
+
+        {/* ── DELIVERY DETAILS ── */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Delivery Details</Text>
+          <Text style={{ fontSize: 14, color: colors.textMuted }}>
+            📍 {(order as any).delivery_address || (order as any).address || 'N/A'}
+          </Text>
         </View>
 
+        {/* ── ORDER SUMMARY ── */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Order Summary</Text>
+          {((order as any).items || []).map((item: any, i: number) => (
+            <View key={i} style={styles.itemRow}>
+              <Text style={{ fontSize: 14, color: colors.textMuted, flex: 1 }}>
+                {item.qty || item.quantity || 1}× {item.name}
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: colors.textMain }}>
+                ₹{(item.price || 0) * (item.qty || item.quantity || 1)}
+              </Text>
+            </View>
+          ))}
+          <View style={[styles.itemRow, { borderTopWidth: 1, borderTopColor: colors.borderColor, marginTop: 8, paddingTop: 12 }]}>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.textMain }}>Total Paid</Text>
+            <Text style={{ fontSize: 16, fontWeight: '800', color: colors.primary }}>
+              ₹{(order as any).total_amount || 0}
+            </Text>
+          </View>
+        </View>
+
+        {/* ── CTA on Delivered ── */}
+        {isDelivered && (
+          <TouchableOpacity
+            style={[styles.btn, { backgroundColor: colors.primary }]}
+            onPress={() => navigation.navigate('Main', { screen: 'Home' })}
+          >
+            <Text style={{ color: '#0B132B', fontWeight: '800', fontSize: 16 }}>🏠 Back to Home</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -138,54 +294,62 @@ const OrderTrackerScreen = () => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgColor },
-  loadingContainer: { flex: 1, backgroundColor: colors.bgColor, justifyContent: 'center', alignItems: 'center' },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl, paddingVertical: spacing.md,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: spacing.lg, paddingVertical: spacing.lg,
   },
   backBtn: { padding: 4 },
-  title: { ...typography.h3, color: colors.textMain },
-
-  graphicContainer: { alignItems: 'center', paddingVertical: spacing.xxl, marginBottom: spacing.lg },
-  pulseCircle: {
-    position: 'absolute', top: 32, width: 120, height: 120,
-    borderRadius: 60, backgroundColor: 'rgba(255,193,7,0.15)',
+  statusPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
   },
-  iconCircle: {
-    width: 80, height: 80, borderRadius: 40, backgroundColor: colors.primaryDark,
-    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg,
-    shadowColor: colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 15, elevation: 8,
+  pulseDot: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: 'white',
   },
-  statusTitle: { ...typography.h1, color: colors.textMain, marginBottom: 4 },
-  orderId: { fontSize: 13, color: colors.textMuted, fontFamily: 'monospace' },
 
-  timelineCard: {
-    backgroundColor: colors.cardBg, borderRadius: radius.lg, padding: spacing.xxl,
-    borderWidth: 1, borderColor: colors.borderColor, marginBottom: spacing.lg,
+  // OTP Card — premium gold style
+  otpCard: {
+    backgroundColor: 'rgba(255,193,7,0.1)', borderRadius: radius.lg,
+    borderWidth: 2, borderColor: 'rgba(255,193,7,0.4)',
+    borderStyle: 'dashed',
+    padding: spacing.xl, marginBottom: spacing.lg, alignItems: 'center',
   },
-  timelineStep: { flexDirection: 'row', alignItems: 'flex-start' },
-  timelineLeft: { alignItems: 'center', width: 24, marginRight: spacing.md },
-  dot: { width: 16, height: 16, borderRadius: 8, backgroundColor: colors.borderColor, alignItems: 'center', justifyContent: 'center' },
-  dotPast: { backgroundColor: colors.success },
-  dotCurrent: { backgroundColor: colors.primary, borderWidth: 4, borderColor: 'rgba(255,193,7,0.3)', width: 20, height: 20, borderRadius: 10 },
-  line: { width: 2, height: 30, backgroundColor: colors.borderColor, marginVertical: 4 },
-  linePast: { backgroundColor: colors.success },
-  stepLabel: { fontSize: 15, color: colors.textMuted, fontWeight: '600', marginTop: -2 },
-  stepLabelActive: { color: colors.textMain },
+  otpCardTitle: { fontSize: 15, fontWeight: '800', color: colors.primary, marginBottom: 4 },
+  otpCardSubtitle: {
+    fontSize: 12, color: colors.textMuted, textAlign: 'center',
+    marginBottom: 16, lineHeight: 18,
+  },
+  otpValue: {
+    fontSize: 44, fontWeight: '900', color: colors.primary,
+    letterSpacing: 10, fontFamily: 'monospace',
+  },
 
-  detailsCard: {
-    backgroundColor: colors.cardBg, borderRadius: radius.lg, padding: spacing.lg,
+  card: {
+    backgroundColor: colors.cardBg, borderRadius: radius.lg,
     borderWidth: 1, borderColor: colors.borderColor,
+    padding: spacing.lg, marginBottom: spacing.lg,
   },
-  detailsTitle: { fontSize: 15, fontWeight: '700', color: colors.textMain, marginBottom: 8 },
-  detailsText: { fontSize: 14, color: colors.textMuted },
-  otpBox: {
-    marginTop: spacing.md, backgroundColor: 'rgba(255,193,7,0.1)', padding: spacing.md, borderRadius: radius.md,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,193,7,0.3)'
+  cardTitle: {
+    fontSize: 11, fontWeight: '700', color: colors.textMuted,
+    textTransform: 'uppercase', letterSpacing: 1, marginBottom: spacing.md,
   },
-  otpLabel: { color: colors.primary, fontWeight: '600', fontSize: 13 },
-  otpValue: { color: colors.primary, fontWeight: '800', fontSize: 24, letterSpacing: 4 },
+
+  // Timeline
+  stepDot: {
+    width: 32, height: 32, borderRadius: 16, backgroundColor: colors.borderColor,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  connector: { width: 2, height: 24, marginVertical: 3 },
+
+  // Item row
+  itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+
+  btn: {
+    paddingVertical: 16, borderRadius: radius.lg,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md,
+  },
 });
 
 export default OrderTrackerScreen;

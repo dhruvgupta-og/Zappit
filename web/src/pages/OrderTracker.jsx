@@ -37,11 +37,17 @@ const OrderTracker = () => {
         if (res.data.success && isSubscribed) {
           const map = {};
           res.data.orders.forEach(o => {
-            // Normalize: MongoDB returns _id as ObjectId — convert to string for map key
             const key = (o.id || o._id || '').toString();
             map[key] = { ...o, id: key };
           });
-          setOrdersMap(map);
+          setOrdersMap(prev => {
+            // Preserve delivery_otp if we fetched it from authenticated API
+            const newMap = { ...prev };
+            Object.keys(map).forEach(k => {
+               newMap[k] = { ...map[k], delivery_otp: prev[k]?.delivery_otp || map[k].delivery_otp };
+            });
+            return newMap;
+          });
         }
       } catch (err) {
         console.error("Tracker poll error:", err.response?.status, err.message);
@@ -50,7 +56,31 @@ const OrderTracker = () => {
       }
     };
 
+    const fetchSecureOrderDetails = async () => {
+      try {
+        // Fetch authenticated orders to get the OTP (which is stripped from public tracker)
+        const res = await api.get('/api/orders');
+        if (res.data.success && isSubscribed) {
+          setOrdersMap(prev => {
+            const newMap = { ...prev };
+            res.data.orders.forEach(authOrder => {
+              const k = (authOrder.id || authOrder._id || '').toString();
+              if (newMap[k]) {
+                newMap[k] = { ...newMap[k], delivery_otp: authOrder.delivery_otp };
+              } else if (orderIds.includes(k)) {
+                 newMap[k] = { ...authOrder, id: k };
+              }
+            });
+            return newMap;
+          });
+        }
+      } catch (err) {
+        // User might not be logged in or session expired
+      }
+    };
+
     fetchOrders();
+    fetchSecureOrderDetails();
     const intervalId = setInterval(fetchOrders, 5000);
 
     return () => {
@@ -151,6 +181,21 @@ const OrderTracker = () => {
       </div>
 
       <div style={{ padding: '0 20px', marginTop: '-20px' }}>
+        {order.delivery_otp && !isDelivered && order.order_status !== 'cancelled' && (
+          <div className="card" style={{ 
+            padding: '24px', marginBottom: '16px', 
+            background: 'rgba(255, 193, 7, 0.1)', 
+            border: '2px dashed rgba(255, 193, 7, 0.5)',
+            textAlign: 'center'
+          }}>
+            <div style={{ color: 'var(--primary)', fontWeight: 800, fontSize: '0.9rem', marginBottom: '8px' }}>🔐 Your Delivery OTP</div>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginBottom: '12px' }}>Share this PIN with your delivery partner</div>
+            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: 'var(--primary)', letterSpacing: '0.3em', fontFamily: 'monospace' }}>
+              {order.delivery_otp}
+            </div>
+          </div>
+        )}
+
         {/* Status Timeline Card */}
         <div className="card" style={{ padding: '24px', marginBottom: '16px' }}>
           <h3 style={{ margin: '0 0 20px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.75rem', fontWeight: 700 }}>Live Status</h3>
