@@ -4,7 +4,6 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { auth } from '../config/firebase';
 import { usersApi } from '../api/users';
 import { User } from '../types';
-import { registerForPushNotifications } from '../utils/notifications';
 
 interface AuthState {
   firebaseUser: FirebaseUser | null;
@@ -19,8 +18,8 @@ interface AuthState {
   setLoading: (loading: boolean) => void;
   logout: () => Promise<void>;
   checkProfileComplete: () => Promise<boolean>;
+  fetchProfile: () => Promise<void>;
 }
-
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   firebaseUser: null,
@@ -64,13 +63,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return false;
     }
   },
+
+  fetchProfile: async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    try {
+      const { exists, user: profile } = await usersApi.getProfile(user.uid);
+      const isComplete = exists && profile?.profile_complete === true;
+      set({ profile, profileComplete: isComplete });
+    } catch (error) {
+      console.error('Failed to fetch profile', error);
+    }
+  },
 }));
 
-// Listen to Firebase auth state and sync with store
 export const initAuthListener = () => {
   return onAuthStateChanged(auth, async (firebaseUser) => {
     const store = useAuthStore.getState();
-    store.setLoading(true); // Prevent flash of uninitialized profile state
+    store.setLoading(true);
     store.setFirebaseUser(firebaseUser);
 
     if (!firebaseUser) {
@@ -83,19 +93,6 @@ export const initAuthListener = () => {
       
     try {
       await store.checkProfileComplete();
-
-      // Register for push notifications and save Expo token to backend
-      try {
-        const pushToken = await registerForPushNotifications();
-        if (pushToken && firebaseUser) {
-          // Save as expoPushToken (separate from web fcmToken)
-          await usersApi.updateProfile(firebaseUser.uid, { expoPushToken: pushToken });
-          console.log('[Notifications] Expo push token registered:', pushToken);
-        }
-      } catch (notifErr) {
-        console.warn('[Notifications] Token registration failed (non-fatal):', notifErr);
-      }
-
     } catch {
       store.setProfileComplete(false);
     } finally {

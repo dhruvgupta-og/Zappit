@@ -1,8 +1,7 @@
 import axios from 'axios';
 import { auth } from '../config/firebase';
 
-// Live backend — same as the website
-const API_BASE_URL = 'https://zappit-backend.onrender.com';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://zappit-backend.onrender.com';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -10,7 +9,6 @@ export const apiClient = axios.create({
   timeout: 15000,
 });
 
-// Automatically attach Firebase ID token to every request (mirrors website's axiosSetup.js)
 apiClient.interceptors.request.use(
   async (config) => {
     try {
@@ -20,7 +18,7 @@ apiClient.interceptors.request.use(
         config.headers.Authorization = `Bearer ${token}`;
       }
     } catch {
-      // If token fetch fails, continue without — public routes still work
+      // ignore
     }
     return config;
   },
