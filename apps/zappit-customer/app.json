@@ -23,6 +23,7 @@
     },
     "android": {
       "package": "com.zappit.customer",
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#0B132B",
         "foregroundImage": "./assets/icon.png",
