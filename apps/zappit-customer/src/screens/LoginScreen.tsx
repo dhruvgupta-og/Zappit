@@ -26,6 +26,8 @@ const GOOGLE_ANDROID_CLIENT_ID = '12406084456-nkg0fjcb4v35il9917lk450dat2m3qla.a
 // Configure native Google Sign-In once
 GoogleSignin.configure({
   webClientId: GOOGLE_WEB_CLIENT_ID,
+  // @ts-ignore — androidClientId is valid at runtime but missing from older type defs
+  androidClientId: GOOGLE_ANDROID_CLIENT_ID,
   offlineAccess: false,
 });
 
