@@ -84,12 +84,13 @@ export const initAuthListener = () => {
     try {
       await store.checkProfileComplete();
 
-      // Register for push notifications and save token to backend
+      // Register for push notifications and save Expo token to backend
       try {
         const pushToken = await registerForPushNotifications();
         if (pushToken && firebaseUser) {
-          await usersApi.updateProfile(firebaseUser.uid, { fcmToken: pushToken });
-          console.log('[Notifications] Push token registered:', pushToken);
+          // Save as expoPushToken (separate from web fcmToken)
+          await usersApi.updateProfile(firebaseUser.uid, { expoPushToken: pushToken });
+          console.log('[Notifications] Expo push token registered:', pushToken);
         }
       } catch (notifErr) {
         console.warn('[Notifications] Token registration failed (non-fatal):', notifErr);

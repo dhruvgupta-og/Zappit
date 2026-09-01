@@ -12,7 +12,8 @@ const UserSchema = new mongoose.Schema({
   photo_url: { type: String },
   role: { type: String, enum: ['user', 'admin', 'delivery'], default: 'user' },
   blocked: { type: Boolean, default: false },
-  fcmToken: { type: String },
+  fcmToken: { type: String },       // Web browser push token (from Chrome/website)
+  expoPushToken: { type: String },   // Mobile app push token (from Expo/React Native)
   profile_complete: { type: Boolean, default: false },
   used_coupons: [String]
 }, { timestamps: true });

@@ -98,48 +98,76 @@ router.post('/send-broadcast-notification', async (req, res) => {
     }
 
     const User = require('../../models/User');
-    const query = { fcmToken: { $exists: true, $ne: null } };
+    const https = require('https');
+
+    // Query users with Expo push tokens (mobile app tokens, NOT web FCM tokens)
+    const query = { expoPushToken: { $exists: true, $ne: null } };
     if (college_id) query.college_id = college_id;
 
-    const users = await User.find(query).select('fcmToken name');
+    const users = await User.find(query).select('expoPushToken name');
     if (users.length === 0) {
-      return res.json({ success: true, sent: 0, message: 'No users with push tokens found.' });
+      return res.json({ success: true, sent: 0, message: 'No mobile app users with push tokens found. Users need to open the app first to register.' });
     }
 
-    // Send in batches of 500 (FCM limit per multicast)
-    const BATCH_SIZE = 500;
+    // Build Expo push messages (max 100 per request)
+    const BATCH_SIZE = 100;
     let totalSent = 0;
     let totalFailed = 0;
 
-    for (let i = 0; i < users.length; i += BATCH_SIZE) {
-      const batch = users.slice(i, i + BATCH_SIZE);
-      const tokens = batch.map(u => u.fcmToken).filter(Boolean);
-      if (tokens.length === 0) continue;
+    const allTokens = users.map(u => u.expoPushToken).filter(t => t && t.startsWith('ExponentPushToken'));
+
+    for (let i = 0; i < allTokens.length; i += BATCH_SIZE) {
+      const batch = allTokens.slice(i, i + BATCH_SIZE);
+      const messages = batch.map(token => ({
+        to: token,
+        title,
+        body,
+        sound: 'default',
+        priority: 'high',
+        data: { type: 'broadcast' },
+      }));
 
       try {
-        const response = await admin.messaging().sendEachForMulticast({
-          tokens,
-          notification: { title, body },
-          android: {
-            notification: {
-              icon: 'notification_icon',
-              color: '#FFD60A',
-              sound: 'default',
+        // Call Expo Push API
+        const postData = JSON.stringify(messages);
+        const result = await new Promise((resolve, reject) => {
+          const options = {
+            hostname: 'exp.host',
+            path: '/--/api/v2/push/send',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Accept-Encoding': 'gzip, deflate',
             },
-            priority: 'high',
-          },
-          data: { type: 'broadcast', title, body },
+          };
+          const req = https.request(options, (r) => {
+            let data = '';
+            r.on('data', chunk => data += chunk);
+            r.on('end', () => {
+              try { resolve(JSON.parse(data)); }
+              catch { resolve({ data: [] }); }
+            });
+          });
+          req.on('error', reject);
+          req.write(postData);
+          req.end();
         });
-        totalSent += response.successCount;
-        totalFailed += response.failureCount;
+
+        const responses = result.data || [];
+        responses.forEach(r => {
+          if (r.status === 'ok') totalSent++;
+          else totalFailed++;
+        });
+        if (responses.length === 0) totalSent += batch.length; // Assume success if no detail
       } catch (batchErr) {
-        console.error('[Broadcast] Batch error:', batchErr.message);
-        totalFailed += tokens.length;
+        console.error('[Broadcast] Expo API batch error:', batchErr.message);
+        totalFailed += batch.length;
       }
     }
 
-    console.log(`[Broadcast] Sent: ${totalSent}, Failed: ${totalFailed}, Total users: ${users.length}`);
-    res.json({ success: true, sent: totalSent, failed: totalFailed, total: users.length });
+    console.log(`[Broadcast] Expo push: Sent: ${totalSent}, Failed: ${totalFailed}, Total: ${allTokens.length}`);
+    res.json({ success: true, sent: totalSent, failed: totalFailed, total: allTokens.length });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
