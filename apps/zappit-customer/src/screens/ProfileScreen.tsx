@@ -31,12 +31,12 @@ const ProfileScreen = () => {
   };
 
   const handleSave = async () => {
-    if (!firebaseUser?.uid) return;
+    if (!firebaseUser?.uid || !firebaseUser?.email || !profile) return;
     setLoading(true);
     try {
       const selectedCollege = colleges.find((c) => (c.id || c._id) === collegeId);
       const collegeName = selectedCollege?.name || college;
-      await usersApi.updateProfile(firebaseUser.uid, { name, phone, college_name: collegeName, college_id: collegeId });
+      await usersApi.updateProfile(firebaseUser.uid, { ...profile, uid: firebaseUser.uid, email: firebaseUser.email, name, phone, college_name: collegeName, college_id: collegeId });
       setProfile({ ...profile, name, phone, college_name: collegeName, college_id: collegeId });
       setIsEditing(false);
       Alert.alert('Success', 'Profile updated successfully!');
@@ -195,3 +195,4 @@ const styles = StyleSheet.create({
 });
 
 export default ProfileScreen;
+

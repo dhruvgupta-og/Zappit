@@ -27,7 +27,7 @@ const HomeScreen = ({ navigation }: any) => {
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [isEditingAddress, setIsEditingAddress] = useState(false);
 
-  const bannerTimer = useRef<NodeJS.Timeout | null>(null);
+  const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = async (showLoader = true) => {
     if (showLoader) setLoading(true);
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   storeImageContainer: { position: 'relative', height: 160 },
   storeImage: { width: '100%', height: '100%' },
   closedOverlay: {
-    ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)',
+    ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center', justifyContent: 'center',
   },
   closedText: { color: '#fff', fontWeight: '700', fontSize: 20, padding: 8, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8 },
@@ -345,3 +345,4 @@ const styles = StyleSheet.create({
 });
 
 export default HomeScreen;
+

@@ -26,7 +26,6 @@ const GOOGLE_ANDROID_CLIENT_ID = '12406084456-nkg0fjcb4v35il9917lk450dat2m3qla.a
 // Configure native Google Sign-In once
 GoogleSignin.configure({
   webClientId: GOOGLE_WEB_CLIENT_ID,
-  androidClientId: GOOGLE_ANDROID_CLIENT_ID,
   offlineAccess: false,
 });
 
@@ -367,4 +366,5 @@ const styles = StyleSheet.create({
 });
 
 export default LoginScreen;
+
 

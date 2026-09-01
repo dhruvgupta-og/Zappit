@@ -298,7 +298,7 @@ const AdminDashboardScreen = () => {
             <Text style={s.cardTitle}>🚚 Delivery Charges</Text>
             <Text style={[s.rowSub, { marginBottom: spacing.md }]}>Set the flat delivery fee applied to all customer orders. Set to 0 for free delivery.</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={[s.inputWrapper, { flex: 1, marginBottom: 0 }]}>
+              <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bgColor, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderColor, paddingHorizontal: spacing.md }, { flex: 1, marginBottom: 0 }]}>
                 <Text style={{ fontSize: 16, marginRight: 8, color: colors.textMain }}>₹</Text>
                 <TextInput
                   style={[s.formInput, { flex: 1, paddingVertical: 12 }]}
@@ -875,3 +875,4 @@ const s = StyleSheet.create({
 });
 
 export default AdminDashboardScreen;
+

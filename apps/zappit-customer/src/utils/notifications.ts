@@ -8,6 +8,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -52,3 +54,4 @@ export const registerForPushNotifications = async (): Promise<string | null> => 
 
   return tokenData.data;
 };
+
