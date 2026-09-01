@@ -86,6 +86,65 @@ router.post('/flush-cache', async (req, res) => {
   }
 });
 
+// --- BROADCAST PUSH NOTIFICATION ---
+router.post('/send-broadcast-notification', async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Forbidden: Admins only' });
+  }
+  try {
+    const { title, body, college_id } = req.body;
+    if (!title || !body) {
+      return res.status(400).json({ success: false, error: 'Title and body are required.' });
+    }
+
+    const User = require('../../models/User');
+    const query = { fcmToken: { $exists: true, $ne: null } };
+    if (college_id) query.college_id = college_id;
+
+    const users = await User.find(query).select('fcmToken name');
+    if (users.length === 0) {
+      return res.json({ success: true, sent: 0, message: 'No users with push tokens found.' });
+    }
+
+    // Send in batches of 500 (FCM limit per multicast)
+    const BATCH_SIZE = 500;
+    let totalSent = 0;
+    let totalFailed = 0;
+
+    for (let i = 0; i < users.length; i += BATCH_SIZE) {
+      const batch = users.slice(i, i + BATCH_SIZE);
+      const tokens = batch.map(u => u.fcmToken).filter(Boolean);
+      if (tokens.length === 0) continue;
+
+      try {
+        const response = await admin.messaging().sendEachForMulticast({
+          tokens,
+          notification: { title, body },
+          android: {
+            notification: {
+              icon: 'notification_icon',
+              color: '#FFD60A',
+              sound: 'default',
+            },
+            priority: 'high',
+          },
+          data: { type: 'broadcast', title, body },
+        });
+        totalSent += response.successCount;
+        totalFailed += response.failureCount;
+      } catch (batchErr) {
+        console.error('[Broadcast] Batch error:', batchErr.message);
+        totalFailed += tokens.length;
+      }
+    }
+
+    console.log(`[Broadcast] Sent: ${totalSent}, Failed: ${totalFailed}, Total users: ${users.length}`);
+    res.json({ success: true, sent: totalSent, failed: totalFailed, total: users.length });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // --- COLLEGES ---
 router.get('/colleges', async (req, res) => {
   try {

@@ -13,6 +13,12 @@ export const adminApi = {
     return res.data;
   },
 
+  // Broadcast Push Notification
+  sendBroadcastNotification: async (title: string, body: string, college_id?: string) => {
+    const res = await apiClient.post('/api/admin/send-broadcast-notification', { title, body, college_id });
+    return res.data;
+  },
+
   // Colleges
   getColleges: async () => {
     const res = await apiClient.get('/api/admin/colleges');

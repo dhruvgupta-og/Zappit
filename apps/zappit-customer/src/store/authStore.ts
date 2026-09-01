@@ -4,6 +4,7 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { auth } from '../config/firebase';
 import { usersApi } from '../api/users';
 import { User } from '../types';
+import { registerForPushNotifications } from '../utils/notifications';
 
 interface AuthState {
   firebaseUser: FirebaseUser | null;
@@ -82,6 +83,18 @@ export const initAuthListener = () => {
       
     try {
       await store.checkProfileComplete();
+
+      // Register for push notifications and save token to backend
+      try {
+        const pushToken = await registerForPushNotifications();
+        if (pushToken && firebaseUser) {
+          await usersApi.updateProfile(firebaseUser.uid, { fcmToken: pushToken });
+          console.log('[Notifications] Push token registered:', pushToken);
+        }
+      } catch (notifErr) {
+        console.warn('[Notifications] Token registration failed (non-fatal):', notifErr);
+      }
+
     } catch {
       store.setProfileComplete(false);
     } finally {

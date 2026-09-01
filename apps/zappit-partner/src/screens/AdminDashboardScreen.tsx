@@ -17,6 +17,7 @@ const TABS = [
   { key: 'colleges', label: '🎓 Colleges' },
   { key: 'banners', label: '🖼️ Banners' },
   { key: 'coupons', label: '🏷️ Coupons' },
+  { key: 'notifications', label: '📢 Notify' },
 ];
 
 const ORDER_STATUS_OPTIONS = ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'];
@@ -52,6 +53,12 @@ const AdminDashboardScreen = () => {
   // Filters
   const [orderSearch, setOrderSearch] = useState('');
   const [collegeFilter, setCollegeFilter] = useState('all');
+
+  // Notification broadcast state
+  const [notifTitle, setNotifTitle] = useState('');
+  const [notifBody, setNotifBody] = useState('');
+  const [notifCollege, setNotifCollege] = useState('');
+  const [notifSending, setNotifSending] = useState(false);
 
   // Modals
   const [modalVisible, setModalVisible] = useState(false);
@@ -530,6 +537,98 @@ const AdminDashboardScreen = () => {
             )}
           />
         </View>
+      )}
+
+      {activeTab === 'notifications' && (
+        <ScrollView contentContainerStyle={s.page}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.adminAccent} />}>
+
+          <View style={s.card}>
+            <Text style={s.cardTitle}>📢 Send Push Notification</Text>
+            <Text style={[s.rowSub, { marginBottom: spacing.md }]}>
+              Send a notification to all customers, or target a specific college.
+            </Text>
+
+            <Text style={s.formLabel}>Title *</Text>
+            <TextInput
+              style={s.formInput}
+              value={notifTitle}
+              onChangeText={setNotifTitle}
+              placeholder="e.g. 🎉 Special Offer Today!"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <Text style={s.formLabel}>Message *</Text>
+            <TextInput
+              style={[s.formInput, { height: 100, textAlignVertical: 'top', paddingTop: 12 }]}
+              value={notifBody}
+              onChangeText={setNotifBody}
+              placeholder="e.g. Get 20% off all orders this weekend. Use code SAVE20!"
+              placeholderTextColor={colors.textMuted}
+              multiline
+            />
+
+            <Text style={s.formLabel}>Target College (optional — leave blank for all)</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.lg }}>
+              <TouchableOpacity
+                style={[s.chip, !notifCollege && s.chipActive]}
+                onPress={() => setNotifCollege('')}>
+                <Text style={[s.chipText, !notifCollege && s.chipTextActive]}>🌍 All Colleges</Text>
+              </TouchableOpacity>
+              {colleges.map(col => {
+                const cId = col.id || col._id;
+                return (
+                  <TouchableOpacity key={cId}
+                    style={[s.chip, notifCollege === cId && s.chipActive]}
+                    onPress={() => setNotifCollege(notifCollege === cId ? '' : cId)}>
+                    <Text style={[s.chipText, notifCollege === cId && s.chipTextActive]}>🎓 {col.name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[s.addBtn, { paddingVertical: 14, borderRadius: 14 }]}
+              disabled={notifSending || !notifTitle.trim() || !notifBody.trim()}
+              onPress={async () => {
+                setNotifSending(true);
+                try {
+                  const res = await adminApi.sendBroadcastNotification(
+                    notifTitle.trim(),
+                    notifBody.trim(),
+                    notifCollege || undefined
+                  );
+                  if (res.success) {
+                    Alert.alert(
+                      '✅ Notifications Sent!',
+                      `Successfully sent to ${res.sent} user(s).\n${res.failed ? `${res.failed} failed.` : ''}`,
+                    );
+                    setNotifTitle('');
+                    setNotifBody('');
+                    setNotifCollege('');
+                  } else {
+                    Alert.alert('Info', res.message || 'No users found to notify.');
+                  }
+                } catch (err: any) {
+                  Alert.alert('Error', err?.response?.data?.error || err.message || 'Failed to send.');
+                } finally {
+                  setNotifSending(false);
+                }
+              }}>
+              {notifSending
+                ? <ActivityIndicator color={colors.adminAccent} />
+                : <Text style={[s.addBtnText, { fontSize: 15 }]}>📤 Send Notification</Text>
+              }
+            </TouchableOpacity>
+          </View>
+
+          <View style={[s.card, { backgroundColor: 'rgba(255,193,7,0.05)' }]}>
+            <Text style={s.cardTitle}>ℹ️ How Push Notifications Work</Text>
+            <Text style={[s.rowSub, { lineHeight: 20 }]}>
+              {'• Customers receive notifications when they open the app for the first time and grant permission.\n\n• Order status updates (Preparing, Ready, etc.) are sent automatically.\n\n• Broadcast notifications go to all registered customers — use responsibly!'}
+            </Text>
+          </View>
+        </ScrollView>
       )}
 
       {/* ── MODAL FORM ── */}
