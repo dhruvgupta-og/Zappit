@@ -32,6 +32,66 @@ const STATUS_MESSAGES = {
   cancelled:        { title: '❌ Order Cancelled',           body: 'Unfortunately your order has been cancelled. Please contact support if this was unexpected.' },
 };
 
+// Helper: send Expo push notifications to store owner(s) for new orders
+async function notifyStoreOwners(orders) {
+  try {
+    const https = require('https');
+    const Staff = require('../../models/Staff');
+    const tokens = [];
+
+    for (const order of orders) {
+      if (!order.store_id) continue;
+      const staffMembers = await Staff.find({ store_id: order.store_id });
+      for (const staff of staffMembers) {
+        const storeUser = await User.findById(staff._id).select('expoPushToken');
+        if (storeUser && storeUser.expoPushToken && storeUser.expoPushToken.startsWith('ExponentPushToken')) {
+          tokens.push({
+            token: storeUser.expoPushToken,
+            storeName: order.store_name || 'Your Store',
+            total: order.total_amount || 0,
+          });
+        }
+      }
+    }
+
+    if (tokens.length === 0) return;
+
+    const messages = tokens.map(t => ({
+      to: t.token,
+      title: '\u{1F6CD}\uFE0F New Order Received!',
+      body: `A new order of \u20B9${t.total} was placed at ${t.storeName}. Check the Orders tab now!`,
+      sound: 'default',
+      priority: 'high',
+      data: { type: 'new_order' },
+    }));
+
+    const postData = JSON.stringify(messages);
+    await new Promise((resolve) => {
+      const options = {
+        hostname: 'exp.host',
+        path: '/--/api/v2/push/send',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'Accept-Encoding': 'gzip, deflate',
+        },
+      };
+      const expoReq = https.request(options, (r) => {
+        let data = '';
+        r.on('data', chunk => data += chunk);
+        r.on('end', () => resolve(data));
+      });
+      expoReq.on('error', (e) => { console.warn('[notifyStoreOwners] Push error:', e.message); resolve(null); });
+      expoReq.write(postData);
+      expoReq.end();
+    });
+    console.log(`[notifyStoreOwners] Sent ${messages.length} notification(s) to store owners.`);
+  } catch (e) {
+    console.warn('[notifyStoreOwners] Non-fatal error:', e.message);
+  }
+}
+
 // POST /api/send-status-notification
 router.post('/send-status-notification', async (req, res) => {
   try {
@@ -319,6 +379,9 @@ router.post('/verify-payment', async (req, res) => {
     const orderIds = verifiedOrders.map(o => o._id);
     const deliveryOtp = verifiedOrders.length > 0 ? verifiedOrders[0].delivery_otp : null;
 
+    // Notify store owners (non-blocking, best-effort)
+    notifyStoreOwners(verifiedOrders).catch(() => {});
+
     res.status(200).json({ 
       success: true, 
       verified: true, 
@@ -388,6 +451,9 @@ router.post('/verify-payment-redirect', async (req, res) => {
     }
 
     const orderIds = verifiedOrders.map(o => o._id).join(',');
+
+    // Notify store owners (non-blocking, best-effort)
+    notifyStoreOwners(verifiedOrders).catch(() => {});
 
     return res.redirect(`${frontendUrl}/payment-callback?verified=true&transactionId=${razorpay_payment_id}&orderIds=${orderIds}`);
 

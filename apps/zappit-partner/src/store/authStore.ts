@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { apiClient } from '../api/client';
+import { usersApi } from '../api/users';
+import { registerForPushNotificationsAsync } from '../utils/notifications';
 import { User } from '../types';
 
 interface AuthState {
@@ -95,6 +97,18 @@ export const initAuthListener = () => {
 
     try {
       await store.fetchProfile();
+
+      // Register for push notifications and save Expo token to backend
+      try {
+        const pushToken = await registerForPushNotificationsAsync();
+        if (pushToken && firebaseUser) {
+          await usersApi.updateProfile(firebaseUser.uid, { expoPushToken: pushToken });
+          console.log('[Notifications] Partner Expo push token registered:', pushToken);
+        }
+      } catch (notifErr) {
+        console.warn('[Notifications] Partner token registration failed:', notifErr);
+      }
+
     } finally {
       store.setLoading(false);
       useAuthStore.setState({ isInitialized: true });

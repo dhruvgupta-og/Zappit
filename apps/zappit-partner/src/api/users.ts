@@ -5,4 +5,8 @@ export const usersApi = {
     const res = await apiClient.get('/api/users/me/staff');
     return res.data;
   },
+  updateProfile: async (uid: string, data: any): Promise<any> => {
+    const res = await apiClient.post(`/api/users/${uid}`, data);
+    return res.data;
+  },
 };
