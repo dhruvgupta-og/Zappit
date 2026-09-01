@@ -1,18 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
 import { usersApi } from '../api/users';
+import { storesApi } from '../api/stores';
+import { College } from '../types';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 
 const ProfileScreen = () => {
-  const { profile, setProfile, logout } = useAuthStore();
+  const { profile, setProfile, logout, firebaseUser } = useAuthStore();
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(profile?.name || '');
   const [phone, setPhone] = useState(profile?.phone || '');
+  const [college, setCollege] = useState(profile?.college_name || profile?.college || '');
+  const [collegeId, setCollegeId] = useState(profile?.college_id || '');
+  const [colleges, setColleges] = useState<College[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    storesApi.getColleges().then(setColleges).catch(() => {});
+  }, []);
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -22,11 +31,13 @@ const ProfileScreen = () => {
   };
 
   const handleSave = async () => {
-    if (!profile?.uid) return;
+    if (!firebaseUser?.uid) return;
     setLoading(true);
     try {
-      await usersApi.updateProfile(profile.uid, { name, phone });
-      setProfile({ ...profile, name, phone });
+      const selectedCollege = colleges.find((c) => (c.id || c._id) === collegeId);
+      const collegeName = selectedCollege?.name || college;
+      await usersApi.updateProfile(firebaseUser.uid, { name, phone, college_name: collegeName, college_id: collegeId });
+      setProfile({ ...profile, name, phone, college_name: collegeName, college_id: collegeId });
       setIsEditing(false);
       Alert.alert('Success', 'Profile updated successfully!');
     } catch (err: any) {
@@ -78,8 +89,29 @@ const ProfileScreen = () => {
             <View style={styles.divider} />
             <View style={styles.row}>
               <Text style={styles.label}>College</Text>
-              <Text style={styles.value}>{profile?.college_name || profile?.college || 'Not set'}</Text>
+              {!isEditing && (
+                <Text style={styles.value}>{profile?.college_name || profile?.college || 'Not set'}</Text>
+              )}
             </View>
+            {isEditing && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.lg }}>
+                {colleges.map((c) => {
+                  const cId = c.id || c._id;
+                  const isActive = collegeId === cId || (college === c.name && !collegeId);
+                  return (
+                    <TouchableOpacity
+                      key={cId}
+                      style={[styles.collegeChip, isActive && styles.collegeChipActive]}
+                      onPress={() => { setCollegeId(cId!); setCollege(c.name); }}
+                    >
+                      <Text style={[styles.collegeChipText, isActive && styles.collegeChipTextActive]}>
+                        🎓 {c.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
           </View>
         </View>
 
@@ -91,12 +123,12 @@ const ProfileScreen = () => {
               <Text style={styles.btnValue}>Enabled</Text>
             </TouchableOpacity>
             <View style={styles.divider} />
-            <TouchableOpacity style={styles.rowBtn}>
+            <TouchableOpacity style={styles.rowBtn} onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')}>
               <Text style={styles.btnLabel}>Saved Addresses</Text>
               <Text style={{ color: colors.textMuted }}>→</Text>
             </TouchableOpacity>
             <View style={styles.divider} />
-            <TouchableOpacity style={styles.rowBtn}>
+            <TouchableOpacity style={styles.rowBtn} onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')}>
               <Text style={styles.btnLabel}>Help & Support</Text>
               <Text style={{ color: colors.textMuted }}>→</Text>
             </TouchableOpacity>
@@ -144,6 +176,15 @@ const styles = StyleSheet.create({
   btnLabel: { fontSize: 15, color: colors.textMain },
   btnValue: { fontSize: 14, color: colors.primary, fontWeight: '600' },
   divider: { height: 1, backgroundColor: colors.borderColor },
+
+  collegeChip: {
+    paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.full,
+    backgroundColor: colors.bgColor, borderWidth: 1, borderColor: colors.borderColor,
+    marginRight: spacing.sm,
+  },
+  collegeChipActive: { backgroundColor: 'rgba(255,193,7,0.15)', borderColor: colors.primary },
+  collegeChipText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
+  collegeChipTextActive: { color: colors.primary },
 
   logoutBtn: {
     backgroundColor: 'rgba(239, 68, 68, 0.1)', borderRadius: radius.md,

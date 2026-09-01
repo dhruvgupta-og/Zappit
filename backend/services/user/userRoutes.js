@@ -32,7 +32,14 @@ router.get('/:uid', async (req, res) => {
     if (!user) {
       return res.json({ success: true, user: null, exists: false });
     }
-    res.json({ success: true, user: { id: user._id, ...user.toObject() }, exists: true });
+    
+    const userObj = user.toObject();
+    // Inject the fully resolved role from authMiddleware if requesting own profile
+    if (req.user && req.user.uid === req.params.uid) {
+      userObj.role = req.user.role;
+    }
+    
+    res.json({ success: true, user: { id: user._id, ...userObj }, exists: true });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }

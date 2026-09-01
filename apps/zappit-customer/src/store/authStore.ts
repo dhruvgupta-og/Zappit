@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { User as FirebaseUser, onAuthStateChanged } from 'firebase/auth';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { auth } from '../config/firebase';
 import { usersApi } from '../api/users';
 import { User } from '../types';
@@ -33,6 +34,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setLoading: (loading) => set({ isLoading: loading }),
 
   logout: async () => {
+    try {
+      await GoogleSignin.signOut();
+    } catch (error) {
+      // Ignored
+    }
     await auth.signOut();
     set({
       firebaseUser: null,
@@ -63,6 +69,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 export const initAuthListener = () => {
   return onAuthStateChanged(auth, async (firebaseUser) => {
     const store = useAuthStore.getState();
+    store.setLoading(true); // Prevent flash of uninitialized profile state
     store.setFirebaseUser(firebaseUser);
 
     if (!firebaseUser) {
@@ -72,7 +79,7 @@ export const initAuthListener = () => {
       useAuthStore.setState({ isInitialized: true });
       return;
     }
-
+      
     try {
       await store.checkProfileComplete();
     } catch {

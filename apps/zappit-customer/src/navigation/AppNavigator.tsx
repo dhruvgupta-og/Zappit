@@ -1,10 +1,12 @@
 import React, { useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { Feather } from '@expo/vector-icons';
 
 import { useAuthStore, initAuthListener } from '../store/authStore';
+import { useCartStore } from '../store/cartStore';
 import { colors } from '../theme/colors';
 
 // Screens
@@ -21,6 +23,21 @@ import ProfileScreen from '../screens/ProfileScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
+// Cart icon with badge — mirrors the web BottomNav badge
+const CartTabIcon = ({ color, size }: { color: string; size: number }) => {
+  const cartCount = useCartStore((s) => s.getCartCount());
+  return (
+    <View style={{ position: 'relative' }}>
+      <Feather name="shopping-cart" size={size} color={color} />
+      {cartCount > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{cartCount > 99 ? '99+' : cartCount}</Text>
+        </View>
+      )}
+    </View>
+  );
+};
+
 const MainTabs = () => (
   <Tab.Navigator
     screenOptions={{
@@ -28,27 +45,55 @@ const MainTabs = () => (
       tabBarStyle: {
         backgroundColor: colors.cardBg,
         borderTopColor: colors.borderColor,
-        paddingBottom: 4,
+        borderTopWidth: 1,
+        paddingBottom: 6,
         paddingTop: 8,
+        height: 60,
       },
       tabBarActiveTintColor: colors.primary,
       tabBarInactiveTintColor: colors.textMuted,
+      tabBarLabelStyle: {
+        fontSize: 11,
+        fontWeight: '600',
+        marginTop: 2,
+      },
     }}
   >
     <Tab.Screen
       name="Home"
       component={HomeScreen}
-      options={{ tabBarIcon: () => <Text style={{ fontSize: 20 }}>🏠</Text> }}
+      options={{
+        tabBarIcon: ({ color, size }) => (
+          <Feather name="home" size={size} color={color} />
+        ),
+      }}
+    />
+    <Tab.Screen
+      name="Cart"
+      component={CartScreen}
+      options={{
+        tabBarIcon: ({ color, size }) => (
+          <CartTabIcon color={color} size={size} />
+        ),
+      }}
     />
     <Tab.Screen
       name="Orders"
       component={OrdersScreen}
-      options={{ tabBarIcon: () => <Text style={{ fontSize: 20 }}>📦</Text> }}
+      options={{
+        tabBarIcon: ({ color, size }) => (
+          <Feather name="shopping-bag" size={size} color={color} />
+        ),
+      }}
     />
     <Tab.Screen
       name="Profile"
       component={ProfileScreen}
-      options={{ tabBarIcon: () => <Text style={{ fontSize: 20 }}>👤</Text> }}
+      options={{
+        tabBarIcon: ({ color, size }) => (
+          <Feather name="user" size={size} color={color} />
+        ),
+      }}
     />
   </Tab.Navigator>
 );
@@ -83,7 +128,6 @@ const AppNavigator = () => {
           <>
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen name="StoreDetail" component={StoreDetailScreen} />
-            <Stack.Screen name="Cart" component={CartScreen} />
             <Stack.Screen name="Checkout" component={CheckoutScreen} />
             <Stack.Screen name="OrderTracker" component={OrderTrackerScreen} />
           </>
@@ -93,7 +137,28 @@ const AppNavigator = () => {
   );
 };
 
-// Simple text shim since we don't have react-native-vector-icons installed
-import { Text } from 'react-native';
+const styles = StyleSheet.create({
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    backgroundColor: colors.primary,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+    borderWidth: 2,
+    borderColor: colors.cardBg,
+  },
+  badgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    lineHeight: 13,
+  },
+});
 
 export default AppNavigator;
+

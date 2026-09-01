@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, Image,
@@ -8,8 +8,9 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithCredential,
+  signInWithPopup,
 } from 'firebase/auth';
-import * as AuthSession from 'expo-auth-session';
+import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin';
 import * as WebBrowser from 'expo-web-browser';
 import { auth } from '../config/firebase';
 import { useAuthStore } from '../store/authStore';
@@ -19,9 +20,15 @@ import { typography, spacing, radius } from '../theme/typography';
 
 WebBrowser.maybeCompleteAuthSession();
 
-// TODO: Replace this placeholder with your REAL Firebase OAuth 2.0 Web Client ID
-// (Found in Firebase Console -> Authentication -> Sign-in method -> Google)
-const GOOGLE_CLIENT_ID = '12406084456-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.apps.googleusercontent.com';
+const GOOGLE_WEB_CLIENT_ID = '12406084456-4rkekvj6h93rm4r90v7c3q324paok1k6.apps.googleusercontent.com';
+const GOOGLE_ANDROID_CLIENT_ID = '12406084456-nkg0fjcb4v35il9917lk450dat2m3qla.apps.googleusercontent.com';
+
+// Configure native Google Sign-In once
+GoogleSignin.configure({
+  webClientId: GOOGLE_WEB_CLIENT_ID,
+  androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+  offlineAccess: false,
+});
 
 const LoginScreen = ({ navigation }: any) => {
   const [tab, setTab] = useState<'login' | 'register'>('login');
@@ -33,7 +40,7 @@ const LoginScreen = ({ navigation }: any) => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const { checkProfileComplete, setLoading: setAuthLoading } = useAuthStore();
+
 
   const friendlyError = (err: any) => {
     const code = err.code || '';
@@ -48,24 +55,14 @@ const LoginScreen = ({ navigation }: any) => {
     return err.message?.replace('Firebase: ', '') || 'Something went wrong.';
   };
 
-  const handlePostLogin = async () => {
-    const isComplete = await checkProfileComplete();
-    if (!isComplete) {
-      navigation.replace('Onboarding');
-    }
-    // If complete, the auth listener in AppNavigator will redirect to Main
-  };
-
   const handleEmailLogin = async () => {
     setError('');
     if (!email.trim() || !password) { setError('Please fill in all fields.'); return; }
     setLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
-      await handlePostLogin();
     } catch (err: any) {
       setError(friendlyError(err));
-    } finally {
       setLoading(false);
     }
   };
@@ -84,55 +81,52 @@ const LoginScreen = ({ navigation }: any) => {
           profile_complete: false,
           auth_method: 'email',
         });
-      } catch {}
-      navigation.replace('Onboarding');
+      } catch { }
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
         try {
           await signInWithEmailAndPassword(auth, email.trim(), password);
-          await handlePostLogin();
         } catch {
           setError('An account with this email already exists. Please sign in with your password.');
           setTab('login');
+          setLoading(false);
         }
       } else {
         setError(friendlyError(err));
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
     }
   };
 
-  const discovery = AuthSession.useAutoDiscovery('https://accounts.google.com');
-
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: GOOGLE_CLIENT_ID,
-      scopes: ['openid', 'profile', 'email'],
-      responseType: AuthSession.ResponseType.IdToken,
-      redirectUri: AuthSession.makeRedirectUri(),
-    },
-    discovery
-  );
-
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      const credential = GoogleAuthProvider.credential(id_token);
-      setLoading(true);
-      signInWithCredential(auth, credential)
-        .then(() => handlePostLogin())
-        .catch((err) => setError(friendlyError(err)))
-        .finally(() => setLoading(false));
-    }
-  }, [response]);
-
   const handleGoogleLogin = async () => {
     setError('');
+    setLoading(true);
     try {
-      await promptAsync();
+      if (Platform.OS === 'web') {
+        // Web: use Firebase popup flow
+        const provider = new GoogleAuthProvider();
+        await signInWithPopup(auth, provider);
+      } else {
+        // Native Android/iOS: use native Google Sign-In SDK
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+        const userInfo = await GoogleSignin.signIn();
+        const idToken = userInfo.data?.idToken;
+        if (!idToken) throw new Error('No ID token received from Google.');
+        const credential = GoogleAuthProvider.credential(idToken);
+        await signInWithCredential(auth, credential);
+      }
     } catch (err: any) {
-      setError('Google sign-in failed. Please try again.');
+      console.error('Google Sign-In error:', err);
+      if (err.code === statusCodes.SIGN_IN_CANCELLED) {
+        // User cancelled — no error message needed
+      } else if (err.code === statusCodes.IN_PROGRESS) {
+        setError('Sign-in already in progress. Please wait.');
+      } else if (err.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        setError('Google Play Services is not available on this device.');
+      } else if (err.code !== 'auth/popup-closed-by-user') {
+        setError(friendlyError(err));
+      }
+      setLoading(false);
     }
   };
 
@@ -153,7 +147,7 @@ const LoginScreen = ({ navigation }: any) => {
             <Text style={styles.logoText}>Zappit</Text>
           </View>
           <Text style={styles.title}>Welcome to Zappit</Text>
-          <Text style={styles.subtitle}>The fastest campus delivery at your doorstep.</Text>
+          <Text style={styles.subtitle}>The fastest campus delivery app.</Text>
         </View>
 
         {/* Card */}
@@ -189,7 +183,7 @@ const LoginScreen = ({ navigation }: any) => {
               style={styles.input}
               value={email}
               onChangeText={setEmail}
-              placeholder="you@college.edu"
+              placeholder="Dhruv@gmail.com"
               placeholderTextColor={colors.textMuted}
               keyboardType="email-address"
               autoCapitalize="none"

@@ -1,15 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
-import { signInWithEmailAndPassword, GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
-import * as AuthSession from 'expo-auth-session';
-import * as WebBrowser from 'expo-web-browser';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 
-WebBrowser.maybeCompleteAuthSession();
-const GOOGLE_CLIENT_ID = '12406084456-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.apps.googleusercontent.com';
 
 const LoginScreen = () => {
   const [email, setEmail] = useState('');
@@ -34,28 +30,7 @@ const LoginScreen = () => {
     }
   };
 
-  const discovery = AuthSession.useAutoDiscovery('https://accounts.google.com');
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: GOOGLE_CLIENT_ID,
-      scopes: ['openid', 'profile', 'email'],
-      responseType: AuthSession.ResponseType.IdToken,
-      redirectUri: AuthSession.makeRedirectUri(),
-    },
-    discovery
-  );
 
-  useEffect(() => {
-    if (response?.type === 'success') {
-      const { id_token } = response.params;
-      const credential = GoogleAuthProvider.credential(id_token);
-      setLoading(true);
-      signInWithCredential(auth, credential)
-        .then(() => fetchProfile())
-        .catch((err) => setError(err.message))
-        .finally(() => setLoading(false));
-    }
-  }, [response]);
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -86,16 +61,6 @@ const LoginScreen = () => {
           <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin} disabled={loading}>
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Sign In</Text>}
           </TouchableOpacity>
-
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity style={styles.googleBtn} onPress={() => promptAsync()} disabled={loading}>
-            <Text style={styles.googleBtnText}>Sign in with Google</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -116,11 +81,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, paddingVertical: 13, fontSize: 16, color: colors.textMain },
   primaryBtn: { backgroundColor: colors.primaryDark, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: spacing.lg },
   primaryBtnText: { ...typography.button, color: '#fff' },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: spacing.xl },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.borderColor },
-  dividerText: { color: colors.textMuted, fontSize: 12, marginHorizontal: spacing.md },
-  googleBtn: { backgroundColor: '#fff', borderRadius: radius.md, paddingVertical: 13, alignItems: 'center' },
-  googleBtnText: { color: '#374151', fontWeight: '700', fontSize: 15 },
+
 });
 
 export default LoginScreen;

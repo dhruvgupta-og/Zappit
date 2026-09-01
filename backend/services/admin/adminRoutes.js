@@ -8,6 +8,7 @@ const MenuItem = require('../../models/MenuItem');
 const Config = require('../../models/Config');
 const { admin } = require('../../firebase');
 const Staff = require('../../models/Staff');
+const { clearCache } = require('../../cache/redis');
 
 const generateId = () => new mongoose.Types.ObjectId().toString();
 
@@ -20,6 +21,36 @@ router.get('/config/:key', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// --- DASHBOARD STATS ---
+router.get('/dashboard-stats', async (req, res) => {
+  if (!['admin'].includes(req.user?.role)) {
+    return res.status(403).json({ success: false, error: 'Forbidden: Admins only' });
+  }
+  try {
+    const Order = require('../../models/Order');
+    const User = require('../../models/User');
+    const [totalOrders, totalStores, totalUsers, revenueAgg] = await Promise.all([
+      Order.countDocuments({ order_status: { $ne: 'cancelled' } }),
+      Store.countDocuments(),
+      User.countDocuments(),
+      Order.aggregate([
+        { $match: { order_status: 'delivered', payment_status: { $in: ['completed', 'paid'] } } },
+        { $group: { _id: null, total: { $sum: '$total_amount' } } }
+      ])
+    ]);
+    res.json({
+      success: true,
+      totalOrders,
+      totalStores,
+      totalUsers,
+      totalRevenue: revenueAgg[0]?.total || 0
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 
 // Route Guard
 router.use((req, res, next) => {
@@ -37,6 +68,22 @@ router.use((req, res, next) => {
   }
   
   next();
+});
+
+// --- FLUSH CACHE (Admin only) ---
+router.post('/flush-cache', async (req, res) => {
+  if (req.user?.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Forbidden: Admins only' });
+  }
+  try {
+    const keys = req.body.keys || ['api:colleges:all', 'api:banners:active', 'api:stores:all'];
+    for (const key of keys) {
+      await clearCache(key);
+    }
+    res.json({ success: true, message: `Cleared cache keys: ${keys.join(', ')}` });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // --- COLLEGES ---
@@ -60,6 +107,7 @@ router.post('/colleges', async (req, res) => {
     delete updateData.id;
 
     const newCollege = await College.findByIdAndUpdate(data._id, updateData, { upsert: true, new: true, setDefaultsOnInsert: true });
+    await clearCache('api:colleges:all'); // Invalidate cache so apps reflect changes
     res.json({ success: true, college: newCollege });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -80,8 +128,14 @@ router.post('/delete', async (req, res) => {
       }
     }
 
-    if (collection === 'colleges') await College.findByIdAndDelete(id);
-    if (collection === 'banners') await Banner.findByIdAndDelete(id);
+    if (collection === 'colleges') {
+      await College.findByIdAndDelete(id);
+      await clearCache('api:colleges:all'); // Invalidate cache
+    }
+    if (collection === 'banners') {
+      await Banner.findByIdAndDelete(id);
+      await clearCache('api:banners:active'); // Invalidate cache
+    }
     if (collection === 'stores') {
       // Delete the store
       await Store.findByIdAndDelete(id);
@@ -118,6 +172,7 @@ router.post('/banners', async (req, res) => {
     delete updateData.id;
 
     const newBanner = await Banner.findByIdAndUpdate(data._id, updateData, { upsert: true, new: true, setDefaultsOnInsert: true });
+    await clearCache('api:banners:active'); // Invalidate banner cache
     res.json({ success: true, banner: newBanner });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

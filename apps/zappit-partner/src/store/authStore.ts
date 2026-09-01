@@ -39,8 +39,39 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       return null;
     }
     try {
-      const res = await apiClient.get(`/api/users/${user.uid}`);
-      const profileData = res.data.user;
+      // First try to fetch standard profile
+      let profileData = null;
+      try {
+        const res = await apiClient.get(`/api/users/${user.uid}`);
+        profileData = res.data.user;
+      } catch (e) {
+        // Ignore error, fallback to staff route
+      }
+
+      // Partner app: always try to merge staff details
+      try {
+        const staffRes = await apiClient.get(`/api/users/me/staff`);
+        if (staffRes.data && staffRes.data.success) {
+          const staffData = staffRes.data;
+          profileData = {
+            ...(profileData || {}),
+            uid: user.uid,
+            email: user.email,
+            role: staffData.role,
+            name: staffData.name || profileData?.name || '',
+            college_id: staffData.college_id,
+            college_name: staffData.college_name,
+          };
+        }
+      } catch (e) {
+        // Ignore staff error
+      }
+
+      if (!profileData) {
+        set({ profile: null });
+        return null;
+      }
+
       set({ profile: profileData });
       return profileData;
     } catch {

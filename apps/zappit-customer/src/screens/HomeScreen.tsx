@@ -25,6 +25,7 @@ const HomeScreen = ({ navigation }: any) => {
   const [collegeName, setCollegeName] = useState('Campus');
   const [collegeId, setCollegeId] = useState('');
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [isEditingAddress, setIsEditingAddress] = useState(false);
 
   const bannerTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -165,7 +166,26 @@ const HomeScreen = ({ navigation }: any) => {
       <View style={styles.header}>
         <View style={{ flex: 1, marginRight: 12 }}>
           <Text style={styles.headerLabel}>📍 DELIVERING TO</Text>
-          <Text style={styles.headerAddress} numberOfLines={1}>{address} ✎</Text>
+          {isEditingAddress ? (
+            <TextInput
+              style={[styles.headerAddress, { borderBottomWidth: 1, borderBottomColor: colors.primary, padding: 0 }]}
+              value={address}
+              onChangeText={setAddress}
+              autoFocus
+              onBlur={() => {
+                setIsEditingAddress(false);
+                AsyncStorage.setItem('userAddress', address);
+              }}
+              onSubmitEditing={() => {
+                setIsEditingAddress(false);
+                AsyncStorage.setItem('userAddress', address);
+              }}
+            />
+          ) : (
+            <TouchableOpacity onPress={() => setIsEditingAddress(true)}>
+              <Text style={styles.headerAddress} numberOfLines={1}>{address} ✎</Text>
+            </TouchableOpacity>
+          )}
           <Text style={styles.headerCollege} numberOfLines={1}>{collegeName}</Text>
         </View>
         <TouchableOpacity

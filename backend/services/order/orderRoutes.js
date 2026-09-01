@@ -14,10 +14,10 @@ router.get('/', async (req, res) => {
       query.user_id = req.user.uid;
     } else if (req.user.role === 'store_owner') {
       // Store owners only see orders for their assigned store
-      query.store_id = req.user.staff_store_id;
+      query.store_id = req.user.staff_store_id || 'UNASSIGNED_STORE';
     } else if (req.user.role === 'delivery') {
       // Delivery partners only see orders for their assigned college
-      query.college_id = req.user.staff_college_id;
+      query.college_id = req.user.staff_college_id || 'UNASSIGNED_COLLEGE';
     } else if (req.query.user_id) {
       // Admins can fetch specific user's orders if requested
       query.user_id = req.query.user_id;

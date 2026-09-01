@@ -1,21 +1,33 @@
 {
   "expo": {
-    "name": "zappit-customer",
-    "slug": "zappit-customer",
-    "scheme": "zappit-customer",
+    "name": "Zappit",
+    "slug": "zappit",
+    "scheme": ["zappit-customer", "com.zappit.customer"],
+    "owner": "dhruvhereyo-organization",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "updates": {
+      "url": "https://u.expo.dev/2e3ea53c-1d6a-470a-8fe6-35bf5a37fb71",
+      "enabled": true,
+      "fallbackToCacheTimeout": 0,
+      "checkAutomatically": "ON_LOAD"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.zappit.customer"
     },
     "android": {
+      "package": "com.zappit.customer",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundColor": "#0B132B",
+        "foregroundImage": "./assets/icon.png",
         "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "monochromeImage": "./assets/icon.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -23,7 +35,19 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-web-browser"
-    ]
+      "expo-web-browser",
+      "expo-updates",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.12406084456-4rkekvj6h93rm4r90v7c3q324paok1k6"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "2e3ea53c-1d6a-470a-8fe6-35bf5a37fb71"
+      }
+    }
   }
 }
