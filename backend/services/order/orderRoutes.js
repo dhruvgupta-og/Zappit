@@ -40,8 +40,20 @@ router.get('/', async (req, res) => {
 });
 
 
+const rateLimit = require('express-rate-limit');
+
+// OTP brute-force limiter: 20 requests per 15 minutes
+const otpLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  keyGenerator: (req) => {
+    return req.user?.uid ? req.user.uid : req.ip;
+  },
+  message: { success: false, error: 'Too many OTP verification attempts. Please try again later.' }
+});
+
 // Verify OTP and Mark Delivered
-router.post('/:id/verify-otp', async (req, res) => {
+router.post('/:id/verify-otp', otpLimiter, async (req, res) => {
   try {
     const isStaff = ['admin', 'delivery'].includes(req.user.role);
     if (!isStaff) {

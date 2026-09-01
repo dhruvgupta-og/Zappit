@@ -83,10 +83,19 @@ const app = express();
 
 // API GATEWAY: Rate Limiting
 if (process.env.NODE_ENV === 'production') {
+  const keyGenerator = (req) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      return authHeader.split(' ')[1];
+    }
+    return req.ip;
+  };
+
   // Global limiter: 100 requests per 15 minutes
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100, 
+    keyGenerator: keyGenerator,
     message: { success: false, error: 'Too many requests from this IP, please try again after 15 minutes' }
   });
   app.use('/api/', apiLimiter);
@@ -95,6 +104,7 @@ if (process.env.NODE_ENV === 'production') {
   const strictLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,
+    keyGenerator: keyGenerator,
     message: { success: false, error: 'Too many payment/coupon attempts. Please try again later.' }
   });
   app.use('/api/create-order', strictLimiter);

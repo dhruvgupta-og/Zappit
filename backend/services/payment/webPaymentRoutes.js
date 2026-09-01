@@ -199,11 +199,20 @@ router.post('/create-order', async (req, res) => {
     const MenuItem = require('../../models/MenuItem');
     const Config = require('../../models/Config');
 
+    // NEW: Batch fetch menu items
+    const itemIds = items.map(item => item.id || item._id);
+    const dbItems = await MenuItem.find({ _id: { $in: itemIds } });
+    const dbItemMap = new Map();
+    dbItems.forEach(dbItem => {
+      dbItemMap.set(dbItem._id.toString(), dbItem);
+    });
+
     // 1. Calculate subtotal securely from DB
     let subtotal = 0;
     const itemsByStore = {};
     for (const item of items) {
-      const dbItem = await MenuItem.findById(item.id || item._id);
+      const itemIdStr = (item.id || item._id).toString();
+      const dbItem = dbItemMap.get(itemIdStr);
       if (!dbItem) {
         return res.status(400).json({ success: false, error: `Item not found: ${item.name}` });
       }
