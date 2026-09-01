@@ -1,0 +1,105 @@
+{
+  "project_info": {
+    "project_number": "12406084456",
+    "project_id": "zappit-90a73",
+    "storage_bucket": "zappit-90a73.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:12406084456:android:506ebb89c22f8f3e597cdd",
+        "android_client_info": {
+          "package_name": "com.dhruvhereyoorganization.zappitpartner"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "12406084456-4rkekvj6h93rm4r90v7c3q324paok1k6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDu43kvyrrqX_XT45cOHEernGL1cljewIU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "12406084456-4rkekvj6h93rm4r90v7c3q324paok1k6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:12406084456:android:547ae66e52d687f1597cdd",
+        "android_client_info": {
+          "package_name": "com.zappit.customer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "12406084456-4rkekvj6h93rm4r90v7c3q324paok1k6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDu43kvyrrqX_XT45cOHEernGL1cljewIU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "12406084456-4rkekvj6h93rm4r90v7c3q324paok1k6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:12406084456:android:1038d90bcdee4cec597cdd",
+        "android_client_info": {
+          "package_name": "zappit.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "12406084456-8c6n8cbisdn61k2lrhnh790cvk5hdo3e.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "zappit.app",
+            "certificate_hash": "1677ed3402b2e65545f1a0401c1a2e693690c94b"
+          }
+        },
+        {
+          "client_id": "12406084456-4rkekvj6h93rm4r90v7c3q324paok1k6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDu43kvyrrqX_XT45cOHEernGL1cljewIU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "12406084456-4rkekvj6h93rm4r90v7c3q324paok1k6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

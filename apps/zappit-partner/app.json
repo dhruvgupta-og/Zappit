@@ -17,7 +17,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.dhruvhereyoorganization.zappitpartner"
+      "package": "com.dhruvhereyoorganization.zappitpartner",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
