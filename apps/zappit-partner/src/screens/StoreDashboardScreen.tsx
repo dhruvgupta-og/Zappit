@@ -177,7 +177,6 @@ const StoreDashboardScreen = () => {
   };
 
   // ── Analytics ──
-  const activeAndCompleted = orders.filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending');
   const todayRevenue = activeAndCompleted
     .filter(o => getDateObj(o.created_at).toDateString() === new Date().toDateString())
     .reduce((s, o) => s + getOrderSubtotal(o), 0);
