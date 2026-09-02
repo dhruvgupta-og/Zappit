@@ -36,6 +36,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   fetchProfile: async () => {
     const user = auth.currentUser;
+    console.log('[AuthStore] fetchProfile called, uid:', user?.uid ?? 'NO USER');
     if (!user) {
       set({ profile: null });
       return null;
@@ -46,13 +47,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       try {
         const res = await apiClient.get(`/api/users/${user.uid}`);
         profileData = res.data.user;
-      } catch (e) {
-        // Ignore error, fallback to staff route
+        console.log('[AuthStore] user profile fetched:', JSON.stringify(profileData));
+      } catch (e: any) {
+        console.warn('[AuthStore] user profile fetch failed:', e?.message);
       }
 
       // Partner app: always try to merge staff details
       try {
         const staffRes = await apiClient.get(`/api/users/me/staff`);
+        console.log('[AuthStore] staff raw response:', JSON.stringify(staffRes.data));
         if (staffRes.data && staffRes.data.success) {
           const staffData = staffRes.data;
           profileData = {
@@ -66,19 +69,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             store_name: staffData.store_name,
             store_id: staffData.store_id,
           };
+          console.log('[AuthStore] merged profile:', JSON.stringify(profileData));
+        } else {
+          console.warn('[AuthStore] staff response not success:', JSON.stringify(staffRes.data));
         }
-      } catch (e) {
-        // Ignore staff error
+      } catch (e: any) {
+        console.error('[AuthStore] staff fetch error:', e?.message, e?.response?.data);
       }
 
       if (!profileData) {
+        console.warn('[AuthStore] no profileData, setting null');
         set({ profile: null });
         return null;
       }
 
       set({ profile: profileData });
       return profileData;
-    } catch {
+    } catch (e: any) {
+      console.error('[AuthStore] fetchProfile outer error:', e?.message);
       set({ profile: null });
       return null;
     }
