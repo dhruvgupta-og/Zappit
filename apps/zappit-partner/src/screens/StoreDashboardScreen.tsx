@@ -41,6 +41,7 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }>
 
 const StoreDashboardScreen = () => {
   const profile = useAuthStore(s => s.profile);
+  const logout = useAuthStore(s => s.logout);
   const staffStoreId = (profile as any)?.store_id;
 
   const [ordersDateFilter, setOrdersDateFilter] = useState<'today' | 'all'>('today');
