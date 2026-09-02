@@ -59,6 +59,12 @@ const DeliveryDashboardScreen = () => {
     return new Date(val);
   };
 
+  const getItems = (items: any) => {
+    if (!items) return [];
+    if (Array.isArray(items)) return items;
+    return Object.entries(items).map(([id, qty]) => ({ id, name: id, qty, price: 0 }));
+  };
+
   const sortedByTime = (list: any[]) => [...list].sort((a, b) => getDateObj(a.created_at).getTime() - getDateObj(b.created_at).getTime());
 
   const newOrders = sortedByTime(orders.filter(o => o.order_status === 'ready' || o.order_status === 'out_for_delivery'));
@@ -138,6 +144,15 @@ const DeliveryDashboardScreen = () => {
         <View style={styles.addressBox}>
           <Text style={styles.addressLabel}>DELIVER TO:</Text>
           <Text style={styles.addressText}>📍 {order.delivery_address || 'Unknown address'}</Text>
+        </View>
+
+        <View style={{ marginBottom: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.borderColor }}>
+          <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', marginBottom: 4 }}>ORDER ITEMS:</Text>
+          {getItems(order.items).map((item: any, i: number) => (
+            <Text key={i} style={{ fontSize: 14, color: colors.textMain, marginBottom: 2 }}>
+              {item.qty || item.quantity || 1}x {item.name || 'Item'}
+            </Text>
+          ))}
         </View>
 
         {order.order_status !== 'delivered' && (

@@ -63,6 +63,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             name: staffData.name || profileData?.name || '',
             college_id: staffData.college_id,
             college_name: staffData.college_name,
+            store_name: staffData.store_name,
+            store_id: staffData.store_id,
           };
         }
       } catch (e) {

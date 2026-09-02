@@ -166,9 +166,9 @@ const StoreDashboard = () => {
   };
 
   // "New" = confirmed (paid) orders waiting for store to start preparing
-  const newOrders       = filterOrdersByDate(orders.filter(o => o.order_status === 'confirmed'));
-  const preparingOrders = filterOrdersByDate(orders.filter(o => o.order_status === 'preparing'));
-  const readyOrders     = filterOrdersByDate(orders.filter(o => o.order_status === 'ready' || o.order_status === 'out_for_delivery' || o.order_status === 'picked_up'));
+  const newOrders       = orders.filter(o => o.order_status === 'confirmed');
+  const preparingOrders = orders.filter(o => o.order_status === 'preparing');
+  const readyOrders     = orders.filter(o => o.order_status === 'ready' || o.order_status === 'out_for_delivery' || o.order_status === 'picked_up');
   const completedOrders = filterOrdersByDate(orders.filter(o => o.order_status === 'delivered' || o.order_status === 'completed'));
 
   const activeAndCompletedOrders = orders.filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending');

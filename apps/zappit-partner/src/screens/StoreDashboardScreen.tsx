@@ -40,10 +40,10 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }>
 };
 
 const StoreDashboardScreen = () => {
-  const { profile, logout } = useAuthStore();
+  const profile = useAuthStore(s => s.profile);
+  const staffStoreId = (profile as any)?.store_id;
 
-  // ── State ──
-  const [staffStoreId, setStaffStoreId] = useState<string | null>(null);
+  const [ordersDateFilter, setOrdersDateFilter] = useState<'today' | 'all'>('today');
   const [isOpen, setIsOpen] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
@@ -66,7 +66,7 @@ const StoreDashboardScreen = () => {
       try {
         const res = await usersApi.getStaffRole();
         if (res.success && res.store_id) {
-          setStaffStoreId(res.store_id);
+          // staffStoreId is handled by auth store profile hook
         }
       } catch {
         // Will show empty state
@@ -79,6 +79,7 @@ const StoreDashboardScreen = () => {
 
   // ── Fetch data ──
   const fetchOrders = useCallback(async () => {
+    if (!staffStoreId) return;
     try {
       const res = await ordersApi.getOrders(staffStoreId);
       if (res.success) {
@@ -145,13 +146,23 @@ const StoreDashboardScreen = () => {
   };
 
   // ── Order Buckets ──
-  const todayStr = new Date().toDateString();
-  const filterToday = (list: any[]) => list.filter(o => getDateObj(o.created_at).toDateString() === todayStr);
+  const filterOrdersByDate = (list: any[]) => {
+    if (ordersDateFilter === 'today') {
+      const todayStr = new Date().toDateString();
+      return list.filter(o => getDateObj(o.created_at).toDateString() === todayStr);
+    }
+    return list;
+  };
 
-  const newOrders = filterToday(orders.filter(o => o.order_status === 'confirmed'));
-  const preparingOrders = filterToday(orders.filter(o => o.order_status === 'preparing'));
-  const readyOrders = filterToday(orders.filter(o => ['ready', 'out_for_delivery', 'picked_up'].includes(o.order_status)));
-  const completedOrders = filterToday(orders.filter(o => ['delivered', 'completed'].includes(o.order_status)));
+  const activeAndCompleted = orders.filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending');
+
+  // Active orders (new, preparing, ready) should ALWAYS show, regardless of date, so they don't get lost
+  const newOrders = activeAndCompleted.filter(o => o.order_status === 'confirmed');
+  const preparingOrders = activeAndCompleted.filter(o => o.order_status === 'preparing');
+  const readyOrders = activeAndCompleted.filter(o => ['ready', 'out_for_delivery', 'picked_up'].includes(o.order_status));
+  
+  // Completed orders can be filtered by date
+  const completedOrders = filterOrdersByDate(activeAndCompleted.filter(o => ['delivered', 'completed'].includes(o.order_status)));
 
   const tabOrders = orderSubTab === 'new' ? newOrders
     : orderSubTab === 'preparing' ? preparingOrders
@@ -168,7 +179,7 @@ const StoreDashboardScreen = () => {
   // ── Analytics ──
   const activeAndCompleted = orders.filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending');
   const todayRevenue = activeAndCompleted
-    .filter(o => getDateObj(o.created_at).toDateString() === todayStr)
+    .filter(o => getDateObj(o.created_at).toDateString() === new Date().toDateString())
     .reduce((s, o) => s + getOrderSubtotal(o), 0);
 
   const dishStats = activeAndCompleted.reduce((acc: any, o: any) => {
@@ -371,9 +382,9 @@ const StoreDashboardScreen = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* ── TOP BAR ── */}
       <View style={styles.topBar}>
-        <View>
+        <View style={{ flex: 1, paddingRight: 8 }}>
           <Text style={styles.topBarSubtitle}>🏪 Store Partner</Text>
-          <Text style={styles.topBarTitle}>Store Dashboard</Text>
+          <Text style={styles.topBarTitle} numberOfLines={1}>{(profile as any)?.store_name || 'Dashboard'}</Text>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <TouchableOpacity onPress={toggleStoreStatus} style={[styles.statusToggle, { backgroundColor: isOpen ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)' }]}>
@@ -415,16 +426,30 @@ const StoreDashboardScreen = () => {
       {/* ── ORDERS TAB ── */}
       {activeTab === 'orders' && (
         <View style={{ flex: 1 }}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll} contentContainerStyle={styles.subTabsContainer}>
-            {ORDER_SUB_TABS.map(t => (
-              <TouchableOpacity key={t.key} onPress={() => setOrderSubTab(t.key)}
-                style={[styles.subTab, orderSubTab === t.key && styles.subTabActive]}>
-                <Text style={[styles.subTabText, orderSubTab === t.key && styles.subTabTextActive]}>
-                  {t.label} ({tabCounts[t.key]})
+        <View style={{ flex: 1 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: spacing.md }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll} contentContainerStyle={styles.subTabsContainer}>
+              {ORDER_SUB_TABS.map(t => (
+                <TouchableOpacity key={t.key} onPress={() => setOrderSubTab(t.key)}
+                  style={[styles.subTab, orderSubTab === t.key && styles.subTabActive]}>
+                  <Text style={[styles.subTabText, orderSubTab === t.key && styles.subTabTextActive]}>
+                    {t.label} ({tabCounts[t.key]})
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            
+            {orderSubTab === 'completed' && (
+              <TouchableOpacity
+                style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: colors.borderColor }}
+                onPress={() => setOrdersDateFilter(prev => prev === 'today' ? 'all' : 'today')}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '700', color: colors.storeAccent }}>
+                  {ordersDateFilter === 'today' ? 'TODAY' : 'ALL TIME'}
                 </Text>
               </TouchableOpacity>
-            ))}
-          </ScrollView>
+            )}
+          </View>
           <FlatList
             data={tabOrders}
             renderItem={renderOrderCard}
@@ -479,7 +504,7 @@ const StoreDashboardScreen = () => {
                 <Text style={styles.analyticsStatLabel}>Revenue</Text>
               </View>
               <View style={styles.analyticsStat}>
-                <Text style={styles.analyticsStatValue}>{activeAndCompleted.filter(o => getDateObj(o.created_at).toDateString() === todayStr).length}</Text>
+                <Text style={styles.analyticsStatValue}>{activeAndCompleted.filter(o => getDateObj(o.created_at).toDateString() === new Date().toDateString()).length}</Text>
                 <Text style={styles.analyticsStatLabel}>Orders</Text>
               </View>
               <View style={styles.analyticsStat}>
