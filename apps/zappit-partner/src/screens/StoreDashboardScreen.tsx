@@ -411,7 +411,7 @@ const StoreDashboardScreen = () => {
       <View style={styles.statsRow}>
         {[
           { label: 'Orders', value: orders.length, emoji: '📦' },
-          { label: 'Revenue', value: `₹${todayRevenue}`, emoji: '💰' },
+          { label: 'Revenue', value: `₹${totalRevenue}`, emoji: '💰' },
           { label: 'New', value: newOrders.length, emoji: '🆕' },
           { label: 'Menu', value: menuItems.length, emoji: '🍽️' },
         ].map(s => (
