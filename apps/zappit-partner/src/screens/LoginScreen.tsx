@@ -37,7 +37,7 @@ const LoginScreen = () => {
       <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         <View style={styles.logoContainer}>
           <Text style={styles.title}>Zappit Partners</Text>
-          <Text style={styles.subtitle}>Store • Delivery • Admin</Text>
+          <Text style={styles.subtitle}>Store & Delivery </Text>
         </View>
 
         <View style={styles.card}>
