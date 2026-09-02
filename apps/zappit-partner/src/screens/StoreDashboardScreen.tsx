@@ -7,7 +7,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ordersApi } from '../api/orders';
 import { storesApi } from '../api/stores';
 import { menuApi } from '../api/menu';
-import { usersApi } from '../api/users';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
@@ -58,25 +57,17 @@ const StoreDashboardScreen = () => {
   const [menuForm, setMenuForm] = useState({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
   const [editingMenuId, setEditingMenuId] = useState<string | null>(null);
   const [menuSaving, setMenuSaving] = useState(false);
+  const [menuCategoryFilter, setMenuCategoryFilter] = useState('All');
+  const [timeFilter, setTimeFilter] = useState('today');
 
   const prevOrderCount = useRef(-1);
 
-  // ── Init: check staff role ──
+  // ── Init: set loading false once staffStoreId is resolved from authStore ──
   useEffect(() => {
-    const init = async () => {
-      try {
-        const res = await usersApi.getStaffRole();
-        if (res.success && res.store_id) {
-          // staffStoreId is handled by auth store profile hook
-        }
-      } catch {
-        // Will show empty state
-      } finally {
-        setLoading(false);
-      }
-    };
-    init();
-  }, []);
+    // staffStoreId comes from authStore profile which is resolved asynchronously.
+    // Once it's available (or confirmed to be absent), we can clear the loading state.
+    setLoading(false);
+  }, [staffStoreId]);
 
   // ── Fetch data ──
   const fetchOrders = useCallback(async () => {
@@ -102,15 +93,21 @@ const StoreDashboardScreen = () => {
   }, [staffStoreId]);
 
   const fetchStoreData = useCallback(async () => {
-    if (!staffStoreId) return;
+    if (!staffStoreId) {
+      console.log('[StoreDashboard] fetchStoreData skipped: no staffStoreId');
+      return;
+    }
     try {
+      console.log('[StoreDashboard] fetching store data for', staffStoreId);
       const res = await storesApi.getStoreById(staffStoreId);
+      console.log('[StoreDashboard] store res:', res.success, 'menu count:', (res.menu || []).length);
       if (res.success) {
         setIsOpen(res.store.is_open !== false);
-        setMenuItems((res.menu || []).map((m: any) => ({ id: m._id, ...m })));
+        const items = (res.menu || []).map((m: any) => ({ ...m, id: m._id || m.id }));
+        setMenuItems(items);
       }
     } catch (err) {
-      console.error('Failed to fetch store:', err);
+      console.error('[StoreDashboard] Failed to fetch store:', err);
     }
   }, [staffStoreId]);
 
@@ -178,12 +175,25 @@ const StoreDashboardScreen = () => {
   };
 
   // ── Analytics ──
-  const todayRevenue = activeAndCompleted
-    .filter(o => getDateObj(o.created_at).toDateString() === new Date().toDateString())
-    .reduce((s, o) => s + getOrderSubtotal(o), 0);
+  const getFilteredAnalyticsOrders = () => {
+    return activeAndCompleted.filter(o => {
+      const orderDate = getDateObj(o.created_at);
+      const now = new Date();
+      if (timeFilter === 'today') return orderDate.toDateString() === now.toDateString();
+      if (timeFilter === 'week') {
+        const weekAgo = new Date(); weekAgo.setDate(now.getDate() - 7);
+        return orderDate >= weekAgo;
+      }
+      if (timeFilter === 'month') return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
+      return true;
+    });
+  };
 
-  const dishStats = activeAndCompleted.reduce((acc: any, o: any) => {
-    if (o.order_status === 'cancelled') return acc;
+  const analyticsOrders = getFilteredAnalyticsOrders();
+
+  const totalRevenue = analyticsOrders.reduce((s, o) => s + getOrderSubtotal(o), 0);
+
+  const dishStats = analyticsOrders.reduce((acc: any, o: any) => {
     getItems(o.items).forEach((item: any) => {
       if (item?.name) {
         if (!acc[item.name]) acc[item.name] = { count: 0, revenue: 0 };
@@ -468,15 +478,29 @@ const StoreDashboardScreen = () => {
       {/* ── MENU TAB ── */}
       {activeTab === 'menu' && (
         <View style={{ flex: 1 }}>
-          <TouchableOpacity style={styles.addMenuBtn} onPress={() => {
-            setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
-            setEditingMenuId(null);
-            setShowMenuForm(true);
-          }}>
-            <Text style={styles.addMenuBtnText}>+ Add Item</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, gap: 12 }}>
+            <TouchableOpacity style={[styles.addMenuBtn, { flex: 1, marginBottom: 0 }]} onPress={() => {
+              setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
+              setEditingMenuId(null);
+              setShowMenuForm(true);
+            }}>
+              <Text style={styles.addMenuBtnText}>+ Add Item</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {['All', ...CATEGORIES].map(cat => (
+                <TouchableOpacity key={cat} onPress={() => setMenuCategoryFilter(cat)}
+                  style={[styles.catChip, menuCategoryFilter === cat && styles.catChipActive]}>
+                  <Text style={[styles.catChipText, menuCategoryFilter === cat && styles.catChipTextActive]}>{cat}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
           <FlatList
-            data={menuItems}
+            data={menuItems.filter(item => menuCategoryFilter === 'All' || item.category === menuCategoryFilter)}
             renderItem={renderMenuItem}
             keyExtractor={item => item.id || item._id}
             contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40 }}
@@ -495,19 +519,34 @@ const StoreDashboardScreen = () => {
       {activeTab === 'analytics' && (
         <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.storeAccent} />}>
+          
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 8, marginBottom: spacing.md }}>
+            {[
+              { key: 'today', label: 'Today' },
+              { key: 'week', label: 'Week' },
+              { key: 'month', label: 'Month' },
+              { key: 'all', label: 'All Time' },
+            ].map(t => (
+              <TouchableOpacity key={t.key} onPress={() => setTimeFilter(t.key as any)}
+                style={[styles.subTab, timeFilter === t.key && styles.subTabActive]}>
+                <Text style={[styles.subTabText, timeFilter === t.key && styles.subTabTextActive]}>{t.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
           <View style={styles.analyticsCard}>
-            <Text style={styles.analyticsTitle}>📊 Today's Summary</Text>
+            <Text style={styles.analyticsTitle}>📊 Summary</Text>
             <View style={styles.analyticsRow}>
               <View style={styles.analyticsStat}>
-                <Text style={styles.analyticsStatValue}>₹{todayRevenue}</Text>
+                <Text style={styles.analyticsStatValue}>₹{totalRevenue}</Text>
                 <Text style={styles.analyticsStatLabel}>Revenue</Text>
               </View>
               <View style={styles.analyticsStat}>
-                <Text style={styles.analyticsStatValue}>{activeAndCompleted.filter(o => getDateObj(o.created_at).toDateString() === new Date().toDateString()).length}</Text>
+                <Text style={styles.analyticsStatValue}>{analyticsOrders.length}</Text>
                 <Text style={styles.analyticsStatLabel}>Orders</Text>
               </View>
               <View style={styles.analyticsStat}>
-                <Text style={styles.analyticsStatValue}>{completedOrders.length}</Text>
+                <Text style={styles.analyticsStatValue}>{analyticsOrders.filter(o => ['delivered', 'completed'].includes(o.order_status)).length}</Text>
                 <Text style={styles.analyticsStatLabel}>Delivered</Text>
               </View>
             </View>
