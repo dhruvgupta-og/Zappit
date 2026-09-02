@@ -67,6 +67,12 @@ const StoreDashboardScreen = () => {
     // staffStoreId comes from authStore profile which is resolved asynchronously.
     // Once it's available (or confirmed to be absent), we can clear the loading state.
     setLoading(false);
+    // DEBUG: show profile state to diagnose data issues
+    Alert.alert(
+      '🔍 Debug Profile',
+      `store_id: ${(profile as any)?.store_id ?? 'NULL'}\nstore_name: ${(profile as any)?.store_name ?? 'NULL'}\nrole: ${(profile as any)?.role ?? 'NULL'}\nuid: ${(profile as any)?.uid ?? 'NULL'}`,
+      [{ text: 'OK' }]
+    );
   }, [staffStoreId]);
 
   // ── Fetch data ──
