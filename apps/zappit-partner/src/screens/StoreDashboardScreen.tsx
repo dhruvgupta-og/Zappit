@@ -425,7 +425,6 @@ const StoreDashboardScreen = () => {
       {/* ── ORDERS TAB ── */}
       {activeTab === 'orders' && (
         <View style={{ flex: 1 }}>
-        <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: spacing.md }}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll} contentContainerStyle={styles.subTabsContainer}>
               {ORDER_SUB_TABS.map(t => (
