@@ -145,6 +145,15 @@ const CheckoutScreen = () => {
     }
   };
 
+  const triggerPopAnimation = () => {
+    fadeAnim.setValue(0);
+    scaleAnim.setValue(0.4);
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.spring(scaleAnim, { toValue: 1, friction: 4, tension: 60, useNativeDriver: true }),
+    ]).start();
+  };
+
   const handleWebViewMessage = async (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -157,7 +166,11 @@ const CheckoutScreen = () => {
         setProcessing(false);
         Alert.alert('Payment Failed', data.error || 'Payment failed.');
       } else if (data.status === 'success') {
+        // Immediately show animation screen to avoid form flicker
         setPaymentHtml(null);
+        setAnimationPhase(1);
+        triggerPopAnimation();
+
         // 3. Verify Payment
         try {
           const verifyRes = await paymentApi.verifyPayment({
@@ -170,33 +183,38 @@ const CheckoutScreen = () => {
             clearCart();
             const orderIds = verifyRes.orderIds;
 
-            // Send order confirmation email (non-blocking)
+            // Send order confirmation email with OTP & receipt
             try {
               await apiClient.post('/api/send-order-email', { orderIds });
             } catch (emailErr) {
               console.warn('[Zappit] Email send failed (non-critical):', emailErr);
             }
 
-            // Animate before navigating — mirrors web PaymentCallback.jsx
-            setPaymentHtml(null);
-            setProcessing(false);
-
-            Animated.parallel([
-              Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
-              Animated.spring(scaleAnim, { toValue: 1, friction: 5, useNativeDriver: true }),
-            ]).start();
-            setAnimationPhase(1);
-            setTimeout(() => setAnimationPhase(2), 1500);
-            setTimeout(() => setAnimationPhase(3), 2800);
+            // Phase 2: ZAPP!
             setTimeout(() => {
+              setAnimationPhase(2);
+              triggerPopAnimation();
+            }, 1200);
+
+            // Phase 3: Confirmed!
+            setTimeout(() => {
+              setAnimationPhase(3);
+              triggerPopAnimation();
+            }, 2600);
+
+            // Redirect to order tracker
+            setTimeout(() => {
+              setAnimationPhase(0);
+              setProcessing(false);
               navigation.replace('OrderTracker', { orderIds });
-            }, 4500);
+            }, 4200);
           } else {
             throw new Error('Verification failed on server');
           }
         } catch (vErr: any) {
-          Alert.alert('Verification Failed', vErr.message);
+          setAnimationPhase(0);
           setProcessing(false);
+          Alert.alert('Verification Failed', vErr.message);
         }
       }
     } catch (e) {

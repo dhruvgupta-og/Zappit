@@ -8,6 +8,7 @@ import {
 } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { useAuthStore } from '../store/authStore';
+import { apiClient } from '../api/client';
 import { usersApi } from '../api/users';
 import { storesApi } from '../api/stores';
 import { colors } from '../theme/colors';
@@ -109,6 +110,13 @@ const OnboardingScreen = ({ navigation }: any) => {
         auth_method: isGoogleUser ? 'google' : 'email',
         updated_at: new Date().toISOString(),
       });
+
+      // Send Welcome Email (non-blocking)
+      try {
+        await apiClient.post('/api/send-welcome-email');
+      } catch (emailErr) {
+        console.warn('[Zappit] Welcome email send failed (non-critical):', emailErr);
+      }
 
       await checkProfileComplete();
       // Auth listener will detect profileComplete=true and switch to Main

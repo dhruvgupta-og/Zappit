@@ -10,6 +10,7 @@ export interface User {
   profile_complete?: boolean;
   auth_method?: 'email' | 'google';
   role?: string;
+  expoPushToken?: string;
   created_at?: string;
   updated_at?: string;
 }
@@ -76,7 +77,9 @@ export interface Order {
   totalAmount?: number;
   delivery_fee?: number;
   deliveryFee?: number;
-  status: 'placed' | 'accepted' | 'preparing' | 'ready' | 'out_for_delivery' | 'delivered' | 'cancelled';
+  status: 'placed' | 'confirmed' | 'accepted' | 'preparing' | 'ready' | 'out_for_delivery' | 'picked_up' | 'delivered' | 'cancelled';
+  order_status?: string;
+  delivery_otp?: string;
   delivery_address?: string;
   deliveryAddress?: string;
   payment_method?: string;

@@ -9,8 +9,8 @@ export const ordersApi = {
 
   getById: async (id: string): Promise<Order> => {
     const res = await apiClient.get(`/api/orders`);
-    const orders = res.data.orders || res.data;
-    return orders.find((o: Order) => o.id === id || o._id === id);
+    const orders = res.data.orders || res.data || [];
+    return orders.find((o: Order) => String(o.id || o._id) === String(id) || String(o._id) === String(id));
   },
 
   updateStatus: async (id: string, status: string): Promise<any> => {

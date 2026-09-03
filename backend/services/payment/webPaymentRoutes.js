@@ -493,7 +493,8 @@ router.post('/send-order-email', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Forbidden: You do not own these orders' });
     }
 
-    const email = req.user?.email;
+    const userProfile = await User.findById(req.user.uid);
+    const email = req.user?.email || userProfile?.email;
     if (!email) {
       return res.status(400).json({ success: false, error: 'Authenticated user has no email address' });
     }
@@ -653,14 +654,13 @@ router.post('/send-order-email', async (req, res) => {
 // POST /api/send-welcome-email
 router.post('/send-welcome-email', async (req, res) => {
   try {
-    // Fix #2: Ignore client-supplied email/name/college — pull from authenticated user + MongoDB
-    const email = req.user?.email;
+    // Fetch trusted profile from MongoDB
+    const userProfile = await User.findById(req.user.uid);
+    const email = req.user?.email || userProfile?.email;
     if (!email) {
       return res.status(400).json({ success: false, error: 'Authenticated user has no email address' });
     }
 
-    // Fetch trusted profile from MongoDB
-    const userProfile = await User.findById(req.user.uid);
     const name = userProfile?.name || req.user?.name || 'there';
     const college = userProfile?.college_name || userProfile?.college || '';
 
@@ -844,9 +844,10 @@ router.post('/save-coupon', async (req, res) => {
       active: active !== false,
     };
     let mongoCoupon;
-    if (id && mongoose.Types.ObjectId.isValid(id)) {
+    if (id) {
       mongoCoupon = await Coupon.findByIdAndUpdate(id, mongoData, { new: true, upsert: true });
     } else {
+      mongoData._id = 'COUPON-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
       mongoCoupon = await Coupon.findOneAndUpdate({ code: mongoData.code }, mongoData, { new: true, upsert: true, setDefaultsOnInsert: true });
     }
     return res.status(200).json({ success: true, message: 'Coupon saved to MongoDB', id: mongoCoupon._id.toString(), source: 'mongodb' });
@@ -866,12 +867,8 @@ router.post('/delete-coupon', async (req, res) => {
     if (!id) {
       return res.status(400).json({ success: false, error: 'id is required' });
     }
-    if (mongoose.Types.ObjectId.isValid(id)) {
-      await Coupon.deleteOne({ _id: id });
-    } else {
-      await Coupon.deleteOne({ code: id });
-    }
-    return res.status(200).json({ success: true, message: 'Coupon deleted successfully', source: 'mongodb' });
+    await Coupon.deleteOne({ _id: id });
+    return res.status(200).json({ success: true, message: 'Coupon deleted from MongoDB', source: 'mongodb' });
   } catch (err) {
     console.error('[Zappit Coupon] delete-coupon error:', err);
     return res.status(500).json({ success: false, error: err.message });

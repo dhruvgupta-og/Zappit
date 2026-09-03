@@ -42,24 +42,26 @@ const OrdersScreen = () => {
     return colors.primary;
   };
 
-  const renderItem = ({ item }: { item: Order }) => (
-    <TouchableOpacity
-      style={styles.card}
-      onPress={() => navigation.navigate('OrderTracker', { orderIds: item.id || item._id })}
-      activeOpacity={0.8}
-    >
-      <View style={styles.cardHeader}>
-        <View>
-          <Text style={styles.storeName}>{item.store_name || item.storeName || 'Store'}</Text>
-          <Text style={styles.date}>
-            {new Date(item.created_at || item.createdAt!).toLocaleDateString()} at{' '}
-            {new Date(item.created_at || item.createdAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+  const renderItem = ({ item }: { item: Order }) => {
+    const status = item.order_status || item.status || 'confirmed';
+    return (
+      <TouchableOpacity
+        style={styles.card}
+        onPress={() => navigation.navigate('OrderTracker', { orderIds: item.id || item._id })}
+        activeOpacity={0.8}
+      >
+        <View style={styles.cardHeader}>
+          <View>
+            <Text style={styles.storeName}>{item.store_name || item.storeName || 'Store'}</Text>
+            <Text style={styles.date}>
+              {new Date(item.created_at || item.createdAt!).toLocaleDateString()} at{' '}
+              {new Date(item.created_at || item.createdAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </View>
+          <Text style={[styles.statusText, { color: getStatusColor(status) }]}>
+            {status.toUpperCase().replace(/_/g, ' ')}
           </Text>
         </View>
-        <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
-          {(item.status || 'PENDING').toUpperCase()}
-        </Text>
-      </View>
       <View style={styles.divider} />
       <View style={styles.itemsWrapper}>
         <Text style={styles.itemsText} numberOfLines={2}>
@@ -72,6 +74,7 @@ const OrdersScreen = () => {
       </View>
     </TouchableOpacity>
   );
+};
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

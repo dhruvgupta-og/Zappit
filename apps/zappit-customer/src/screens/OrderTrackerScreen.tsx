@@ -61,9 +61,13 @@ const statusIndex = (status: string) => {
 const OrderTrackerScreen = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
-  const { orderIds } = route.params;
+  const { orderIds } = route.params || {};
 
-  const primaryOrderId = Array.isArray(orderIds) ? orderIds[0] : orderIds;
+  const primaryOrderId = Array.isArray(orderIds)
+    ? orderIds[0]
+    : typeof orderIds === 'string'
+    ? orderIds.split(',')[0]
+    : orderIds;
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const pulse = useRef(new Animated.Value(1)).current;
