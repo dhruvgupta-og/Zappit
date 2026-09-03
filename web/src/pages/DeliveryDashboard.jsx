@@ -299,14 +299,14 @@ const DeliveryDashboard = () => {
                       <>
                         {otpPromptId === order.id ? (
                           <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '10px', border: '1px solid var(--border-color)' }}>
-                            <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '8px', color: 'var(--text-main)', textAlign: 'center' }}>Enter 6-digit OTP from Customer</div>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '8px', color: 'var(--text-main)', textAlign: 'center' }}>Enter 4-digit OTP from Customer</div>
                             <div style={{ display: 'flex', gap: '8px' }}>
                               <input 
                                 type="text" 
-                                maxLength={6}
+                                maxLength={4}
                                 value={otpInput}
                                 onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
-                                placeholder="000000"
+                                placeholder="0000"
                                 style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid var(--border-color)', outline: 'none', textAlign: 'center', fontSize: '1.2rem', letterSpacing: '0.2em', fontWeight: 700 }}
                               />
                               <button 

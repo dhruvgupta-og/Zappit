@@ -279,7 +279,7 @@ router.post('/create-order', async (req, res) => {
 
     // 5. Create Pending Orders in MongoDB immediately
     const orderIds = [];
-    const deliveryOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
     
     let isFirstStore = true;
     for (const [storeId, storeItems] of Object.entries(itemsByStore)) {

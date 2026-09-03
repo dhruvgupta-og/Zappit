@@ -219,16 +219,16 @@ const DeliveryDashboardScreen = () => {
       <Modal visible={!!otpPromptId} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Enter 6-Digit Delivery PIN</Text>
-            <Text style={styles.modalDesc}>Ask the customer for the 6-digit PIN to confirm delivery.</Text>
+            <Text style={styles.modalTitle}>Enter 4-Digit Delivery PIN</Text>
+            <Text style={styles.modalDesc}>Ask the customer for the 4-digit PIN to confirm delivery.</Text>
 
             <TextInput
               style={styles.otpInput}
               value={otpInput}
-              onChangeText={(t) => setOtpInput(t.replace(/\D/g, '').slice(0, 6))}
-              placeholder="000000"
+              onChangeText={(t) => setOtpInput(t.replace(/\D/g, '').slice(0, 4))}
+              placeholder="0000"
               keyboardType="number-pad"
-              maxLength={6}
+              maxLength={4}
               placeholderTextColor={colors.textMuted}
             />
 
