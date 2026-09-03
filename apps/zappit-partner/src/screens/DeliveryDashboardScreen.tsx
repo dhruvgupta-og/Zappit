@@ -143,7 +143,29 @@ const DeliveryDashboardScreen = () => {
 
         <View style={styles.addressBox}>
           <Text style={styles.addressLabel}>DELIVER TO:</Text>
-          <Text style={styles.addressText}>📍 {order.delivery_address || 'Unknown address'}</Text>
+          <Text style={styles.addressText}>📍 {order.address || order.delivery_address || 'Unknown address'}</Text>
+          {(order.user_phone || order.user_name) && (
+            <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {order.user_name ? (
+                <Text style={{ fontSize: 13, color: colors.textMain, fontWeight: '600' }}>
+                  👤 {order.user_name}
+                </Text>
+              ) : null}
+              {order.user_phone ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    const { Linking } = require('react-native');
+                    Linking.openURL(`tel:${order.user_phone}`);
+                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 20 }}
+                >
+                  <Text style={{ fontSize: 13, color: colors.success, fontWeight: '700' }}>
+                    📞 {order.user_phone}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          )}
         </View>
 
         <View style={{ marginBottom: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.borderColor }}>

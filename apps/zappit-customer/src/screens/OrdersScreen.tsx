@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ordersApi } from '../api/orders';
@@ -7,25 +7,29 @@ import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order } from '../types';
 
+const STATUS_CONFIG: Record<string, { label: string; color: string; emoji: string }> = {
+  confirmed:        { label: 'Confirmed',       color: colors.primary,   emoji: '✅' },
+  preparing:        { label: 'Preparing',        color: '#F59E0B',        emoji: '👨‍🍳' },
+  ready:            { label: 'Ready',            color: '#3B82F6',        emoji: '📦' },
+  out_for_delivery: { label: 'Out for Delivery', color: '#8B5CF6',        emoji: '🛵' },
+  picked_up:        { label: 'On the Way',       color: '#8B5CF6',        emoji: '🛵' },
+  delivered:        { label: 'Delivered',        color: colors.success,   emoji: '🎉' },
+  cancelled:        { label: 'Cancelled',        color: colors.error,     emoji: '❌' },
+};
+
 const OrdersScreen = () => {
   const navigation = useNavigation<any>();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      fetchOrders();
-    });
-    return unsubscribe;
-  }, [navigation]);
-
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await ordersApi.getAll();
-      // Sort by newest first
       const sorted = data.sort((a, b) => {
-        const d1 = new Date(a.created_at || a.createdAt || 0).getTime();
-        const d2 = new Date(b.created_at || b.createdAt || 0).getTime();
+        const d1 = new Date((a as any).created_at || a.createdAt || 0).getTime();
+        const d2 = new Date((b as any).created_at || b.createdAt || 0).getTime();
         return d2 - d1;
       });
       setOrders(sorted);
@@ -33,55 +37,81 @@ const OrdersScreen = () => {
       console.error(e);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  const getStatusColor = (status: string) => {
-    if (status === 'delivered') return colors.success;
-    if (status === 'cancelled') return colors.error;
-    return colors.primary;
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchOrders();
+    });
+    return unsubscribe;
+  }, [navigation, fetchOrders]);
+
+  useEffect(() => {
+    fetchOrders();
+    const interval = setInterval(() => fetchOrders(true), 10000);
+    return () => clearInterval(interval);
+  }, [fetchOrders]);
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchOrders();
   };
 
   const renderItem = ({ item }: { item: Order }) => {
-    const status = item.order_status || item.status || 'confirmed';
+    const status = (item as any).order_status || item.status || 'confirmed';
+    const cfg = STATUS_CONFIG[status] || { label: status.replace(/_/g, ' ').toUpperCase(), color: colors.primary, emoji: '📋' };
+    const isActive = !['delivered', 'cancelled'].includes(status);
+
     return (
       <TouchableOpacity
-        style={styles.card}
+        style={[styles.card, isActive && { borderColor: cfg.color, borderWidth: 1.5 }]}
         onPress={() => navigation.navigate('OrderTracker', { orderIds: item.id || item._id })}
         activeOpacity={0.8}
       >
         <View style={styles.cardHeader}>
-          <View>
-            <Text style={styles.storeName}>{item.store_name || item.storeName || 'Store'}</Text>
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={styles.storeName}>{(item as any).store_name || item.storeName || 'Store'}</Text>
             <Text style={styles.date}>
-              {new Date(item.created_at || item.createdAt!).toLocaleDateString()} at{' '}
-              {new Date(item.created_at || item.createdAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {new Date((item as any).created_at || item.createdAt!).toLocaleDateString()} at{' '}
+              {new Date((item as any).created_at || item.createdAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
-          <Text style={[styles.statusText, { color: getStatusColor(status) }]}>
-            {status.toUpperCase().replace(/_/g, ' ')}
+          <View style={[styles.statusBadge, { backgroundColor: `${cfg.color}22`, borderColor: cfg.color }]}>
+            <Text style={{ fontSize: 10, marginRight: 3 }}>{cfg.emoji}</Text>
+            <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
+          </View>
+        </View>
+
+        <View style={styles.divider} />
+
+        <View style={styles.itemsWrapper}>
+          <Text style={styles.itemsText} numberOfLines={2}>
+            {item.items.map((i: any) => `${i.qty || i.quantity || 1} × ${i.name || 'Item'}`).join(', ')}
           </Text>
         </View>
-      <View style={styles.divider} />
-      <View style={styles.itemsWrapper}>
-        <Text style={styles.itemsText} numberOfLines={2}>
-          {item.items.map((i) => `${i.qty || i.quantity} x ${i.name || (typeof i.menuItem === 'object' ? i.menuItem.name : 'Item')}`).join(', ')}
-        </Text>
-      </View>
-      <View style={styles.footer}>
-        <Text style={styles.totalLabel}>Total</Text>
-        <Text style={styles.totalValue}>₹{item.total_amount || item.totalAmount}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-};
+
+        <View style={styles.footer}>
+          <Text style={styles.totalLabel}>Total</Text>
+          <Text style={styles.totalValue}>₹{(item as any).total_amount || item.totalAmount}</Text>
+        </View>
+
+        {isActive && (
+          <Text style={{ fontSize: 11, color: cfg.color, fontWeight: '600', marginTop: 6, textAlign: 'right' }}>
+            Tap to track →
+          </Text>
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
         <Text style={styles.title}>Your Orders</Text>
       </View>
-      
+
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
@@ -99,6 +129,14 @@ const OrdersScreen = () => {
           renderItem={renderItem}
           contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
         />
       )}
     </SafeAreaView>
@@ -120,7 +158,11 @@ const styles = StyleSheet.create({
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
   storeName: { fontSize: 16, fontWeight: '700', color: colors.textMain, marginBottom: 2 },
   date: { fontSize: 12, color: colors.textMuted },
-  statusText: { fontSize: 12, fontWeight: '800' },
+  statusBadge: {
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 20, borderWidth: 1,
+  },
+  statusText: { fontSize: 11, fontWeight: '800' },
   divider: { height: 1, backgroundColor: colors.borderColor, marginVertical: spacing.md },
   itemsWrapper: { marginBottom: spacing.md },
   itemsText: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
