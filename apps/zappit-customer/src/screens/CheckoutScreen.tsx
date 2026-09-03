@@ -79,61 +79,96 @@ const CheckoutScreen = () => {
     setProcessing(true);
     
     try {
+      const userCollegeId = (await AsyncStorage.getItem('userCollegeId')) || '';
+
       // 1. Create order on backend
       const res = await paymentApi.createOrder({
-        amount: cartTotal, // Backend actually recalculates this, but we send it for legacy reasons
-        items: cartItems.map(c => ({ ...c.menuItem, qty: c.qty, storeId: c.storeId, storeName: c.storeName })),
+        amount: cartTotal,
+        items: cartItems.map(c => ({
+          id: c.menuItem.id || c.menuItem._id,
+          _id: c.menuItem.id || c.menuItem._id,
+          name: c.menuItem.name,
+          price: c.menuItem.price,
+          qty: c.qty,
+          storeId: c.storeId,
+          storeName: c.storeName,
+        })),
         storeId: storeId!,
         storeName: storeName!,
-        deliveryAddress: address,
+        address: address.trim(),
+        deliveryAddress: address.trim(),
         deliveryFee,
+        coupon_code: appliedCoupon?.code,
         couponCode: appliedCoupon?.code,
+        college_id: userCollegeId,
       });
 
       if (!res.success) throw new Error(res.error || 'Failed to create order');
 
-      // 2. Generate Razorpay Checkout HTML to load in WebView
+      const razorpayKey = res.key_id || 'rzp_test_T0gdDL6JAF6MCI';
+
+      // 2. Generate Razorpay Checkout HTML to load in WebView with full error handling
       const html = `
+        <!DOCTYPE html>
         <html>
           <head>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+            <style>
+              body { background-color: #0B132B; color: #FFC107; font-family: -apple-system, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; padding: 20px; text-align: center; }
+              .spinner { border: 4px solid rgba(255,193,7,0.2); border-left-color: #FFC107; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+              @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+            </style>
           </head>
-          <body style="background-color: #0B132B; display: flex; justify-content: center; align-items: center; height: 100vh;">
-            <h2 style="color: #FFC107; font-family: sans-serif;">Initializing Payment...</h2>
+          <body>
+            <div class="spinner"></div>
+            <h2>Opening Secure Payment...</h2>
+            <p style="color: #9CA3AF; font-size: 14px;">Please complete the payment below.</p>
             <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
             <script>
-              var options = {
-                key: "${res.key_id}",
-                amount: "${res.amount}",
-                currency: "${res.currency}",
-                name: "Zappit",
-                description: "Campus Delivery",
-                order_id: "${res.order_id}",
-                prefill: {
-                  name: "${profile?.name || ''}",
-                  email: "${profile?.email || ''}",
-                  contact: "${profile?.phone || ''}"
-                },
-                theme: { color: "#FFC107" },
-                handler: function(response) {
-                  window.ReactNativeWebView.postMessage(JSON.stringify({
-                    status: 'success',
-                    razorpay_order_id: response.razorpay_order_id,
-                    razorpay_payment_id: response.razorpay_payment_id,
-                    razorpay_signature: response.razorpay_signature
-                  }));
-                },
-                modal: {
-                  ondismiss: function() {
-                    window.ReactNativeWebView.postMessage(JSON.stringify({ status: 'cancelled' }));
-                  }
+              function postToApp(data) {
+                if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
+                  window.ReactNativeWebView.postMessage(JSON.stringify(data));
                 }
-              };
-              var rzp = new Razorpay(options);
-              rzp.on('payment.failed', function(response) {
-                window.ReactNativeWebView.postMessage(JSON.stringify({ status: 'failed', error: response.error.description }));
-              });
-              rzp.open();
+              }
+
+              try {
+                var options = {
+                  key: "${razorpayKey}",
+                  amount: "${res.amount}",
+                  currency: "${res.currency || 'INR'}",
+                  name: "Zappit",
+                  description: "Campus Delivery",
+                  order_id: "${res.order_id}",
+                  prefill: {
+                    name: "${(profile?.name || '').replace(/"/g, '\\"')}",
+                    email: "${(profile?.email || '').replace(/"/g, '\\"')}",
+                    contact: "${(profile?.phone || '').replace(/"/g, '\\"')}"
+                  },
+                  theme: { color: "#FFC107" },
+                  handler: function(response) {
+                    postToApp({
+                      status: 'success',
+                      razorpay_order_id: response.razorpay_order_id,
+                      razorpay_payment_id: response.razorpay_payment_id,
+                      razorpay_signature: response.razorpay_signature
+                    });
+                  },
+                  modal: {
+                    ondismiss: function() {
+                      postToApp({ status: 'cancelled' });
+                    }
+                  }
+                };
+
+                var rzp = new Razorpay(options);
+                rzp.on('payment.failed', function(response) {
+                  var errDesc = response.error ? (response.error.description || response.error.reason || 'Payment failed') : 'Payment failed';
+                  postToApp({ status: 'failed', error: errDesc });
+                });
+                rzp.open();
+              } catch (err) {
+                postToApp({ status: 'failed', error: err.message || 'Could not open payment gateway' });
+              }
             </script>
           </body>
         </html>
@@ -263,14 +298,25 @@ const CheckoutScreen = () => {
 
   if (paymentHtml) {
     return (
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, backgroundColor: colors.bgColor }}>
         <View style={{ height: insets.top, backgroundColor: colors.bgColor }} />
         <WebView
           originWhitelist={['*']}
-          source={{ html: paymentHtml }}
+          source={{ html: paymentHtml, baseUrl: 'https://checkout.razorpay.com' }}
           onMessage={handleWebViewMessage}
           style={{ flex: 1 }}
-          javaScriptEnabled
+          javaScriptEnabled={true}
+          domStorageEnabled={true}
+          thirdPartyCookiesEnabled={true}
+          mixedContentMode="always"
+          startInLoadingState={true}
+          onError={(syntheticEvent) => {
+            const { nativeEvent } = syntheticEvent;
+            console.warn('WebView error: ', nativeEvent);
+            Alert.alert('Payment Error', nativeEvent.description || 'Failed to load payment gateway.');
+            setPaymentHtml(null);
+            setProcessing(false);
+          }}
         />
       </View>
     );

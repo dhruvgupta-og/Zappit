@@ -622,12 +622,24 @@ router.post('/send-order-email', async (req, res) => {
 
     if (resend) {
       console.log('[Zappit Debug] Sending order receipt email to:', email);
-      const emailResponse = await resend.emails.send({
-        from: 'Zappit <orders@zappit.shop>',
-        to: email,
-        subject: `⚡ Zappit Order Confirmed - OTP: ${deliveryOtp}`,
-        html: htmlContent
-      });
+      let emailResponse;
+      const primaryFrom = process.env.RESEND_FROM_EMAIL || 'Zappit <orders@zappit.shop>';
+      try {
+        emailResponse = await resend.emails.send({
+          from: primaryFrom,
+          to: email,
+          subject: `⚡ Zappit Order Confirmed - OTP: ${deliveryOtp}`,
+          html: htmlContent
+        });
+      } catch (primaryErr) {
+        console.warn('[Zappit Email Warning] Failed with primary from address, retrying with onboarding@resend.dev:', primaryErr.message);
+        emailResponse = await resend.emails.send({
+          from: 'Zappit <onboarding@resend.dev>',
+          to: email,
+          subject: `⚡ Zappit Order Confirmed - OTP: ${deliveryOtp}`,
+          html: htmlContent
+        });
+      }
       console.log('[Zappit] Resend Email sent response:', email, emailResponse);
       return res.status(200).json({ success: true, message: `Email sent successfully to ${email}`, data: emailResponse });
     } else {
@@ -747,12 +759,24 @@ router.post('/send-welcome-email', async (req, res) => {
 
     if (resend) {
       console.log('[Zappit Debug] Sending welcome email to:', email);
-      const emailResponse = await resend.emails.send({
-        from: 'Zappit <hello@zappit.shop>',
-        to: email,
-        subject: `⚡ Welcome to Zappit, ${name}!`,
-        html: htmlContent
-      });
+      let emailResponse;
+      const primaryFrom = process.env.RESEND_FROM_EMAIL || 'Zappit <hello@zappit.shop>';
+      try {
+        emailResponse = await resend.emails.send({
+          from: primaryFrom,
+          to: email,
+          subject: `⚡ Welcome to Zappit, ${name}!`,
+          html: htmlContent
+        });
+      } catch (primaryErr) {
+        console.warn('[Zappit Email Warning] Failed with primary from address, retrying with onboarding@resend.dev:', primaryErr.message);
+        emailResponse = await resend.emails.send({
+          from: 'Zappit <onboarding@resend.dev>',
+          to: email,
+          subject: `⚡ Welcome to Zappit, ${name}!`,
+          html: htmlContent
+        });
+      }
       console.log('[Zappit] Resend Welcome Email sent response to:', email, emailResponse);
       return res.status(200).json({ success: true, message: `Welcome email sent successfully to ${email}`, data: emailResponse });
     } else {

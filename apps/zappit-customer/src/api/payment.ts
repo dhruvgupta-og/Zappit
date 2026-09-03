@@ -2,13 +2,16 @@ import { apiClient } from './client';
 
 export const paymentApi = {
   createOrder: async (data: {
-    amount: number;
+    amount?: number;
     items: any[];
-    storeId: string;
-    storeName: string;
-    deliveryAddress: string;
-    deliveryFee: number;
+    storeId?: string;
+    storeName?: string;
+    address?: string;
+    deliveryAddress?: string;
+    deliveryFee?: number;
+    coupon_code?: string;
     couponCode?: string;
+    college_id?: string;
   }): Promise<any> => {
     const res = await apiClient.post('/api/create-order', data);
     return res.data;
