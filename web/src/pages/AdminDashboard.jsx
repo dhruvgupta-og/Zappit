@@ -19,8 +19,8 @@ const AdminDashboard = () => {
   const [coupons, setCoupons] = useState([]);
   const [banners, setBanners] = useState([]);
   const [localFees, setLocalFees] = useState([
-    { name: 'Delivery Fee', value: 20 },
-    { name: 'Platform Fee', value: 5 }
+    { name: 'Delivery Fee', type: 'flat', value: 20 },
+    { name: 'Platform Fee', type: 'percent', value: 5 }
   ]);
 
   const addLocalFee = () => {
@@ -38,6 +38,10 @@ const AdminDashboard = () => {
       }
       return f;
     }));
+  };
+
+  const addLocalFeeWithType = () => {
+    setLocalFees(p => [...p, { name: '', type: 'flat', value: 0 }]);
   };
 
   const saveFeesToDb = async () => {
@@ -230,6 +234,18 @@ const AdminDashboard = () => {
   const totalRevenue = filteredOrders.filter(o => o.order_status === 'delivered').reduce((s, o) => s + (o.total_amount || 0), 0);
   const totalOrdersCount = filteredOrders.length;
   const pendingOrders = filteredOrders.filter(o => ['pending', 'confirmed', 'preparing', 'ready'].includes(o.order_status));
+
+  // Store payout = sum of (item price × qty) for all delivered orders minus discount
+  const storePayout = filteredOrders
+    .filter(o => o.order_status === 'delivered')
+    .reduce((s, o) => {
+      const itemTotal = Array.isArray(o.items)
+        ? o.items.reduce((sum, i) => sum + (Number(i.price || 0) * Number(i.qty || i.quantity || 1)), 0)
+        : 0;
+      const disc = Number(o.discount_amount || 0);
+      return s + Math.max(0, itemTotal - disc);
+    }, 0);
+  const platformRevenue = Math.max(0, totalRevenue - storePayout);
   
   const storeStats = filteredOrders.reduce((acc, o) => {
     const key = o.store_name || 'Unknown';
@@ -499,14 +515,14 @@ const AdminDashboard = () => {
   const topDishes = Object.entries(dishStats).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
   const statCards = [
-    { label: 'Revenue',        value: `₹${totalRevenue}`,   icon: <IndianRupee size={20} />,  color: '#F59E0B', bg: '#FEF3C7' },
-    { label: 'Total Orders',   value: totalOrdersCount,      icon: <ShoppingBag size={20} />, color: '#3B82F6', bg: '#EFF6FF' },
-    { label: 'Active Orders',  value: pendingOrders.length,  icon: <Package size={20} />,     color: '#EF4444', bg: '#FEE2E2' },
-    { label: 'Delivered',      value: filteredOrders.filter(o => o.order_status === 'delivered').length, icon: <CheckCircle size={20} />, color: '#10B981', bg: '#D1FAE5' },
-    { label: 'Stores',         value: stores.length,         icon: <Store size={20} />,       color: '#8B5CF6', bg: '#EDE9FE' },
-    { label: 'Colleges',       value: colleges.length,       icon: <School size={20} />,      color: '#EC4899', bg: '#FCE7F3' },
-    { label: 'Coupons',        value: coupons.length,        icon: <Tag size={20} />,         color: '#065F46', bg: '#D1FAE5' },
-    { label: 'Banners',        value: banners.length,        icon: <ImageIcon size={20} />,   color: '#F59E0B', bg: '#FEF3C7' },
+    { label: 'Total Revenue',       value: `₹${totalRevenue}`,       icon: <IndianRupee size={20} />,  color: '#F59E0B', bg: '#FEF3C7' },
+    { label: 'Store Payout',        value: `₹${storePayout}`,        icon: <Store size={20} />,        color: '#3B82F6', bg: '#EFF6FF' },
+    { label: 'Platform Earnings',   value: `₹${platformRevenue}`,    icon: <TrendingUp size={20} />,   color: '#10B981', bg: '#D1FAE5' },
+    { label: 'Total Orders',        value: totalOrdersCount,          icon: <ShoppingBag size={20} />, color: '#8B5CF6', bg: '#EDE9FE' },
+    { label: 'Active Orders',       value: pendingOrders.length,      icon: <Package size={20} />,     color: '#EF4444', bg: '#FEE2E2' },
+    { label: 'Delivered',           value: filteredOrders.filter(o => o.order_status === 'delivered').length, icon: <CheckCircle size={20} />, color: '#065F46', bg: '#D1FAE5' },
+    { label: 'Stores',              value: stores.length,             icon: <BarChart3 size={20} />,   color: '#EC4899', bg: '#FCE7F3' },
+    { label: 'Colleges',            value: colleges.length,           icon: <School size={20} />,      color: '#F59E0B', bg: '#FEF3C7' },
   ];
 
   const tabs = [
@@ -1176,26 +1192,35 @@ const AdminDashboard = () => {
             </h3>
             
             <p style={{ fontSize: '0.85rem', color: '#64748B', marginBottom: 20 }}>
-              Adjust or add fees that are charged at checkout. All values are in INR (₹).
+              Add flat (₹ fixed) or percentage (% of subtotal) fees charged at checkout. <strong>Platform Earnings = Total Revenue − Store Payout</strong>.
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
               {localFees.map((fee, idx) => (
-                <div key={idx} style={{ display: 'flex', gap: 10, alignItems: 'center', background: '#F8FAFC', padding: 10, borderRadius: 8, border: '1px solid #E2E8F0' }}>
+                <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#F8FAFC', padding: 10, borderRadius: 8, border: '1px solid #E2E8F0' }}>
                   <input 
                     type="text" 
-                    placeholder="Fee Name (e.g. Service Fee)" 
+                    placeholder="Fee Name" 
                     value={fee.name} 
                     onChange={e => updateLocalFee(idx, 'name', e.target.value)}
-                    style={{ flex: 2, padding: '8px 10px', borderRadius: 6, border: '1px solid #CBD5E1', outline: 'none', fontSize: '0.9rem' }} 
+                    style={{ flex: 2, padding: '8px 10px', borderRadius: 6, border: '1px solid #CBD5E1', outline: 'none', fontSize: '0.85rem' }} 
                   />
+                  <select
+                    value={fee.type || 'flat'}
+                    onChange={e => updateLocalFee(idx, 'type', e.target.value)}
+                    style={{ flex: 1, padding: '8px 6px', borderRadius: 6, border: '1px solid #CBD5E1', outline: 'none', fontSize: '0.8rem', background: 'white' }}
+                  >
+                    <option value="flat">₹ Flat</option>
+                    <option value="percent">% Percent</option>
+                  </select>
                   <input 
                     type="number" 
-                    placeholder="Value (₹)" 
+                    placeholder={fee.type === 'percent' ? 'e.g. 5' : 'e.g. 20'} 
                     value={fee.value} 
                     onChange={e => updateLocalFee(idx, 'value', e.target.value)}
-                    style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid #CBD5E1', outline: 'none', fontSize: '0.9rem' }} 
+                    style={{ flex: 1, padding: '8px 10px', borderRadius: 6, border: '1px solid #CBD5E1', outline: 'none', fontSize: '0.85rem' }} 
                   />
+                  <span style={{ fontSize: '0.75rem', color: '#94A3B8', minWidth: 24 }}>{fee.type === 'percent' ? '%' : '₹'}</span>
                   <button 
                     onClick={() => removeLocalFee(idx)}
                     style={{ background: '#FEE2E2', color: '#DC2626', border: 'none', borderRadius: 6, padding: '8px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -1209,7 +1234,7 @@ const AdminDashboard = () => {
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button 
-                onClick={addLocalFee}
+                onClick={addLocalFeeWithType}
                 style={{ flex: 1, padding: '12px', borderRadius: 10, border: '1px solid #CBD5E1', background: 'white', color: '#0F172A', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               >
                 <Plus size={16} /> Add Fee

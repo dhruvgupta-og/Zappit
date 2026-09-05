@@ -254,11 +254,18 @@ router.post('/create-order', async (req, res) => {
       }
     }
 
-    // 3. Add Config fees
+    // 3. Add Config fees (supports flat and percent types)
     let totalFees = 0;
+    let feesBreakdown = [];
     const feesConfig = await Config.findById('fees');
     if (feesConfig && feesConfig.list) {
-       totalFees = feesConfig.list.reduce((sum, f) => sum + Number(f.value), 0);
+       feesConfig.list.forEach(f => {
+         const feeAmt = f.type === 'percent'
+           ? Math.round((subtotal * Number(f.value)) / 100)
+           : Number(f.value);
+         totalFees += feeAmt;
+         feesBreakdown.push({ name: f.name, type: f.type || 'flat', value: f.value, amount: feeAmt });
+       });
     }
 
     const amountToPay = Math.max(1, Math.round(subtotal - discount + totalFees));
@@ -349,7 +356,8 @@ router.post('/create-order', async (req, res) => {
       amount: razorpayOrder.amount,
       currency: razorpayOrder.currency,
       key_id: process.env.RAZORPAY_KEY_ID,
-      db_order_ids: orderIds
+      db_order_ids: orderIds,
+      fees_breakdown: feesBreakdown
     });
   } catch (err) {
     console.error('Create Order Error:', err);

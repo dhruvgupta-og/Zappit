@@ -2,7 +2,10 @@
   "expo": {
     "name": "Zappit",
     "slug": "zappit",
-    "scheme": ["zappit-customer", "com.zappit.customer"],
+    "scheme": [
+      "zappit-customer",
+      "com.zappit.customer"
+    ],
     "owner": "dhruvhereyo-organization",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -50,6 +53,14 @@
           "icon": "./assets/icon.png",
           "color": "#FFD60A",
           "defaultChannel": "default"
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/",
+          "project": "react-native",
+          "organization": "dhruv-hereyo-organization"
         }
       ]
     ],

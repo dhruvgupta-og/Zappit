@@ -34,13 +34,28 @@ export const paymentApi = {
 
   getDeliveryFee: async (): Promise<number> => {
     try {
-      const res = await apiClient.get('/api/admin/config/delivery_fee');
-      if (res.data.success && res.data.data && typeof res.data.data.value === 'number') {
-        return res.data.data.value;
+      const res = await apiClient.get('/api/admin/config/fees');
+      if (res.data.success && res.data.data?.list) {
+        const list: any[] = res.data.data.list;
+        // Return only the delivery fee (flat) for backwards compat
+        const deliveryFee = list.find((f: any) => f.name?.toLowerCase().includes('delivery'));
+        return deliveryFee ? Number(deliveryFee.value) : 0;
       }
       return 0;
     } catch {
       return 0;
+    }
+  },
+
+  getAllFees: async (): Promise<Array<{ name: string; type: string; value: number }>> => {
+    try {
+      const res = await apiClient.get('/api/admin/config/fees');
+      if (res.data.success && res.data.data?.list) {
+        return res.data.data.list;
+      }
+      return [];
+    } catch {
+      return [];
     }
   },
 };

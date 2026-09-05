@@ -30,6 +30,7 @@ const CheckoutScreen = () => {
   const [address, setAddress] = useState('Engineering Block A');
   const [additionalNote, setAdditionalNote] = useState('');
   const [deliveryFee, setDeliveryFee] = useState(0);
+  const [allFees, setAllFees] = useState<Array<{ name: string; type: string; value: number }>>([]);
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [couponError, setCouponError] = useState('');
@@ -44,6 +45,7 @@ const CheckoutScreen = () => {
   useEffect(() => {
     AsyncStorage.getItem('userAddress').then((v) => v && setAddress(v));
     paymentApi.getDeliveryFee().then(setDeliveryFee).catch(() => setDeliveryFee(0));
+    paymentApi.getAllFees().then(setAllFees).catch(() => setAllFees([]));
   }, []);
 
   const handleApplyCoupon = async () => {
@@ -70,7 +72,24 @@ const CheckoutScreen = () => {
   };
 
   const discount = appliedCoupon ? Math.round((cartTotal * appliedCoupon.discount_percent) / 100) : 0;
-  const totalToPay = Math.max(0, cartTotal + deliveryFee - discount);
+
+  // Compute all fees against the subtotal (after discount)
+  const computedFees = allFees.map(f => ({
+    name: f.name,
+    type: f.type,
+    amount: f.type === 'percent'
+      ? Math.round((cartTotal * Number(f.value)) / 100)
+      : Number(f.value),
+  }));
+  const totalFeesAmount = computedFees.reduce((s, f) => s + f.amount, 0);
+  const totalToPay = Math.max(0, cartTotal + totalFeesAmount - discount);
+
+  // Legacy: deliveryFee used for the payment API call (backend will recalculate authoritatively)
+  const legacyDeliveryFee = allFees.find(f => f.name?.toLowerCase().includes('delivery'))
+    ? (allFees.find(f => f.name?.toLowerCase().includes('delivery'))!.type === 'percent'
+        ? Math.round((cartTotal * Number(allFees.find(f => f.name?.toLowerCase().includes('delivery'))!.value)) / 100)
+        : Number(allFees.find(f => f.name?.toLowerCase().includes('delivery'))!.value))
+    : deliveryFee;
 
   const startPayment = async () => {
     if (!address.trim()) {
@@ -98,7 +117,7 @@ const CheckoutScreen = () => {
         storeName: storeName!,
         address: address.trim(),
         deliveryAddress: address.trim(),
-        deliveryFee,
+        deliveryFee: legacyDeliveryFee,
         coupon_code: appliedCoupon?.code,
         couponCode: appliedCoupon?.code,
         additionalNote: additionalNote.trim(),
@@ -416,10 +435,21 @@ const CheckoutScreen = () => {
             <Text style={styles.billText}>Item Total</Text>
             <Text style={styles.billText}>₹{cartTotal}</Text>
           </View>
-          <View style={styles.billRow}>
-            <Text style={styles.billText}>Delivery Fee</Text>
-            <Text style={styles.billText}>₹{deliveryFee}</Text>
-          </View>
+          {computedFees.map((fee, i) => (
+            <View key={i} style={styles.billRow}>
+              <Text style={styles.billText}>
+                {fee.name}{fee.type === 'percent' ? ` (${allFees[i]?.value}%)` : ''}
+              </Text>
+              <Text style={styles.billText}>₹{fee.amount}</Text>
+            </View>
+          ))}
+          {/* Fallback: show delivery fee if allFees not loaded yet */}
+          {computedFees.length === 0 && deliveryFee > 0 && (
+            <View style={styles.billRow}>
+              <Text style={styles.billText}>Delivery Fee</Text>
+              <Text style={styles.billText}>₹{deliveryFee}</Text>
+            </View>
+          )}
           {appliedCoupon && (
             <View style={styles.billRow}>
               <Text style={styles.discountText}>Coupon Discount ({appliedCoupon.discount_percent}%)</Text>
