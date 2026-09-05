@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { storesApi } from '../api/stores';
+import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Store, Banner } from '../types';
@@ -24,6 +25,10 @@ const HomeScreen = ({ navigation }: any) => {
   const [address, setAddress] = useState('Engineering Block A');
   const [collegeName, setCollegeName] = useState('Campus');
   const [collegeId, setCollegeId] = useState('');
+  
+  const { profile } = useAuthStore();
+  const activeCollegeId = profile?.college_id || collegeId;
+  const activeCollegeName = profile?.college_name || profile?.college || collegeName;
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [isEditingAddress, setIsEditingAddress] = useState(false);
 
@@ -70,10 +75,10 @@ const HomeScreen = ({ navigation }: any) => {
       const matchesCategory =
         activeCategory === 'All' || (store.tags && store.tags.includes(activeCategory));
       const matchesCollege = 
-        !collegeId || !store.college_id || store.college_id === collegeId;
+        !activeCollegeId || !store.college_id || store.college_id === activeCollegeId;
       return matchesSearch && matchesCategory && matchesCollege;
     });
-  }, [stores, searchQuery, activeCategory, collegeId]);
+  }, [stores, searchQuery, activeCategory, activeCollegeId]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -186,7 +191,7 @@ const HomeScreen = ({ navigation }: any) => {
               <Text style={styles.headerAddress} numberOfLines={1}>{address} ✎</Text>
             </TouchableOpacity>
           )}
-          <Text style={styles.headerCollege} numberOfLines={1}>{collegeName}</Text>
+          <Text style={styles.headerCollege} numberOfLines={1}>{activeCollegeName}</Text>
         </View>
         <TouchableOpacity
           style={styles.profileBtn}
