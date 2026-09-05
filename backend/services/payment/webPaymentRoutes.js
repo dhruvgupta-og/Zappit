@@ -292,12 +292,26 @@ router.post('/create-order', async (req, res) => {
     const orderIds = [];
     const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
     
+    let remainingDiscount = discount;
+    const storeCount = Object.keys(itemsByStore).length;
+    let storeIndex = 0;
+
     let isFirstStore = true;
     for (const [storeId, storeItems] of Object.entries(itemsByStore)) {
+      storeIndex++;
       const storeName = storeItems[0].storeName || 'Campus Store';
       const storeSubtotal = storeItems.reduce((sum, i) => sum + (i.price * i.qty), 0);
       const storeTotalFees = isFirstStore ? totalFees : 0; // Assign fees to first order only
-      const storeDiscount = validCoupon ? Math.round((storeSubtotal * validCoupon.discount_percent) / 100) : 0;
+      
+      let storeDiscount = 0;
+      if (validCoupon) {
+        if (storeIndex === storeCount) {
+          storeDiscount = remainingDiscount; // Ensure remainder exact match
+        } else {
+          storeDiscount = Math.round((storeSubtotal * validCoupon.discount_percent) / 100);
+          remainingDiscount -= storeDiscount;
+        }
+      }
       
       const store = await Store.findById(storeId);
       const actualCollegeId = store && store.college_id ? store.college_id : (college_id || 'unknown');
@@ -375,6 +389,24 @@ router.post('/verify-payment', async (req, res) => {
         { payment_status: 'flagged', payment_transaction_id: razorpay_payment_id }
       );
       return res.status(400).json({ success: false, verified: false, error: 'Payment not captured by Razorpay' });
+    }
+
+    // 2a. Fetch the pending orders to verify existence and amount
+    const pendingOrders = await Order.find({ razorpay_order_id: razorpay_order_id });
+    if (pendingOrders.length === 0) {
+      return res.status(404).json({ success: false, verified: false, error: 'No matching order found for this payment' });
+    }
+
+    const expectedTotal = pendingOrders.reduce((sum, o) => sum + o.total_amount, 0);
+    const expectedPaise = Math.round(expectedTotal * 100);
+
+    if (payment.amount !== expectedPaise) {
+      // Flag for amount mismatch
+      await Order.updateMany(
+        { razorpay_order_id: razorpay_order_id },
+        { payment_status: 'flagged', payment_transaction_id: razorpay_payment_id, additional_note: 'Amount mismatch' }
+      );
+      return res.status(400).json({ success: false, verified: false, error: 'Payment amount mismatch' });
     }
 
     // 3. Mark orders as paid securely server-side
@@ -503,8 +535,9 @@ router.post('/send-order-email', async (req, res) => {
     }
 
     // Verify ownership
-    if (orders[0].user_id !== req.user?.uid && req.user?.role !== 'admin') {
-      return res.status(403).json({ success: false, error: 'Forbidden: You do not own these orders' });
+    const allOwned = orders.every(o => o.user_id === req.user?.uid);
+    if (!allOwned && req.user?.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Forbidden: You do not own all of these orders' });
     }
 
     const userProfile = await User.findById(req.user.uid);
