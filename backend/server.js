@@ -94,7 +94,7 @@ if (process.env.NODE_ENV === 'production') {
   // Global limiter: 100 requests per 15 minutes
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 1000, 
+    max: 100, 
     keyGenerator: keyGenerator,
     message: { success: false, error: 'Too many requests from this IP, please try again after 15 minutes' }
   });
@@ -103,7 +103,7 @@ if (process.env.NODE_ENV === 'production') {
   // Strict limiter for payments and coupons: 10 requests per 15 minutes
   const strictLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 200,
+    max: 10,
     keyGenerator: keyGenerator,
     message: { success: false, error: 'Too many payment/coupon attempts. Please try again later.' }
   });
@@ -114,7 +114,7 @@ if (process.env.NODE_ENV === 'production') {
   // Email relay limiter: 30 emails per hour per token (anti-spam, but generous enough for real orders)
   const emailLimiter = rateLimit({
     windowMs: 60 * 60 * 1000,
-    max: 300,
+    max: 30,
     keyGenerator: keyGenerator,
     message: { success: false, error: 'Too many email requests. Please try again later.' }
   });

@@ -12,6 +12,7 @@ export const paymentApi = {
     coupon_code?: string;
     couponCode?: string;
     college_id?: string;
+    additionalNote?: string;
   }): Promise<any> => {
     const res = await apiClient.post('/api/create-order', data);
     return res.data;

@@ -58,7 +58,7 @@ const rateLimit = require('express-rate-limit');
 // OTP brute-force limiter: 20 requests per 15 minutes
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200,
+  max: 20,
   keyGenerator: (req) => {
     return req.user?.uid ? req.user.uid : req.ip;
   },
@@ -80,6 +80,10 @@ router.post('/:id/verify-otp', otpLimiter, async (req, res) => {
     // Check college authorization for delivery staff
     if (req.user.role === 'delivery' && order.college_id !== req.user.staff_college_id) {
       return res.status(403).json({ success: false, error: 'Forbidden: Order not assigned to your college' });
+    }
+
+    if (!['out_for_delivery', 'picked_up'].includes(order.order_status)) {
+      return res.status(400).json({ success: false, error: 'Order is not ready for delivery verification' });
     }
 
     if (order.delivery_otp !== otp) {
