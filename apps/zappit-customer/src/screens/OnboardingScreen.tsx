@@ -111,9 +111,13 @@ const OnboardingScreen = ({ navigation }: any) => {
         updated_at: new Date().toISOString(),
       });
 
-      // Send Welcome Email (non-blocking)
+      // Send Welcome Email (non-blocking) — pass data in body as fallback for DB race condition
       try {
-        await apiClient.post('/api/send-welcome-email');
+        await apiClient.post('/api/send-welcome-email', {
+          name: name.trim(),
+          email: user.email || '',
+          college: collegeName,
+        });
       } catch (emailErr) {
         console.warn('[Zappit] Welcome email send failed (non-critical):', emailErr);
       }

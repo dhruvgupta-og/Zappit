@@ -88,6 +88,7 @@ router.post('/flush-cache', async (req, res) => {
 
 // --- BROADCAST PUSH NOTIFICATION ---
 router.post('/send-broadcast-notification', async (req, res) => {
+  // Allow admin from User collection OR staff with role 'admin' from Staff collection
   if (req.user?.role !== 'admin') {
     return res.status(403).json({ success: false, error: 'Forbidden: Admins only' });
   }

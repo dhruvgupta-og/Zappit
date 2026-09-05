@@ -723,13 +723,14 @@ router.post('/send-welcome-email', async (req, res) => {
   try {
     // Fetch trusted profile from MongoDB
     const userProfile = await User.findById(req.user.uid);
-    const email = req.user?.email || userProfile?.email;
+    // Use body fields as fallback (race condition: profile saved just before this call)
+    const email = req.user?.email || userProfile?.email || req.body?.email;
     if (!email) {
       return res.status(400).json({ success: false, error: 'Authenticated user has no email address' });
     }
 
-    const name = userProfile?.name || req.user?.name || 'there';
-    const college = userProfile?.college_name || userProfile?.college || '';
+    const name = userProfile?.name || req.body?.name || req.user?.name || 'there';
+    const college = userProfile?.college_name || userProfile?.college || req.body?.college || '';
 
     const htmlContent = `
 <!DOCTYPE html>
