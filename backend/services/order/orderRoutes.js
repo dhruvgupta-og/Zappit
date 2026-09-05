@@ -58,7 +58,7 @@ const rateLimit = require('express-rate-limit');
 // OTP brute-force limiter: 20 requests per 15 minutes
 const otpLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: 200,
   keyGenerator: (req) => {
     return req.user?.uid ? req.user.uid : req.ip;
   },
