@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
 import { usersApi } from '../api/users';
@@ -130,6 +130,21 @@ const ProfileScreen = () => {
             <View style={styles.divider} />
             <TouchableOpacity style={styles.rowBtn} onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')}>
               <Text style={styles.btnLabel}>Help & Support</Text>
+              <Text style={{ color: colors.textMuted }}>→</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Legal</Text>
+          <View style={styles.card}>
+            <TouchableOpacity style={styles.rowBtn} onPress={() => Linking.openURL('https://zappit.shop/terms')}>
+              <Text style={styles.btnLabel}>Terms & Conditions</Text>
+              <Text style={{ color: colors.textMuted }}>→</Text>
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.rowBtn} onPress={() => Linking.openURL('https://zappit.shop/privacy')}>
+              <Text style={styles.btnLabel}>Privacy Policy</Text>
               <Text style={{ color: colors.textMuted }}>→</Text>
             </TouchableOpacity>
           </View>
