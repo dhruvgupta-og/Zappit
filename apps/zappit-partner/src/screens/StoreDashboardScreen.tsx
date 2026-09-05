@@ -324,8 +324,18 @@ const StoreDashboardScreen = () => {
           <Text style={styles.orderAddress}>📍 {order.delivery_address}</Text>
         )}
 
+        {order.additional_note ? (
+          <View style={{ backgroundColor: '#FEF9C3', padding: spacing.sm, borderRadius: radius.sm, marginBottom: spacing.sm }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#854D0E', marginBottom: 2 }}>NOTE FROM CUSTOMER:</Text>
+            <Text style={{ fontSize: 13, color: '#854D0E', fontStyle: 'italic' }}>{order.additional_note}</Text>
+          </View>
+        ) : null}
+
         <View style={styles.orderFooter}>
-          <Text style={styles.orderTotal}>₹{getOrderSubtotal(order)}</Text>
+          <View>
+            <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>ITEMS TOTAL</Text>
+            <Text style={styles.orderTotal}>₹{getOrderSubtotal(order)}</Text>
+          </View>
 
           {order.order_status === 'confirmed' && (
             <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.storeAccent }]}

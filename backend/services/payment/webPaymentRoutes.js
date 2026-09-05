@@ -178,7 +178,7 @@ router.post('/send-status-notification', async (req, res) => {
 // POST /api/create-order
 router.post('/create-order', async (req, res) => {
   try {
-    const { items, coupon_code, address, college_id } = req.body;
+    const { items, coupon_code, address, college_id, additionalNote } = req.body;
 
     if (!items || !items.length) {
       return res.status(400).json({ success: false, error: 'Items are required' });
@@ -277,7 +277,18 @@ router.post('/create-order', async (req, res) => {
 
     const razorpayOrder = await razorpay.orders.create(options);
 
-    // 5. Create Pending Orders in MongoDB immediately
+    // 5. Fetch User to populate name and phone
+    let orderUserName = 'Guest';
+    let orderUserPhone = '';
+    if (req.user?.uid) {
+      const dbUser = await require('../../models/User').findById(req.user.uid);
+      if (dbUser) {
+        orderUserName = dbUser.name || 'Guest';
+        orderUserPhone = dbUser.phone || '';
+      }
+    }
+
+    // 6. Create Pending Orders in MongoDB immediately
     const orderIds = [];
     const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
     
@@ -295,6 +306,8 @@ router.post('/create-order', async (req, res) => {
       const newOrder = new Order({
         _id: new mongoose.Types.ObjectId().toString(),
         user_id: req.user?.uid || 'guest_user',
+        user_name: orderUserName,
+        user_phone: orderUserPhone,
         college_id: actualCollegeId,
         college_name: actualCollegeName,
         store_id: storeId,
@@ -306,6 +319,7 @@ router.post('/create-order', async (req, res) => {
         address: address || '',
         payment_status: 'pending',
         order_status: 'pending',
+        additional_note: additionalNote,
         delivery_otp: deliveryOtp,
         razorpay_order_id: razorpayOrder.id, // Link for verify-payment
         created_at: new Date().toISOString()

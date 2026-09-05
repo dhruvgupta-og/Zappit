@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ActivityIndicator, ScrollView, Image, TouchableOpacity,
-  Platform,
+  Platform, Alert
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,9 +23,34 @@ const StoreDetailScreen = () => {
 
   const cartItems = useCartStore((state) => state.items);
   const addToCart = useCartStore((state) => state.addToCart);
+  const getCartStoreId = useCartStore((state) => state.getCartStoreId);
+  const clearCart = useCartStore((state) => state.clearCart);
   const removeFromCart = useCartStore((state) => state.removeFromCart);
   const getCartCount = useCartStore((state) => state.getCartCount);
   const getCartTotal = useCartStore((state) => state.getCartTotal);
+
+  const handleAddToCart = (item: MenuItem, currentStoreId: string, currentStoreName: string) => {
+    const existingStoreId = getCartStoreId();
+    if (existingStoreId && existingStoreId !== currentStoreId) {
+      Alert.alert(
+        'Replace cart item?',
+        'Your cart contains items from another store. Do you want to discard the selection and add items from this store?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Replace',
+            style: 'destructive',
+            onPress: () => {
+              clearCart();
+              addToCart(item, currentStoreId, currentStoreName);
+            },
+          },
+        ]
+      );
+    } else {
+      addToCart(item, currentStoreId, currentStoreName);
+    }
+  };
 
   useEffect(() => {
     const fetchStore = async () => {
@@ -164,14 +189,14 @@ const StoreDetailScreen = () => {
                                 <Text style={styles.qtyBtnText}>-</Text>
                               </TouchableOpacity>
                               <Text style={styles.qtyText}>{inCart.qty}</Text>
-                              <TouchableOpacity onPress={() => addToCart(item, sId!, store.name)} style={styles.qtyBtn}>
+                              <TouchableOpacity onPress={() => handleAddToCart(item, sId!, store.name)} style={styles.qtyBtn}>
                                 <Text style={styles.qtyBtnText}>+</Text>
                               </TouchableOpacity>
                             </View>
                           ) : (
                             <TouchableOpacity
                               style={styles.addBtn}
-                              onPress={() => addToCart(item, sId!, store.name)}
+                              onPress={() => handleAddToCart(item, sId!, store.name)}
                             >
                               <Text style={styles.addBtnText}>ADD</Text>
                             </TouchableOpacity>

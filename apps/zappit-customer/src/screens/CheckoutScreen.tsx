@@ -28,6 +28,7 @@ const CheckoutScreen = () => {
   const { profile } = useAuthStore();
 
   const [address, setAddress] = useState('Engineering Block A');
+  const [additionalNote, setAdditionalNote] = useState('');
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
@@ -100,6 +101,7 @@ const CheckoutScreen = () => {
         deliveryFee,
         coupon_code: appliedCoupon?.code,
         couponCode: appliedCoupon?.code,
+        additionalNote: additionalNote.trim(),
         college_id: userCollegeId,
       });
 
@@ -347,6 +349,22 @@ const CheckoutScreen = () => {
               }}
               placeholder="Hostel / Room details"
               placeholderTextColor={colors.textMuted}
+            />
+          </View>
+        </View>
+
+        {/* Additional Note */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Additional Note</Text>
+          <View style={styles.inputWrapper}>
+            <Text style={{ fontSize: 18, marginRight: 8 }}>📝</Text>
+            <TextInput
+              style={styles.input}
+              value={additionalNote}
+              onChangeText={setAdditionalNote}
+              placeholder="e.g. Extra chutney, less spicy"
+              placeholderTextColor={colors.textMuted}
+              maxLength={150}
             />
           </View>
         </View>

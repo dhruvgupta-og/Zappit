@@ -28,6 +28,7 @@ const OrderSchema = new mongoose.Schema({
   order_status: { type: String, enum: ['pending', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'picked_up', 'delivered', 'cancelled'], default: 'pending' },
   delivery_otp: { type: String },
   coupon_applied: { type: String },
+  additional_note: { type: String },
   created_at: { type: Date, default: Date.now }
 });
 
