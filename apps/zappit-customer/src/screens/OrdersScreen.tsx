@@ -14,6 +14,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; emoji: strin
   out_for_delivery: { label: 'Out for Delivery', color: '#8B5CF6',        emoji: '🛵' },
   picked_up:        { label: 'On the Way',       color: '#8B5CF6',        emoji: '🛵' },
   delivered:        { label: 'Delivered',        color: colors.success,   emoji: '🎉' },
+  pending:          { label: 'Payment Pending',  color: '#F59E0B',        emoji: '⏳' },
   cancelled:        { label: 'Cancelled',        color: colors.error,     emoji: '❌' },
 };
 

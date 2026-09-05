@@ -5,7 +5,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { auth, storage } from '../firebase';
 import {
   BarChart3, Users, Store, ShoppingBag, IndianRupee,
-  Plus, Trash2, Edit2, School, Package, TrendingUp, Menu as MenuIcon, Tag, Image as ImageIcon, Download
+  Plus, Trash2, Edit2, School, Package, TrendingUp, Menu as MenuIcon, Tag, Image as ImageIcon, Download, CheckCircle
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -502,6 +502,7 @@ const AdminDashboard = () => {
     { label: 'Revenue',        value: `₹${totalRevenue}`,   icon: <IndianRupee size={20} />,  color: '#F59E0B', bg: '#FEF3C7' },
     { label: 'Total Orders',   value: totalOrdersCount,      icon: <ShoppingBag size={20} />, color: '#3B82F6', bg: '#EFF6FF' },
     { label: 'Active Orders',  value: pendingOrders.length,  icon: <Package size={20} />,     color: '#EF4444', bg: '#FEE2E2' },
+    { label: 'Delivered',      value: filteredOrders.filter(o => o.order_status === 'delivered').length, icon: <CheckCircle size={20} />, color: '#10B981', bg: '#D1FAE5' },
     { label: 'Stores',         value: stores.length,         icon: <Store size={20} />,       color: '#8B5CF6', bg: '#EDE9FE' },
     { label: 'Colleges',       value: colleges.length,       icon: <School size={20} />,      color: '#EC4899', bg: '#FCE7F3' },
     { label: 'Coupons',        value: coupons.length,        icon: <Tag size={20} />,         color: '#065F46', bg: '#D1FAE5' },

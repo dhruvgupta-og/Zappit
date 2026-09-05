@@ -263,6 +263,7 @@ const AdminDashboardScreen = () => {
             {[
               { label: 'Total Orders', value: fmt(stats.orders), emoji: '📦', color: '#F59E0B' },
               { label: 'Revenue', value: `₹${fmt(stats.revenue)}`, emoji: '💰', color: '#10B981' },
+              { label: 'Delivered', value: fmt(orders.filter(o => o.order_status === 'delivered').length), emoji: '🎉', color: '#34D399' },
               { label: 'Stores', value: fmt(stats.stores), emoji: '🏪', color: '#3B82F6' },
               { label: 'Users', value: fmt(stats.users), emoji: '👥', color: '#8B5CF6' },
             ].map(stat => (
