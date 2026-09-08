@@ -20,11 +20,23 @@ const CartScreen = () => {
   const removeFromCart = useCartStore((state) => state.removeFromCart);
   const clearCart = useCartStore((state) => state.clearCart);
 
+  const [allFees, setAllFees] = useState<Array<{ name: string; type: string; value: number }>>([]);
   const [deliveryFee, setDeliveryFee] = useState(0);
 
   useEffect(() => {
     paymentApi.getDeliveryFee().then(setDeliveryFee).catch(() => setDeliveryFee(0));
+    paymentApi.getAllFees().then(setAllFees).catch(() => setAllFees([]));
   }, []);
+
+  const computedFees = allFees.map(f => ({
+    name: f.name,
+    type: f.type,
+    amount: f.type === 'percent'
+      ? Math.round((cartTotal * Number(f.value)) / 100)
+      : Number(f.value),
+  }));
+  const totalFeesAmount = computedFees.reduce((s, f) => s + f.amount, 0);
+  const totalToPay = Math.max(0, cartTotal + (computedFees.length > 0 ? totalFeesAmount : deliveryFee));
 
   if (cartItems.length === 0) {
     return (
@@ -92,21 +104,34 @@ const CartScreen = () => {
             <Text style={styles.billText}>Item Total</Text>
             <Text style={styles.billText}>₹{cartTotal}</Text>
           </View>
-          <View style={[styles.billRow, { marginBottom: 8 }]}>
-            <Text style={styles.billText}>Delivery Fee</Text>
-            <Text style={styles.billText}>₹{deliveryFee}</Text>
-          </View>
+          
+          {computedFees.map((fee, i) => (
+            <View key={i} style={[styles.billRow, { marginBottom: 8 }]}>
+              <Text style={styles.billText}>
+                {fee.name}{fee.type === 'percent' ? ` (${allFees[i]?.value}%)` : ''}
+              </Text>
+              <Text style={styles.billText}>₹{fee.amount}</Text>
+            </View>
+          ))}
+          {/* Fallback */}
+          {computedFees.length === 0 && deliveryFee > 0 && (
+            <View style={[styles.billRow, { marginBottom: 8 }]}>
+              <Text style={styles.billText}>Delivery Fee</Text>
+              <Text style={styles.billText}>₹{deliveryFee}</Text>
+            </View>
+          )}
+
           <View style={{ height: 1, backgroundColor: colors.borderColor, marginVertical: 12 }} />
           <View style={styles.billRow}>
             <Text style={styles.billTextBold}>To Pay</Text>
-            <Text style={styles.billTextBold}>₹{cartTotal + deliveryFee}</Text>
+            <Text style={styles.billTextBold}>₹{totalToPay}</Text>
           </View>
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.checkoutBtn} onPress={() => navigation.navigate('Checkout')} activeOpacity={0.9}>
-          <Text style={styles.checkoutBtnText}>Proceed to Checkout • ₹{cartTotal + deliveryFee}</Text>
+          <Text style={styles.checkoutBtnText}>Proceed to Checkout • ₹{totalToPay}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

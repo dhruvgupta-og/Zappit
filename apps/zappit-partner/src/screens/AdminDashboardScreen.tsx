@@ -60,9 +60,10 @@ const AdminDashboardScreen = () => {
   const [notifCollege, setNotifCollege] = useState('');
   const [notifSending, setNotifSending] = useState(false);
 
-  // Delivery Fee Config
-  const [deliveryFee, setDeliveryFee] = useState('0');
-  const [savingFee, setSavingFee] = useState(false);
+  // Fees List Config (delivery fee, platform fee, etc.)
+  const [feesList, setFeesList] = useState<Array<{ name: string; type: string; value: string }>>([]);
+  const [savingFees, setSavingFees] = useState(false);
+  const [newFee, setNewFee] = useState({ name: '', type: 'flat', value: '' });
 
   // Modals
   const [modalVisible, setModalVisible] = useState(false);
@@ -73,18 +74,19 @@ const AdminDashboardScreen = () => {
   // ── Fetch all data ──
   const fetchAll = useCallback(async () => {
     try {
-      const [statsRes, ordersRes, storesRes, collegesRes, bannersRes, couponsRes, feeRes] = await Promise.allSettled([
+      const [statsRes, ordersRes, storesRes, collegesRes, bannersRes, couponsRes, feesRes] = await Promise.allSettled([
         adminApi.getDashboardStats(),
         adminApi.getAllOrders(),
         adminApi.getAllStores(),
         adminApi.getColleges(),
         adminApi.getBanners(),
         adminApi.getCoupons(),
-        adminApi.getDeliveryFeeConfig(),
+        adminApi.getFees(),
       ]);
 
-      if (feeRes.status === 'fulfilled' && feeRes.value.success) {
-        setDeliveryFee(feeRes.value.data?.value?.toString() || '0');
+      if (feesRes.status === 'fulfilled' && feesRes.value.success) {
+        const list = feesRes.value.data?.list || [];
+        setFeesList(list.map((f: any) => ({ name: f.name || '', type: f.type || 'flat', value: String(f.value ?? '') })));
       }
 
       if (statsRes.status === 'fulfilled' && statsRes.value.success) {
@@ -296,37 +298,110 @@ const AdminDashboardScreen = () => {
           </View>
 
           <View style={s.card}>
-            <Text style={s.cardTitle}>🚚 Delivery Charges</Text>
-            <Text style={[s.rowSub, { marginBottom: spacing.md }]}>Set the flat delivery fee applied to all customer orders. Set to 0 for free delivery.</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={[{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bgColor, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderColor, paddingHorizontal: spacing.md }, { flex: 1, marginBottom: 0 }]}>
-                <Text style={{ fontSize: 16, marginRight: 8, color: colors.textMain }}>₹</Text>
-                <TextInput
-                  style={[s.formInput, { flex: 1, paddingVertical: 12 }]}
-                  value={deliveryFee}
-                  onChangeText={setDeliveryFee}
-                  keyboardType="numeric"
-                  placeholder="0"
-                  placeholderTextColor={colors.textMuted}
-                />
+            <Text style={s.cardTitle}>💸 Fees & Charges</Text>
+            <Text style={[s.rowSub, { marginBottom: spacing.md }]}>
+              Manage delivery fee, platform fee, and other charges. These are applied to ALL customer orders.
+            </Text>
+
+            {/* Existing fees list */}
+            {feesList.map((fee, i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <View style={{ flex: 1, backgroundColor: colors.bgColor, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderColor, paddingHorizontal: spacing.md, paddingVertical: 8 }}>
+                  <Text style={{ color: colors.textMain, fontWeight: '600', fontSize: 13 }}>{fee.name}</Text>
+                  <Text style={{ color: colors.textMuted, fontSize: 12 }}>
+                    {fee.type === 'percent' ? `${fee.value}%` : `₹${fee.value}`} ({fee.type})
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    const updated = feesList.filter((_, idx) => idx !== i);
+                    setFeesList(updated);
+                  }}
+                  style={{ padding: 8 }}
+                >
+                  <Text style={{ color: '#EF4444', fontSize: 18, fontWeight: '700' }}>✕</Text>
+                </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={[s.addBtn, { paddingHorizontal: 24, paddingVertical: 12, borderRadius: radius.md, marginBottom: 0 }]}
-                disabled={savingFee}
-                onPress={async () => {
-                  setSavingFee(true);
-                  try {
-                    await adminApi.saveDeliveryFeeConfig(parseInt(deliveryFee) || 0);
-                    Alert.alert('✅ Saved', 'Delivery fee updated successfully.');
-                  } catch (e: any) {
-                    Alert.alert('Error', e.message || 'Failed to save.');
-                  } finally {
-                    setSavingFee(false);
-                  }
-                }}>
-                {savingFee ? <ActivityIndicator color="#fff" /> : <Text style={s.addBtnText}>Save</Text>}
-              </TouchableOpacity>
+            ))}
+            {feesList.length === 0 && (
+              <Text style={[s.rowSub, { marginBottom: spacing.md, fontStyle: 'italic' }]}>No fees configured. Add one below.</Text>
+            )}
+
+            {/* Add new fee row */}
+            <View style={{ borderTopWidth: 1, borderTopColor: colors.borderColor, paddingTop: spacing.md, marginTop: spacing.sm }}>
+              <Text style={{ color: colors.textMuted, fontSize: 12, fontWeight: '700', marginBottom: 8 }}>ADD NEW FEE</Text>
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8 }}>
+                <View style={{ flex: 2, backgroundColor: colors.bgColor, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderColor, paddingHorizontal: spacing.sm }}>
+                  <TextInput
+                    style={[s.formInput, { paddingVertical: 8 }]}
+                    value={newFee.name}
+                    onChangeText={v => setNewFee(prev => ({ ...prev, name: v }))}
+                    placeholder="Name (e.g. Delivery Fee)"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+                <TouchableOpacity
+                  onPress={() => setNewFee(prev => ({ ...prev, type: prev.type === 'flat' ? 'percent' : 'flat' }))}
+                  style={{ backgroundColor: colors.bgColor, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderColor, paddingHorizontal: 10, justifyContent: 'center' }}
+                >
+                  <Text style={{ color: colors.adminAccent, fontWeight: '700', fontSize: 12 }}>
+                    {newFee.type === 'flat' ? '₹ Flat' : '% Pct'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bgColor, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderColor, paddingHorizontal: spacing.md }}>
+                  <Text style={{ color: colors.textMuted, marginRight: 4 }}>{newFee.type === 'flat' ? '₹' : '%'}</Text>
+                  <TextInput
+                    style={[s.formInput, { flex: 1, paddingVertical: 8 }]}
+                    value={newFee.value}
+                    onChangeText={v => setNewFee(prev => ({ ...prev, value: v }))}
+                    placeholder="Amount"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                  />
+                </View>
+                <TouchableOpacity
+                  style={[s.addBtn, { paddingHorizontal: 16, paddingVertical: 10, borderRadius: radius.md, marginBottom: 0 }]}
+                  onPress={() => {
+                    if (!newFee.name.trim() || !newFee.value.trim()) {
+                      Alert.alert('Missing fields', 'Please enter a name and value.');
+                      return;
+                    }
+                    setFeesList(prev => [...prev, { ...newFee }]);
+                    setNewFee({ name: '', type: 'flat', value: '' });
+                  }}
+                >
+                  <Text style={s.addBtnText}>+ Add</Text>
+                </TouchableOpacity>
+              </View>
             </View>
+
+            {/* Save all fees button */}
+            <TouchableOpacity
+              style={[s.addBtn, { marginTop: spacing.md, paddingVertical: 14, borderRadius: radius.md, marginBottom: 0, alignItems: 'center' }]}
+              disabled={savingFees}
+              onPress={async () => {
+                setSavingFees(true);
+                try {
+                  const listToSave = feesList.map(f => ({
+                    name: f.name.trim(),
+                    type: f.type,
+                    value: Number(f.value) || 0,
+                  }));
+                  await adminApi.saveFees(listToSave);
+                  Alert.alert('✅ Saved', 'Fees updated successfully. All customers will see the new charges.');
+                } catch (e: any) {
+                  Alert.alert('Error', e.message || 'Failed to save fees.');
+                } finally {
+                  setSavingFees(false);
+                }
+              }}
+            >
+              {savingFees
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={s.addBtnText}>💾 Save All Fees</Text>}
+            </TouchableOpacity>
           </View>
 
           <View style={s.card}>
