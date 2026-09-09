@@ -32,4 +32,16 @@ const OrderSchema = new mongoose.Schema({
   created_at: { type: Date, default: Date.now }
 });
 
+// ── Indexes for fast queries ──
+// Most critical: user opens Orders tab → queries by user_id + order_status
+OrderSchema.index({ user_id: 1, order_status: 1 });
+// Partner app loads pending orders → queries by store_id + order_status
+OrderSchema.index({ store_id: 1, order_status: 1 });
+// Admin dashboard sorts by date → index on created_at
+OrderSchema.index({ created_at: -1 });
+// Payment verification → razorpay_order_id (already indexed inline above, this ensures it)
+OrderSchema.index({ razorpay_order_id: 1 });
+// College-level order filtering
+OrderSchema.index({ college_id: 1, order_status: 1 });
+
 module.exports = mongoose.model('Order', OrderSchema);

@@ -13,4 +13,7 @@ const StoreSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+// Home screen filters stores by college and open status
+StoreSchema.index({ college_id: 1, is_open: 1 });
+
 module.exports = mongoose.model('Store', StoreSchema);

@@ -1,4 +1,33 @@
 require('dotenv').config();
+const cluster = require('cluster');
+const os = require('os');
+
+// ── Node.js Clustering: use all available CPU cores ──
+// On Render free (shared CPU): 1 worker, but auto-restarts on crash
+// On Render Starter+ (dedicated CPU): 2+ workers = 2-4x more throughput
+if (cluster.isPrimary) {
+  // Cap at 2 workers to stay within Render free tier memory (512MB)
+  // Each worker uses ~100-150MB, so 2 workers = ~300MB safely under 512MB
+  const numWorkers = Math.min(os.cpus().length, 2);
+  console.log(`[Cluster] Primary ${process.pid} starting ${numWorkers} worker(s)`);
+
+  for (let i = 0; i < numWorkers; i++) {
+    cluster.fork();
+  }
+
+  // Auto-restart crashed workers
+  cluster.on('exit', (worker, code, signal) => {
+    console.warn(`[Cluster] Worker ${worker.process.pid} died (code: ${code}, signal: ${signal}). Restarting...`);
+    cluster.fork();
+  });
+
+  cluster.on('online', (worker) => {
+    console.log(`[Cluster] Worker ${worker.process.pid} is online`);
+  });
+
+} else {
+  // ── Worker process: runs the actual Express server ──
+
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -194,3 +223,5 @@ app.use('/api', authCheck, webPaymentService);
     shutdown();
   });
 
+
+} // end cluster worker

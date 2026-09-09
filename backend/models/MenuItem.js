@@ -12,4 +12,7 @@ const MenuItemSchema = new mongoose.Schema({
   is_available: { type: Boolean, default: true }
 });
 
+// Fast menu load: fetch all items for a store filtered by availability
+MenuItemSchema.index({ store_id: 1, is_available: 1 });
+
 module.exports = mongoose.model('MenuItem', MenuItemSchema);
