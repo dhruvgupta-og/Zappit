@@ -264,6 +264,40 @@ const CheckoutScreen = () => {
               setProcessing(false);
               navigation.replace('OrderTracker', { orderIds });
             }, 4200);
+          } else if (verifyRes.retryable) {
+            // DB was down — payment is safe, ask user to retry
+            setAnimationPhase(0);
+            setProcessing(false);
+            Alert.alert(
+              '⚠️ Almost There!',
+              `Your payment was received but we had a brief server issue confirming your order.\n\nYour money is SAFE.\n\nPlease wait 30 seconds and tap "Retry" — or contact support with Payment ID:\n${data.razorpay_payment_id}`,
+              [
+                {
+                  text: 'Retry',
+                  onPress: async () => {
+                    setProcessing(true);
+                    try {
+                      const retryRes = await paymentApi.verifyPayment({
+                        razorpay_order_id: data.razorpay_order_id,
+                        razorpay_payment_id: data.razorpay_payment_id,
+                        razorpay_signature: data.razorpay_signature,
+                      });
+                      if (retryRes.success) {
+                        clearCart();
+                        navigation.replace('OrderTracker', { orderIds: retryRes.orderIds });
+                      } else {
+                        Alert.alert('Contact Support', `Payment ID: ${data.razorpay_payment_id}\n\nPlease share this with support.`);
+                      }
+                    } catch {
+                      Alert.alert('Contact Support', `Payment ID: ${data.razorpay_payment_id}`);
+                    } finally {
+                      setProcessing(false);
+                    }
+                  }
+                },
+                { text: 'Copy Payment ID', onPress: () => {} },
+              ]
+            );
           } else {
             throw new Error('Verification failed on server');
           }

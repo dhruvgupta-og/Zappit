@@ -12,7 +12,9 @@ process.on('uncaughtException', (err) => {
 });
 
 // Database Setup
-require('./database/mongodb');
+const { mongoose, isDBHealthy } = require('./database/mongodb');
+// Export for use in payment routes
+global._isDBHealthy = isDBHealthy;
 
 const app = express();
 
@@ -26,8 +28,22 @@ const app = express();
   app.use(compression());
 
   // Health Check for Hosting Providers and Frontend Proxy
-  app.get('/health', (req, res) => res.status(200).json({ status: 'healthy', timestamp: new Date() }));
-  app.get('/api/health', (req, res) => res.status(200).json({ status: 'healthy', timestamp: new Date() }));
+  app.get('/health', (req, res) => {
+    const dbOk = isDBHealthy();
+    res.status(dbOk ? 200 : 503).json({
+      status: dbOk ? 'healthy' : 'degraded',
+      db: dbOk ? 'connected' : 'disconnected',
+      timestamp: new Date()
+    });
+  });
+  app.get('/api/health', (req, res) => {
+    const dbOk = isDBHealthy();
+    res.status(dbOk ? 200 : 503).json({
+      status: dbOk ? 'healthy' : 'degraded',
+      db: dbOk ? 'connected' : 'disconnected',
+      timestamp: new Date()
+    });
+  });
 
   // ── KEEP-ALIVE: Self-ping every 14 minutes to prevent Render free tier from sleeping
   if (process.env.NODE_ENV === 'production') {

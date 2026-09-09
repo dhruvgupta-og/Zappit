@@ -374,6 +374,19 @@ router.post('/verify-payment', async (req, res) => {
       return res.status(400).json({ success: false, verified: false, error: 'Missing required payment verification fields' });
     }
 
+    // ── SAFETY GUARD: Check DB is healthy before touching any orders ──
+    // If DB is down here, Razorpay already captured the money.
+    // We return 503 so the app knows to retry — money is safe in Razorpay.
+    if (global._isDBHealthy && !global._isDBHealthy()) {
+      console.error('[verify-payment] DB is DOWN during payment verification! razorpay_order_id:', razorpay_order_id, 'payment_id:', razorpay_payment_id);
+      return res.status(503).json({
+        success: false,
+        verified: false,
+        retryable: true,
+        error: 'Database temporarily unavailable. Your payment is safe — please retry in 30 seconds or contact support with your payment ID: ' + razorpay_payment_id,
+      });
+    }
+
     const secret = process.env.RAZORPAY_KEY_SECRET;
     if (!secret) {
       return res.status(503).json({ success: false, error: 'Razorpay secret not configured' });
