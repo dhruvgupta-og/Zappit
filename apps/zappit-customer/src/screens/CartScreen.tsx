@@ -130,7 +130,7 @@ const CartScreen = () => {
       </ScrollView>
 
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.checkoutBtn} onPress={() => navigation.navigate('Checkout')} activeOpacity={0.9}>
+        <TouchableOpacity style={styles.checkoutBtn} onPress={() => navigation.getParent()?.navigate('Checkout')} activeOpacity={0.9}>
           <Text style={styles.checkoutBtnText}>Proceed to Checkout • ₹{totalToPay}</Text>
         </TouchableOpacity>
       </View>

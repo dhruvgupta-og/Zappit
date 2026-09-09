@@ -23,17 +23,12 @@ import ProfileScreen from '../screens/ProfileScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Cart icon with badge — navigates to the stack-level Cart screen
-const CartTabButton = ({ navigation }: { navigation: any }) => {
+// Cart icon with badge
+const CartTabIcon = ({ color, size }: { color: string; size: number }) => {
   const cartCount = useCartStore((s) => s.getCartCount());
   return (
     <View style={{ position: 'relative' }}>
-      <Feather
-        name="shopping-cart"
-        size={22}
-        color={colors.textMuted}
-        onPress={() => navigation.navigate('CartStack')}
-      />
+      <Feather name="shopping-cart" size={size} color={color} />
       {cartCount > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{cartCount > 99 ? '99+' : cartCount}</Text>
@@ -41,17 +36,6 @@ const CartTabButton = ({ navigation }: { navigation: any }) => {
       )}
     </View>
   );
-};
-
-// Placeholder screen for the Cart tab — immediately redirects to CartStack
-const CartTabPlaceholder = ({ navigation }: { navigation: any }) => {
-  React.useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', () => {
-      navigation.navigate('CartStack');
-    });
-    return unsubscribe;
-  }, [navigation]);
-  return null;
 };
 
 const MainTabs = () => (
@@ -85,12 +69,13 @@ const MainTabs = () => (
       }}
     />
     <Tab.Screen
-      name="CartTab"
-      component={CartTabPlaceholder}
-      options={({ navigation }) => ({
-        tabBarLabel: 'Cart',
-        tabBarIcon: () => <CartTabButton navigation={navigation} />,
-      })}
+      name="Cart"
+      component={CartScreen}
+      options={{
+        tabBarIcon: ({ color, size }) => (
+          <CartTabIcon color={color} size={size} />
+        ),
+      }}
     />
     <Tab.Screen
       name="Orders"
