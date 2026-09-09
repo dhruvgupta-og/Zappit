@@ -8,14 +8,19 @@ const MenuItem = require('../../models/MenuItem');
 const Config = require('../../models/Config');
 const { admin } = require('../../firebase');
 const Staff = require('../../models/Staff');
-const { clearCache } = require('../../cache/redis');
+const { clearCache, getCache, setCache } = require('../../cache/redis');
 
 const generateId = () => new mongoose.Types.ObjectId().toString();
 
 // --- PUBLIC ROUTES (No Admin required) ---
 router.get('/config/:key', async (req, res) => {
   try {
+    const cacheKey = `api:config:${req.params.key}`;
+    const cached = await getCache(cacheKey);
+    if (cached) return res.json({ success: true, data: cached, cached: true });
+
     const config = await Config.findById(req.params.key);
+    if (config) await setCache(cacheKey, config, 600); // Cache fees for 10 minutes
     res.json({ success: true, data: config || null });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -391,6 +396,8 @@ router.post('/config/:key', async (req, res) => {
       { _id: req.params.key, ...req.body },
       { upsert: true, new: true }
     );
+    // Invalidate fees cache so all users see the new fees immediately
+    await clearCache(`api:config:${req.params.key}`);
     res.json({ success: true, data: updated });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
