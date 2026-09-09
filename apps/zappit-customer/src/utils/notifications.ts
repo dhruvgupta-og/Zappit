@@ -3,13 +3,13 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 
 // Configure how notifications appear while the app is in the foreground
+// NOTE: Only use the 3 valid props — shouldShowBanner/shouldShowList are NOT
+// valid Expo API props and cause notification handler to silently fail on Android.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
   }),
 });
 
@@ -47,11 +47,11 @@ export const registerForPushNotifications = async (): Promise<string | null> => 
     });
   }
 
-  // Get the Expo push token (used by Expo's push service which relays to FCM)
+  // Get the Expo push token (used by Expo's push service which relays to FCM/APNs)
   const tokenData = await Notifications.getExpoPushTokenAsync({
     projectId: '2e3ea53c-1d6a-470a-8fe6-35bf5a37fb71', // from app.json extra.eas.projectId
   });
 
+  console.log('[Notifications] Push token:', tokenData.data);
   return tokenData.data;
 };
-

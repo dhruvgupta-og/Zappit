@@ -119,6 +119,7 @@ router.post('/send-broadcast-notification', async (req, res) => {
     const BATCH_SIZE = 100;
     let totalSent = 0;
     let totalFailed = 0;
+    const ticketIds = []; // collect ticket IDs for receipt checking
 
     const allTokens = users.map(u => u.expoPushToken).filter(t => t && t.startsWith('ExponentPushToken'));
 
@@ -130,11 +131,11 @@ router.post('/send-broadcast-notification', async (req, res) => {
         body,
         sound: 'default',
         priority: 'high',
+        channelId: 'default', // Required for Android — must match channel registered in app
         data: { type: 'broadcast' },
       }));
 
       try {
-        // Call Expo Push API
         const postData = JSON.stringify(messages);
         const result = await new Promise((resolve, reject) => {
           const options = {
@@ -147,7 +148,7 @@ router.post('/send-broadcast-notification', async (req, res) => {
               'Accept-Encoding': 'gzip, deflate',
             },
           };
-          const req = https.request(options, (r) => {
+          const reqHttp = https.request(options, (r) => {
             let data = '';
             r.on('data', chunk => data += chunk);
             r.on('end', () => {
@@ -155,25 +156,72 @@ router.post('/send-broadcast-notification', async (req, res) => {
               catch { resolve({ data: [] }); }
             });
           });
-          req.on('error', reject);
-          req.write(postData);
-          req.end();
+          reqHttp.on('error', reject);
+          reqHttp.write(postData);
+          reqHttp.end();
         });
 
-        const responses = result.data || [];
-        responses.forEach(r => {
-          if (r.status === 'ok') totalSent++;
-          else totalFailed++;
+        const tickets = (result.data || []);
+        tickets.forEach(ticket => {
+          if (ticket.status === 'ok') {
+            totalSent++;
+            if (ticket.id) ticketIds.push(ticket.id);
+          } else {
+            totalFailed++;
+            console.warn('[Broadcast] Ticket error:', ticket.message, ticket.details);
+          }
         });
-        if (responses.length === 0) totalSent += batch.length; // Assume success if no detail
+        if (tickets.length === 0) totalSent += batch.length;
       } catch (batchErr) {
         console.error('[Broadcast] Expo API batch error:', batchErr.message);
         totalFailed += batch.length;
       }
     }
 
-    console.log(`[Broadcast] Expo push: Sent: ${totalSent}, Failed: ${totalFailed}, Total: ${allTokens.length}`);
-    res.json({ success: true, sent: totalSent, failed: totalFailed, total: allTokens.length });
+    // Check delivery receipts after a short delay (Expo processes them async)
+    // This tells us if FCM/APNs actually delivered or rejected the message
+    let receiptErrors = [];
+    if (ticketIds.length > 0) {
+      try {
+        await new Promise(r => setTimeout(r, 3000)); // wait 3s for Expo to process
+        const receiptBody = JSON.stringify({ ids: ticketIds.slice(0, 300) });
+        const receiptResult = await new Promise((resolve, reject) => {
+          const options = {
+            hostname: 'exp.host',
+            path: '/--/api/v2/push/getReceipts',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          };
+          const r2 = https.request(options, (resp) => {
+            let data = '';
+            resp.on('data', chunk => data += chunk);
+            resp.on('end', () => {
+              try { resolve(JSON.parse(data)); }
+              catch { resolve({ data: {} }); }
+            });
+          });
+          r2.on('error', reject);
+          r2.write(receiptBody);
+          r2.end();
+        });
+
+        const receipts = receiptResult.data || {};
+        for (const [id, receipt] of Object.entries(receipts)) {
+          if (receipt.status === 'error') {
+            receiptErrors.push({ id, error: receipt.message, details: receipt.details });
+            console.error(`[Broadcast] Receipt error for ticket ${id}:`, receipt.message, receipt.details);
+          }
+        }
+      } catch (receiptErr) {
+        console.warn('[Broadcast] Could not fetch receipts (non-fatal):', receiptErr.message);
+      }
+    }
+
+    console.log(`[Broadcast] Expo push: Sent: ${totalSent}, Failed: ${totalFailed}, Total: ${allTokens.length}, Receipt errors: ${receiptErrors.length}`);
+    res.json({ success: true, sent: totalSent, failed: totalFailed, total: allTokens.length, receiptErrors: receiptErrors.slice(0, 5) });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
