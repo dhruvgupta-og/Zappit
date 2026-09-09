@@ -23,12 +23,17 @@ import ProfileScreen from '../screens/ProfileScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// Cart icon with badge — mirrors the web BottomNav badge
-const CartTabIcon = ({ color, size }: { color: string; size: number }) => {
+// Cart icon with badge — navigates to the stack-level Cart screen
+const CartTabButton = ({ navigation }: { navigation: any }) => {
   const cartCount = useCartStore((s) => s.getCartCount());
   return (
     <View style={{ position: 'relative' }}>
-      <Feather name="shopping-cart" size={size} color={color} />
+      <Feather
+        name="shopping-cart"
+        size={22}
+        color={colors.textMuted}
+        onPress={() => navigation.navigate('CartStack')}
+      />
       {cartCount > 0 && (
         <View style={styles.badge}>
           <Text style={styles.badgeText}>{cartCount > 99 ? '99+' : cartCount}</Text>
@@ -36,6 +41,17 @@ const CartTabIcon = ({ color, size }: { color: string; size: number }) => {
       )}
     </View>
   );
+};
+
+// Placeholder screen for the Cart tab — immediately redirects to CartStack
+const CartTabPlaceholder = ({ navigation }: { navigation: any }) => {
+  React.useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      navigation.navigate('CartStack');
+    });
+    return unsubscribe;
+  }, [navigation]);
+  return null;
 };
 
 const MainTabs = () => (
@@ -69,13 +85,12 @@ const MainTabs = () => (
       }}
     />
     <Tab.Screen
-      name="Cart"
-      component={CartScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => (
-          <CartTabIcon color={color} size={size} />
-        ),
-      }}
+      name="CartTab"
+      component={CartTabPlaceholder}
+      options={({ navigation }) => ({
+        tabBarLabel: 'Cart',
+        tabBarIcon: () => <CartTabButton navigation={navigation} />,
+      })}
     />
     <Tab.Screen
       name="Orders"
@@ -128,6 +143,7 @@ const AppNavigator = () => {
           <>
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen name="StoreDetail" component={StoreDetailScreen} />
+            <Stack.Screen name="CartStack" component={CartScreen} />
             <Stack.Screen name="Checkout" component={CheckoutScreen} />
             <Stack.Screen name="OrderTracker" component={OrderTrackerScreen} />
           </>
