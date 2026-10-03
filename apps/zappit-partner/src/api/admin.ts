@@ -106,4 +106,14 @@ export const adminApi = {
     const res = await apiClient.post('/api/admin/config/delivery_fee', { value });
     return res.data;
   },
+
+  // Maintenance Mode
+  getMaintenance: async () => {
+    const res = await apiClient.get('/api/app-status');
+    return res.data;
+  },
+  setMaintenance: async (isMaintenanceMode: boolean) => {
+    const res = await apiClient.post('/api/admin/config/maintenance', { isMaintenanceMode });
+    return res.data;
+  },
 };

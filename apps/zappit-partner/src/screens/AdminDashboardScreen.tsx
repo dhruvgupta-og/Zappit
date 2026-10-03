@@ -18,6 +18,7 @@ const TABS = [
   { key: 'banners', label: '🖼️ Banners' },
   { key: 'coupons', label: '🏷️ Coupons' },
   { key: 'notifications', label: '📢 Notify' },
+  { key: 'control', label: '🛑 App Control' },
 ];
 
 const ORDER_STATUS_OPTIONS = ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'];
@@ -65,6 +66,10 @@ const AdminDashboardScreen = () => {
   const [savingFees, setSavingFees] = useState(false);
   const [newFee, setNewFee] = useState({ name: '', type: 'flat', value: '' });
 
+  // Maintenance Mode
+  const [isMaintenance, setIsMaintenance] = useState(false);
+  const [savingMaintenance, setSavingMaintenance] = useState(false);
+
   // Modals
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('');
@@ -88,6 +93,12 @@ const AdminDashboardScreen = () => {
         const list = feesRes.value.data?.list || [];
         setFeesList(list.map((f: any) => ({ name: f.name || '', type: f.type || 'flat', value: String(f.value ?? '') })));
       }
+
+      // Load maintenance mode
+      try {
+        const maintenanceRes = await adminApi.getMaintenance();
+        setIsMaintenance(maintenanceRes.isMaintenanceMode === true);
+      } catch (e) { /* ignore */ }
 
       if (statsRes.status === 'fulfilled' && statsRes.value.success) {
         setStats({
@@ -746,6 +757,60 @@ const AdminDashboardScreen = () => {
             <Text style={[s.rowSub, { lineHeight: 20 }]}>
               {'• Customers receive notifications when they open the app for the first time and grant permission.\n\n• Order status updates (Preparing, Ready, etc.) are sent automatically.\n\n• Broadcast notifications go to all registered customers — use responsibly!'}
             </Text>
+          </View>
+        </ScrollView>
+      )}
+
+      {activeTab === 'control' && (
+        <ScrollView contentContainerStyle={s.page}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.adminAccent} />}>
+
+          <View style={[s.card, {
+            borderWidth: 2,
+            borderColor: isMaintenance ? '#EF4444' : '#10B981',
+            backgroundColor: isMaintenance ? 'rgba(239,68,68,0.06)' : 'rgba(16,185,129,0.06)',
+          }]}>
+            <Text style={s.cardTitle}>🛑 Maintenance Mode</Text>
+            <Text style={[s.rowSub, { marginBottom: spacing.lg }]}>
+              When ON, the customer app is blocked and shows a maintenance screen. Orders stop immediately.
+            </Text>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg }}>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.listTitle, { color: isMaintenance ? '#EF4444' : '#10B981', fontSize: 18 }]}>
+                  {isMaintenance ? '🔴 Orders STOPPED' : '🟢 Orders OPEN'}
+                </Text>
+                <Text style={s.rowSub}>
+                  {isMaintenance ? 'Customers see maintenance screen' : 'Customers can order normally'}
+                </Text>
+              </View>
+              <Switch
+                value={isMaintenance}
+                onValueChange={async (val) => {
+                  setSavingMaintenance(true);
+                  setIsMaintenance(val);
+                  try {
+                    await adminApi.setMaintenance(val);
+                    Alert.alert(
+                      val ? '🔴 Maintenance ON' : '🟢 Maintenance OFF',
+                      val ? 'Customer app is now blocked.' : 'Customer app is now accessible.'
+                    );
+                  } catch (e: any) {
+                    Alert.alert('Error', e.message || 'Failed to update.');
+                    setIsMaintenance(!val);
+                  } finally {
+                    setSavingMaintenance(false);
+                  }
+                }}
+                trackColor={{ false: '#374151', true: 'rgba(239,68,68,0.5)' }}
+                thumbColor={isMaintenance ? '#EF4444' : '#10B981'}
+                disabled={savingMaintenance}
+              />
+            </View>
+
+            {savingMaintenance && (
+              <ActivityIndicator color={colors.adminAccent} style={{ marginTop: 8 }} />
+            )}
           </View>
         </ScrollView>
       )}
