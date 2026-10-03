@@ -19,6 +19,8 @@ import CheckoutScreen from '../screens/CheckoutScreen';
 import OrderTrackerScreen from '../screens/OrderTrackerScreen';
 import OrdersScreen from '../screens/OrdersScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import MaintenanceScreen from '../screens/MaintenanceScreen';
+import { apiClient } from '../api/client';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -100,18 +102,40 @@ const MainTabs = () => (
 
 const AppNavigator = () => {
   const { firebaseUser, profileComplete, isLoading, isInitialized } = useAuthStore();
+  const [isMaintenance, setIsMaintenance] = React.useState(false);
+  const [checkingMaintenance, setCheckingMaintenance] = React.useState(true);
 
   useEffect(() => {
     const unsubscribe = initAuthListener();
     return () => unsubscribe();
   }, []);
 
-  if (!isInitialized || isLoading) {
+  useEffect(() => {
+    const checkMaintenance = async () => {
+      try {
+        const res = await apiClient.get('/api/admin/config/maintenance');
+        if (res.data.data?.isMaintenanceMode) {
+          setIsMaintenance(true);
+        }
+      } catch (e) {
+        // ignore
+      } finally {
+        setCheckingMaintenance(false);
+      }
+    };
+    checkMaintenance();
+  }, []);
+
+  if (!isInitialized || isLoading || checkingMaintenance) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bgColor, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
+  }
+
+  if (isMaintenance) {
+    return <MaintenanceScreen />;
   }
 
   return (

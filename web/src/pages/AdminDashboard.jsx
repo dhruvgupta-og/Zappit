@@ -22,6 +22,7 @@ const AdminDashboard = () => {
     { name: 'Delivery Fee', type: 'flat', value: 20 },
     { name: 'Platform Fee', type: 'percent', value: 5 }
   ]);
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState(false);
 
   const addLocalFee = () => {
     setLocalFees(p => [...p, { name: '', value: 0 }]);
@@ -115,16 +116,18 @@ const AdminDashboard = () => {
   // ── DATA LOADING (one-time fetch to save Firestore quota) ──────────────────
   const loadAllData = async () => {
     try {
-      const [storesRes, collegesRes, bannersRes, feesRes] = await Promise.all([
+      const [storesRes, collegesRes, bannersRes, feesRes, maintenanceRes] = await Promise.all([
         api.get('/api/stores'),
         api.get('/api/admin/colleges'),
         api.get('/api/admin/banners'),
-        api.get('/api/admin/config/fees').catch(() => ({ data: { data: null } }))
+        api.get('/api/admin/config/fees').catch(() => ({ data: { data: null } })),
+        api.get('/api/admin/config/maintenance').catch(() => ({ data: { data: null } }))
       ]);
       if (storesRes.data.success) setStores(storesRes.data.stores);
       if (collegesRes.data.success) setColleges(collegesRes.data.colleges);
       if (bannersRes.data.success) setBanners(bannersRes.data.banners);
       if (feesRes.data.data?.list) setLocalFees(feesRes.data.data.list);
+      if (maintenanceRes.data.data?.isMaintenanceMode !== undefined) setIsMaintenanceMode(maintenanceRes.data.data.isMaintenanceMode);
       
       try {
         const couponsRes = await api.get('/api/get-coupons');
@@ -1184,19 +1187,49 @@ const AdminDashboard = () => {
           </>
         )}
 
-        {/* ════ FEES ════ */}
         {activeTab === 'fees' && (
-          <div style={{ background: 'white', borderRadius: 12, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-            <h3 style={{ margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-              ⚙️ Manage Application Fees
-            </h3>
-            
-            <p style={{ fontSize: '0.85rem', color: '#64748B', marginBottom: 20 }}>
-              Add flat (₹ fixed) or percentage (% of subtotal) fees charged at checkout. <strong>Platform Earnings = Total Revenue − Store Payout</strong>.
-            </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ background: 'white', borderRadius: 12, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+              <h3 style={{ margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                🛑 Maintenance Mode
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: '#64748B', marginBottom: 20 }}>
+                When enabled, the customer app will stop accepting orders and show a maintenance screen.
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div 
+                  onClick={async () => {
+                    const newValue = !isMaintenanceMode;
+                    setIsMaintenanceMode(newValue);
+                    try {
+                      await api.post('/api/admin/config/maintenance', { isMaintenanceMode: newValue });
+                      alert(`Maintenance mode ${newValue ? 'ENABLED' : 'DISABLED'}`);
+                    } catch (err) {
+                      alert('Failed to update maintenance mode: ' + err.message);
+                      setIsMaintenanceMode(!newValue);
+                    }
+                  }}
+                  style={{ width: 50, height: 26, background: isMaintenanceMode ? '#EF4444' : '#E2E8F0', borderRadius: 13, position: 'relative', cursor: 'pointer', transition: '0.3s' }}
+                >
+                  <div style={{ width: 22, height: 22, background: 'white', borderRadius: '50%', position: 'absolute', top: 2, left: isMaintenanceMode ? 26 : 2, transition: '0.3s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                </div>
+                <span style={{ fontWeight: 700, color: isMaintenanceMode ? '#EF4444' : '#64748B' }}>
+                  {isMaintenanceMode ? 'Maintenance Mode is ON' : 'Maintenance Mode is OFF'}
+                </span>
+              </div>
+            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-              {localFees.map((fee, idx) => (
+            <div style={{ background: 'white', borderRadius: 12, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+              <h3 style={{ margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                ⚙️ Manage Application Fees
+              </h3>
+              
+              <p style={{ fontSize: '0.85rem', color: '#64748B', marginBottom: 20 }}>
+                Add flat (₹ fixed) or percentage (% of subtotal) fees charged at checkout. <strong>Platform Earnings = Total Revenue − Store Payout</strong>.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+                {localFees.map((fee, idx) => (
                 <div key={idx} style={{ display: 'flex', gap: 8, alignItems: 'center', background: '#F8FAFC', padding: 10, borderRadius: 8, border: '1px solid #E2E8F0' }}>
                   <input 
                     type="text" 
@@ -1247,6 +1280,7 @@ const AdminDashboard = () => {
                 Save Changes
               </button>
             </div>
+          </div>
           </div>
         )}
       </div>
