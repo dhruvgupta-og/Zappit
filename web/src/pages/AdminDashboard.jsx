@@ -5,7 +5,7 @@ import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { auth, storage } from '../firebase';
 import {
   BarChart3, Users, Store, ShoppingBag, IndianRupee,
-  Plus, Trash2, Edit2, School, Package, TrendingUp, Menu as MenuIcon, Tag, Image as ImageIcon, Download, CheckCircle
+  Plus, Trash2, Edit2, School, Package, TrendingUp, Menu as MenuIcon, Tag, Image as ImageIcon, Download, CheckCircle, Power
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -537,6 +537,7 @@ const AdminDashboard = () => {
     { key: 'coupons',   label: '🎟️ Coupons' },
     { key: 'banners',   label: '🖼️ Banners' },
     { key: 'fees',      label: '⚙️ Fees' },
+    { key: 'control',   label: '🛑 App Control' },
   ];
 
   const handleExportData = async () => {
@@ -1187,39 +1188,87 @@ const AdminDashboard = () => {
           </>
         )}
 
-        {activeTab === 'fees' && (
+        {/* ════ APP CONTROL ════ */}
+        {activeTab === 'control' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ background: 'white', borderRadius: 12, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
-              <h3 style={{ margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                🛑 Maintenance Mode
-              </h3>
-              <p style={{ fontSize: '0.85rem', color: '#64748B', marginBottom: 20 }}>
-                When enabled, the customer app will stop accepting orders and show a maintenance screen.
+            <div style={{
+              background: isMaintenanceMode
+                ? 'linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)'
+                : 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)',
+              borderRadius: 16,
+              padding: 24,
+              border: isMaintenanceMode ? '2px solid #EF4444' : '2px solid #10B981',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.08)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <div style={{
+                  width: 48, height: 48, borderRadius: 12,
+                  background: isMaintenanceMode ? '#EF4444' : '#10B981',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}>
+                  <Power size={24} color="white" />
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '1.1rem', color: '#0F172A' }}>Maintenance Mode</div>
+                  <div style={{ fontSize: '0.78rem', color: '#64748B' }}>Controls customer app access</div>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '0.88rem', color: '#475569', marginBottom: 20, lineHeight: 1.6 }}>
+                When <strong>ON</strong>, the customer app will be blocked and show a maintenance screen instead of the regular app. Use this when you want to stop taking orders temporarily.
               </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div 
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                <div
                   onClick={async () => {
                     const newValue = !isMaintenanceMode;
                     setIsMaintenanceMode(newValue);
                     try {
                       await api.post('/api/admin/config/maintenance', { isMaintenanceMode: newValue });
-                      alert(`Maintenance mode ${newValue ? 'ENABLED' : 'DISABLED'}`);
                     } catch (err) {
-                      alert('Failed to update maintenance mode: ' + err.message);
+                      alert('Failed to update: ' + err.message);
                       setIsMaintenanceMode(!newValue);
                     }
                   }}
-                  style={{ width: 50, height: 26, background: isMaintenanceMode ? '#EF4444' : '#E2E8F0', borderRadius: 13, position: 'relative', cursor: 'pointer', transition: '0.3s' }}
+                  style={{
+                    width: 64, height: 34,
+                    background: isMaintenanceMode ? '#EF4444' : '#CBD5E1',
+                    borderRadius: 17, position: 'relative', cursor: 'pointer',
+                    transition: 'background 0.3s',
+                    boxShadow: isMaintenanceMode ? '0 0 0 4px rgba(239,68,68,0.2)' : 'none'
+                  }}
                 >
-                  <div style={{ width: 22, height: 22, background: 'white', borderRadius: '50%', position: 'absolute', top: 2, left: isMaintenanceMode ? 26 : 2, transition: '0.3s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }} />
+                  <div style={{
+                    width: 28, height: 28, background: 'white', borderRadius: '50%',
+                    position: 'absolute', top: 3,
+                    left: isMaintenanceMode ? 33 : 3,
+                    transition: 'left 0.3s',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.25)'
+                  }} />
                 </div>
-                <span style={{ fontWeight: 700, color: isMaintenanceMode ? '#EF4444' : '#64748B' }}>
-                  {isMaintenanceMode ? 'Maintenance Mode is ON' : 'Maintenance Mode is OFF'}
-                </span>
+                <div>
+                  <div style={{
+                    fontWeight: 800, fontSize: '1.1rem',
+                    color: isMaintenanceMode ? '#DC2626' : '#16A34A'
+                  }}>
+                    {isMaintenanceMode ? '🔴 Orders STOPPED' : '🟢 Orders OPEN'}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: 2 }}>
+                    {isMaintenanceMode
+                      ? 'Customers see maintenance screen'
+                      : 'Customers can browse and order normally'}
+                  </div>
+                </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'fees' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
             <div style={{ background: 'white', borderRadius: 12, padding: 16, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }}>
+
               <h3 style={{ margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
                 ⚙️ Manage Application Fees
               </h3>
