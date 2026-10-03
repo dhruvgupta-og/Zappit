@@ -113,12 +113,12 @@ const AppNavigator = () => {
   useEffect(() => {
     const checkMaintenance = async () => {
       try {
-        const res = await apiClient.get('/api/admin/config/maintenance');
-        if (res.data.data?.isMaintenanceMode) {
+        const res = await apiClient.get('/api/app-status');
+        if (res.data.isMaintenanceMode) {
           setIsMaintenance(true);
         }
       } catch (e) {
-        // ignore
+        // ignore — if check fails, let the app open normally
       } finally {
         setCheckingMaintenance(false);
       }

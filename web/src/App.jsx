@@ -145,9 +145,9 @@ function App() {
 
   // Check maintenance mode on load (no auth required - public endpoint)
   useEffect(() => {
-    api.get('/api/admin/config/maintenance')
+    api.get('/api/app-status')
       .then(res => {
-        if (res.data?.data?.isMaintenanceMode) setIsMaintenance(true);
+        if (res.data?.isMaintenanceMode) setIsMaintenance(true);
       })
       .catch(() => {});
   }, []);

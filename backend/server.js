@@ -74,6 +74,20 @@ const app = express();
     });
   });
 
+  // ── PUBLIC: App status check (no auth) — used by customer app/web to check maintenance mode
+  app.get('/api/app-status', async (req, res) => {
+    try {
+      const Config = require('./models/Config');
+      const config = await Config.findById('maintenance');
+      res.json({
+        success: true,
+        isMaintenanceMode: config?.isMaintenanceMode === true
+      });
+    } catch (err) {
+      res.json({ success: true, isMaintenanceMode: false });
+    }
+  });
+
   // ── KEEP-ALIVE: Self-ping every 14 minutes to prevent Render free tier from sleeping
   if (process.env.NODE_ENV === 'production') {
     const keepAliveUrl = process.env.BACKEND_URL
