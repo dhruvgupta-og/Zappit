@@ -17,14 +17,14 @@ import { typography, spacing, radius } from '../theme/typography';
 const CheckoutScreen = () => {
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
-  
+
   const itemsMap = useCartStore((state) => state.items);
   const cartItems = Object.values(itemsMap);
   const cartTotal = useCartStore((state) => state.getCartTotal());
   const storeId = useCartStore((state) => state.getCartStoreId());
   const storeName = useCartStore((state) => state.getCartStoreName());
   const clearCart = useCartStore((state) => state.clearCart);
-  
+
   const { profile } = useAuthStore();
 
   const [address, setAddress] = useState('Engineering Block A');
@@ -35,7 +35,7 @@ const CheckoutScreen = () => {
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [couponError, setCouponError] = useState('');
   const [applying, setApplying] = useState(false);
-  
+
   const [processing, setProcessing] = useState(false);
   const [paymentHtml, setPaymentHtml] = useState<string | null>(null);
   const [animationPhase, setAnimationPhase] = useState(0); // 0=none,1=placed,2=zapp,3=confirmed
@@ -87,8 +87,8 @@ const CheckoutScreen = () => {
   // Legacy: deliveryFee used for the payment API call (backend will recalculate authoritatively)
   const legacyDeliveryFee = allFees.find(f => f.name?.toLowerCase().includes('delivery'))
     ? (allFees.find(f => f.name?.toLowerCase().includes('delivery'))!.type === 'percent'
-        ? Math.round((cartTotal * Number(allFees.find(f => f.name?.toLowerCase().includes('delivery'))!.value)) / 100)
-        : Number(allFees.find(f => f.name?.toLowerCase().includes('delivery'))!.value))
+      ? Math.round((cartTotal * Number(allFees.find(f => f.name?.toLowerCase().includes('delivery'))!.value)) / 100)
+      : Number(allFees.find(f => f.name?.toLowerCase().includes('delivery'))!.value))
     : deliveryFee;
 
   const startPayment = async () => {
@@ -97,7 +97,7 @@ const CheckoutScreen = () => {
       return;
     }
     setProcessing(true);
-    
+
     try {
       const userCollegeId = (await AsyncStorage.getItem('userCollegeId')) || '';
 
@@ -234,7 +234,7 @@ const CheckoutScreen = () => {
             razorpay_payment_id: data.razorpay_payment_id,
             razorpay_signature: data.razorpay_signature,
           });
-          
+
           if (verifyRes.success) {
             clearCart();
             const orderIds = verifyRes.orderIds;
@@ -295,7 +295,7 @@ const CheckoutScreen = () => {
                     }
                   }
                 },
-                { text: 'Copy Payment ID', onPress: () => {} },
+                { text: 'Copy Payment ID', onPress: () => { } },
               ]
             );
           } else {
@@ -472,7 +472,7 @@ const CheckoutScreen = () => {
           {computedFees.map((fee, i) => (
             <View key={i} style={styles.billRow}>
               <Text style={styles.billText}>
-                {fee.name}{fee.type === 'percent' ? ` (${allFees[i]?.value}%)` : ''}
+                {fee.name}
               </Text>
               <Text style={styles.billText}>₹{fee.amount}</Text>
             </View>
@@ -541,7 +541,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: colors.borderColor, paddingHorizontal: spacing.md,
   },
   input: { flex: 1, paddingVertical: 12, color: colors.textMain, fontSize: 15 },
-  
+
   applyBtn: {
     backgroundColor: colors.primaryDark, borderRadius: radius.md,
     paddingHorizontal: spacing.lg, justifyContent: 'center', alignItems: 'center',
