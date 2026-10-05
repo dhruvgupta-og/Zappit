@@ -31,7 +31,7 @@ const STATUS_COLORS: Record<string, string> = {
 const fmt = (n: number) => n?.toLocaleString('en-IN') || '0';
 
 // ── Modal Form Helpers ──
-const emptyCollege = () => ({ name: '', city: '', isActive: true });
+const emptyCollege = () => ({ name: '', city: '', isActive: true, blocks: [] });
 const emptyStore = (colleges: any[]) => ({ name: '', description: '', college_id: colleges[0]?.id || '', is_open: true, image: '' });
 const emptyBanner = () => ({ imageUrl: '', coupon_code: '', isActive: true });
 const emptyCoupon = () => ({ code: '', discount: '', type: 'flat', minOrder: '', maxUses: '' });
@@ -839,6 +839,50 @@ const AdminDashboardScreen = () => {
                     <Switch value={formData.isActive !== false} onValueChange={v => setFormData((p: any) => ({ ...p, isActive: v }))}
                       trackColor={{ false: '#374151', true: 'rgba(139,92,246,0.3)' }} thumbColor={formData.isActive !== false ? colors.adminAccent : '#9CA3AF'} />
                   </View>
+
+                  <Text style={[s.formLabel, { marginTop: spacing.md }]}>Delivery Blocks (Optional)</Text>
+                  <Text style={[s.rowSub, { marginBottom: spacing.md }]}>Add blocks/hostels for address selection and block-specific delivery fees.</Text>
+                  
+                  {(formData.blocks || []).map((b: any, i: number) => (
+                    <View key={i} style={{ flexDirection: 'row', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                      <TextInput 
+                        style={[s.formInput, { flex: 2, marginBottom: 0 }]} 
+                        value={b.name} 
+                        onChangeText={v => {
+                          const newBlocks = [...formData.blocks];
+                          newBlocks[i].name = v;
+                          setFormData((p: any) => ({ ...p, blocks: newBlocks }));
+                        }} 
+                        placeholder="Block Name" 
+                        placeholderTextColor={colors.textMuted} 
+                      />
+                      <TextInput 
+                        style={[s.formInput, { flex: 1, marginBottom: 0 }]} 
+                        value={String(b.deliveryFee ?? 0)} 
+                        onChangeText={v => {
+                          const newBlocks = [...formData.blocks];
+                          newBlocks[i].deliveryFee = Number(v) || 0;
+                          setFormData((p: any) => ({ ...p, blocks: newBlocks }));
+                        }} 
+                        placeholder="Fee (₹)" 
+                        placeholderTextColor={colors.textMuted} 
+                        keyboardType="numeric" 
+                      />
+                      <TouchableOpacity onPress={() => {
+                        const newBlocks = formData.blocks.filter((_: any, idx: number) => idx !== i);
+                        setFormData((p: any) => ({ ...p, blocks: newBlocks }));
+                      }}>
+                        <Text style={{ color: colors.error, fontSize: 24 }}>×</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  
+                  <TouchableOpacity style={[s.addBtn, { backgroundColor: 'rgba(139,92,246,0.15)', marginTop: 8 }]} onPress={() => {
+                    const newBlocks = [...(formData.blocks || []), { name: '', deliveryFee: 0 }];
+                    setFormData((p: any) => ({ ...p, blocks: newBlocks }));
+                  }}>
+                    <Text style={[s.addBtnText, { color: colors.adminAccent }]}>+ Add Block</Text>
+                  </TouchableOpacity>
                 </>
               )}
 

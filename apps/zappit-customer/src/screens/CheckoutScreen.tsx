@@ -9,6 +9,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiClient } from '../api/client';
 import { paymentApi } from '../api/payment';
+import { storesApi } from '../api/stores';
+import { College } from '../types';
 import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
@@ -28,6 +30,9 @@ const CheckoutScreen = () => {
   const { profile } = useAuthStore();
 
   const [address, setAddress] = useState('Engineering Block A');
+  const [roomDetails, setRoomDetails] = useState('');
+  const [selectedBlock, setSelectedBlock] = useState<any>(null);
+  const [collegeDetails, setCollegeDetails] = useState<College | null>(null);
   const [additionalNote, setAdditionalNote] = useState('');
   const [deliveryFee, setDeliveryFee] = useState(0);
   const [allFees, setAllFees] = useState<Array<{ name: string; type: string; value: number }>>([]);
@@ -46,6 +51,20 @@ const CheckoutScreen = () => {
     AsyncStorage.getItem('userAddress').then((v) => v && setAddress(v));
     paymentApi.getDeliveryFee().then(setDeliveryFee).catch(() => setDeliveryFee(0));
     paymentApi.getAllFees().then(setAllFees).catch(() => setAllFees([]));
+
+    AsyncStorage.getItem('userCollegeId').then((cid) => {
+      if (cid) {
+        storesApi.getColleges().then(colleges => {
+          const c = colleges.find(x => x.id === cid || x._id === cid);
+          if (c) {
+            setCollegeDetails(c);
+            if (c.blocks && c.blocks.length > 0) {
+              setSelectedBlock(c.blocks[0]);
+            }
+          }
+        }).catch(() => {});
+      }
+    });
   }, []);
 
   const handleApplyCoupon = async () => {
@@ -74,27 +93,40 @@ const CheckoutScreen = () => {
   const discount = appliedCoupon ? Math.round((cartTotal * appliedCoupon.discount_percent) / 100) : 0;
 
   // Compute all fees against the subtotal (after discount)
-  const computedFees = allFees.map(f => ({
+  let computedFees = allFees.map(f => ({
     name: f.name,
     type: f.type,
     amount: f.type === 'percent'
       ? Math.round((cartTotal * Number(f.value)) / 100)
       : Number(f.value),
   }));
+
+  if (collegeDetails?.blocks && collegeDetails.blocks.length > 0 && selectedBlock) {
+    const delFeeIndex = computedFees.findIndex(f => f.name.toLowerCase().includes('delivery'));
+    if (delFeeIndex !== -1) {
+      computedFees[delFeeIndex].amount = selectedBlock.deliveryFee || 0;
+    } else {
+      computedFees.push({ name: 'Block Delivery Fee', type: 'flat', amount: selectedBlock.deliveryFee || 0 });
+    }
+  }
+
   const totalFeesAmount = computedFees.reduce((s, f) => s + f.amount, 0);
   const totalToPay = Math.max(0, cartTotal + totalFeesAmount - discount);
 
-  // Legacy: deliveryFee used for the payment API call (backend will recalculate authoritatively)
-  const legacyDeliveryFee = allFees.find(f => f.name?.toLowerCase().includes('delivery'))
-    ? (allFees.find(f => f.name?.toLowerCase().includes('delivery'))!.type === 'percent'
-      ? Math.round((cartTotal * Number(allFees.find(f => f.name?.toLowerCase().includes('delivery'))!.value)) / 100)
-      : Number(allFees.find(f => f.name?.toLowerCase().includes('delivery'))!.value))
-    : deliveryFee;
+  const legacyDeliveryFee = computedFees.find(f => f.name?.toLowerCase().includes('delivery'))?.amount || deliveryFee;
 
   const startPayment = async () => {
-    if (!address.trim()) {
-      Alert.alert('Address Required', 'Please enter your delivery address.');
-      return;
+    const hasBlocks = collegeDetails?.blocks && collegeDetails.blocks.length > 0;
+    if (hasBlocks) {
+      if (!roomDetails.trim()) {
+        Alert.alert('Address Required', 'Please enter your Room / Floor details.');
+        return;
+      }
+    } else {
+      if (!address.trim()) {
+        Alert.alert('Address Required', 'Please enter your delivery address.');
+        return;
+      }
     }
     setProcessing(true);
 
@@ -115,8 +147,8 @@ const CheckoutScreen = () => {
         })),
         storeId: storeId!,
         storeName: storeName!,
-        address: address.trim(),
-        deliveryAddress: address.trim(),
+        address: hasBlocks ? `${selectedBlock?.name || ''}, ${roomDetails.trim()}` : address.trim(),
+        deliveryAddress: hasBlocks ? `${selectedBlock?.name || ''}, ${roomDetails.trim()}` : address.trim(),
         deliveryFee: legacyDeliveryFee,
         coupon_code: appliedCoupon?.code,
         couponCode: appliedCoupon?.code,
@@ -391,19 +423,57 @@ const CheckoutScreen = () => {
         {/* Delivery Address */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Delivery Address</Text>
-          <View style={styles.inputWrapper}>
-            <Text style={{ fontSize: 18, marginRight: 8 }}>📍</Text>
-            <TextInput
-              style={styles.input}
-              value={address}
-              onChangeText={(txt) => {
-                setAddress(txt);
-                AsyncStorage.setItem('userAddress', txt);
-              }}
-              placeholder="Hostel / Room details"
-              placeholderTextColor={colors.textMuted}
-            />
-          </View>
+          
+          {collegeDetails?.blocks && collegeDetails.blocks.length > 0 ? (
+            <>
+              <Text style={{ color: colors.textMuted, fontSize: 13, marginBottom: 8 }}>Select Block / Hostel</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
+                {collegeDetails.blocks.map((b: any, i: number) => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => setSelectedBlock(b)}
+                    style={{
+                      paddingHorizontal: 16, paddingVertical: 10,
+                      borderRadius: radius.md, borderWidth: 1,
+                      borderColor: selectedBlock?.name === b.name ? colors.primary : colors.borderColor,
+                      backgroundColor: selectedBlock?.name === b.name ? 'rgba(255,193,7,0.1)' : colors.bgColor,
+                      marginRight: 8,
+                    }}
+                  >
+                    <Text style={{ color: selectedBlock?.name === b.name ? colors.primary : colors.textMain, fontWeight: '600' }}>
+                      {b.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              
+              <Text style={{ color: colors.textMuted, fontSize: 13, marginBottom: 8 }}>Floor & Room No.</Text>
+              <View style={styles.inputWrapper}>
+                <Text style={{ fontSize: 18, marginRight: 8 }}>🚪</Text>
+                <TextInput
+                  style={styles.input}
+                  value={roomDetails}
+                  onChangeText={setRoomDetails}
+                  placeholder="e.g. 2nd Floor, Room 204"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+            </>
+          ) : (
+            <View style={styles.inputWrapper}>
+              <Text style={{ fontSize: 18, marginRight: 8 }}>📍</Text>
+              <TextInput
+                style={styles.input}
+                value={address}
+                onChangeText={(txt) => {
+                  setAddress(txt);
+                  AsyncStorage.setItem('userAddress', txt);
+                }}
+                placeholder="Hostel / Room details"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+          )}
         </View>
 
         {/* Additional Note */}

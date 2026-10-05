@@ -99,6 +99,7 @@ export interface College {
   location?: string;
   isActive?: boolean;
   active?: boolean;
+  blocks?: { name: string; deliveryFee: number }[];
 }
 
 export interface Banner {
