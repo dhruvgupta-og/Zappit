@@ -542,7 +542,7 @@ const CheckoutScreen = () => {
           {computedFees.map((fee, i) => (
             <View key={i} style={styles.billRow}>
               <Text style={styles.billText}>
-                {fee.name}
+                {fee.name}{fee.type === 'percent' ? ` (${allFees.find(f => f.name === fee.name)?.value}%)` : ''}
               </Text>
               <Text style={styles.billText}>₹{fee.amount}</Text>
             </View>
