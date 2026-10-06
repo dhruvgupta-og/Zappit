@@ -52,20 +52,19 @@ const CheckoutScreen = () => {
     paymentApi.getDeliveryFee().then(setDeliveryFee).catch(() => setDeliveryFee(0));
     paymentApi.getAllFees().then(setAllFees).catch(() => setAllFees([]));
 
-    AsyncStorage.getItem('userCollegeId').then((cid) => {
-      if (cid) {
-        storesApi.getColleges().then(colleges => {
-          const c = colleges.find(x => x.id === cid || x._id === cid);
-          if (c) {
-            setCollegeDetails(c);
-            if (c.blocks && c.blocks.length > 0) {
-              setSelectedBlock(c.blocks[0]);
-            }
+    const cid = profile?.college_id;
+    if (cid) {
+      storesApi.getColleges().then(colleges => {
+        const c = colleges.find(x => x.id === cid || x._id === cid);
+        if (c) {
+          setCollegeDetails(c);
+          if (c.blocks && c.blocks.length > 0) {
+            setSelectedBlock(c.blocks[0]);
           }
-        }).catch(() => {});
-      }
-    });
-  }, []);
+        }
+      }).catch(() => {});
+    }
+  }, [profile?.college_id]);
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
@@ -126,7 +125,7 @@ const CheckoutScreen = () => {
     setProcessing(true);
 
     try {
-      const userCollegeId = (await AsyncStorage.getItem('userCollegeId')) || '';
+      const userCollegeId = profile?.college_id || '';
 
       // 1. Create order on backend
       const res = await paymentApi.createOrder({
