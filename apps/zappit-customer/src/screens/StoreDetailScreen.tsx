@@ -102,7 +102,11 @@ const StoreDetailScreen = () => {
       >
         {/* Cover Image */}
         <View style={styles.coverContainer}>
-          <Image source={{ uri: store.image }} style={styles.coverImage} />
+          <Image 
+            source={{ uri: store.image || 'https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=400&auto=format&fit=crop' }} 
+            style={styles.coverImage} 
+            resizeMode="cover"
+          />
           <View style={[styles.headerOverlay, { paddingTop: Math.max(insets.top, 16) }]}>
             <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
               <Text style={{ fontSize: 18, color: '#fff' }}>←</Text>

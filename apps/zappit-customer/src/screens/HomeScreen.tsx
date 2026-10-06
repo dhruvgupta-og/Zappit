@@ -130,7 +130,11 @@ const HomeScreen = ({ navigation }: any) => {
       activeOpacity={0.85}
     >
       <View style={styles.storeImageContainer}>
-        <Image source={{ uri: store.image }} style={styles.storeImage} />
+        <Image
+          source={{ uri: store.image || 'https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=400&auto=format&fit=crop' }}
+          style={styles.storeImage}
+          resizeMode="cover"
+        />
         {!store.is_open && (
           <View style={styles.closedOverlay}>
             <Text style={styles.closedText}>CLOSED</Text>
