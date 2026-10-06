@@ -107,9 +107,7 @@ const CartScreen = () => {
           
           {computedFees.map((fee, i) => (
             <View key={i} style={[styles.billRow, { marginBottom: 8 }]}>
-              <Text style={styles.billText}>
-                {fee.name}{fee.type === 'percent' ? ` (${allFees[i]?.value}%)` : ''}
-              </Text>
+              <Text style={styles.billText}>{fee.name}</Text>
               <Text style={styles.billText}>₹{fee.amount}</Text>
             </View>
           ))}
