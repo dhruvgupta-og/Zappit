@@ -101,13 +101,8 @@ const CheckoutScreen = () => {
       : Number(f.value),
   }));
 
-  if (collegeDetails?.blocks && collegeDetails.blocks.length > 0 && selectedBlock) {
-    const delFeeIndex = computedFees.findIndex(f => f.name.toLowerCase().includes('delivery'));
-    if (delFeeIndex !== -1) {
-      computedFees[delFeeIndex].amount = selectedBlock.deliveryFee || 0;
-    } else {
-      computedFees.push({ name: 'Block Delivery Fee', type: 'flat', amount: selectedBlock.deliveryFee || 0 });
-    }
+  if (collegeDetails?.blocks && collegeDetails.blocks.length > 0 && selectedBlock && (selectedBlock.deliveryFee || 0) > 0) {
+    computedFees.push({ name: `Block Fee (${selectedBlock.name})`, type: 'flat', amount: selectedBlock.deliveryFee || 0 });
   }
 
   const totalFeesAmount = computedFees.reduce((s, f) => s + f.amount, 0);
