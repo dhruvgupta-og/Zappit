@@ -225,7 +225,7 @@ const StoreDetailScreen = () => {
         <View style={[styles.cartFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <TouchableOpacity
             style={styles.cartBtn}
-            onPress={() => navigation.navigate('Cart')}
+            onPress={() => navigation.navigate('Main', { screen: 'Cart' } as any)}
             activeOpacity={0.9}
           >
             <View>

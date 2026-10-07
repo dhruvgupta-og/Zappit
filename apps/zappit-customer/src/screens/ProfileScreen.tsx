@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
+import { useCartStore } from '../store/cartStore';
 import { usersApi } from '../api/users';
 import { storesApi } from '../api/stores';
 import { College } from '../types';
@@ -10,6 +11,7 @@ import { typography, spacing, radius } from '../theme/typography';
 
 const ProfileScreen = () => {
   const { profile, setProfile, logout, firebaseUser } = useAuthStore();
+  const clearCart = useCartStore((state) => state.clearCart);
 
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(profile?.name || '');
@@ -36,10 +38,14 @@ const ProfileScreen = () => {
     try {
       const selectedCollege = colleges.find((c) => (c.id || c._id) === collegeId);
       const collegeName = selectedCollege?.name || college;
+      const collegeChanged = collegeId !== profile.college_id;
       await usersApi.updateProfile(firebaseUser.uid, { ...profile, uid: firebaseUser.uid, email: firebaseUser.email, name, phone, college_name: collegeName, college_id: collegeId });
       setProfile({ ...profile, name, phone, college_name: collegeName, college_id: collegeId });
+      if (collegeChanged) {
+        clearCart();
+      }
       setIsEditing(false);
-      Alert.alert('Success', 'Profile updated successfully!');
+      Alert.alert('Success', collegeChanged ? 'Profile updated! Cart cleared since you changed college.' : 'Profile updated successfully!');
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Could not update profile');
     } finally {
