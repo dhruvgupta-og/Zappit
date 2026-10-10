@@ -4,6 +4,8 @@ import {
   ActivityIndicator, TextInput, Alert, Switch, Modal, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { ordersApi } from '../api/orders';
 import { storesApi } from '../api/stores';
 import { menuApi } from '../api/menu';
@@ -207,6 +209,37 @@ const StoreDashboardScreen = () => {
   const topDishes = Object.entries(dishStats).sort((a: any, b: any) => b[1].count - a[1].count).slice(0, 10);
 
   // ── Actions ──
+  const exportToExcel = async () => {
+    try {
+      const headerString = 'Order ID,Date,Status,Items,Subtotal\n';
+      const rowString = analyticsOrders.map(order => {
+        const orderId = order.id || order._id || '';
+        const dateStr = getDateObj(order.created_at).toLocaleString();
+        const status = order.order_status || '';
+        const items = getItems(order.items).map((item: any) => `${item.qty || item.quantity || 1}x ${item.name || 'Item'}`).join(' | ').replace(/"/g, '""');
+        const subtotal = getOrderSubtotal(order);
+        return `${orderId},"${dateStr}",${status},"${items}",${subtotal}`;
+      }).join('\n');
+
+      const csvString = `${headerString}${rowString}`;
+      
+      const fileUri = FileSystem.documentDirectory + 'store_earnings.csv';
+      await FileSystem.writeAsStringAsync(fileUri, csvString, { encoding: FileSystem.EncodingType.UTF8 });
+      
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Export Earnings',
+        });
+      } else {
+        Alert.alert('Error', 'Sharing is not available on this device');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      Alert.alert('Error', 'Failed to export data');
+    }
+  };
+
   const toggleStoreStatus = async () => {
     if (!staffStoreId) return;
     const newStatus = !isOpen;
@@ -543,6 +576,10 @@ const StoreDashboardScreen = () => {
               </TouchableOpacity>
             ))}
           </ScrollView>
+
+          <TouchableOpacity onPress={exportToExcel} style={{ backgroundColor: colors.storeAccent, padding: 12, borderRadius: radius.md, marginBottom: spacing.md, alignItems: 'center' }}>
+            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>📊 Export Earnings to Excel</Text>
+          </TouchableOpacity>
 
           <View style={styles.analyticsCard}>
             <Text style={styles.analyticsTitle}>📊 Summary</Text>

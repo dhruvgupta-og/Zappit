@@ -4,6 +4,8 @@ import {
   ActivityIndicator, TextInput, Alert, Modal, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { ordersApi } from '../api/orders';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
@@ -95,6 +97,36 @@ const DeliveryDashboardScreen = () => {
       setOtpInput('');
     } else {
       updateOrderStatus(order.id || order._id, 'delivered');
+    }
+  };
+
+  const exportToExcel = async () => {
+    try {
+      const headerString = 'Order ID,Date,Status,Store\n';
+      const rowString = completedOrders.map(order => {
+        const orderId = order.id || order._id || '';
+        const dateStr = getDateObj(order.created_at).toLocaleString();
+        const status = order.order_status || '';
+        const storeName = (order.store_name || 'Store').replace(/"/g, '""');
+        return `${orderId},"${dateStr}",${status},"${storeName}"`;
+      }).join('\n');
+
+      const csvString = `${headerString}${rowString}`;
+      
+      const fileUri = FileSystem.documentDirectory + 'delivery_earnings.csv';
+      await FileSystem.writeAsStringAsync(fileUri, csvString, { encoding: FileSystem.EncodingType.UTF8 });
+      
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Export Completed Orders',
+        });
+      } else {
+        Alert.alert('Error', 'Sharing is not available on this device');
+      }
+    } catch (error) {
+      console.error('Export error:', error);
+      Alert.alert('Error', 'Failed to export data');
     }
   };
 
@@ -221,6 +253,12 @@ const DeliveryDashboardScreen = () => {
           </TouchableOpacity>
         ))}
       </View>
+
+      {activeTab === 'completed' && completedOrders.length > 0 && (
+        <TouchableOpacity onPress={exportToExcel} style={{ backgroundColor: colors.deliveryAccent, padding: 12, borderRadius: radius.md, marginHorizontal: spacing.lg, marginBottom: spacing.sm, alignItems: 'center' }}>
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>📊 Export Orders to Excel</Text>
+        </TouchableOpacity>
+      )}
 
       {/* List */}
       <FlatList
