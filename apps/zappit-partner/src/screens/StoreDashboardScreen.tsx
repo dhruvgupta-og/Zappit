@@ -4,8 +4,6 @@ import {
   ActivityIndicator, TextInput, Alert, Switch, Modal, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import { ordersApi } from '../api/orders';
 import { storesApi } from '../api/stores';
 import { menuApi } from '../api/menu';
@@ -223,16 +221,31 @@ const StoreDashboardScreen = () => {
 
       const csvString = `${headerString}${rowString}`;
       
-      const fileUri = FileSystem.documentDirectory + 'store_earnings.csv';
-      await FileSystem.writeAsStringAsync(fileUri, csvString, { encoding: FileSystem.EncodingType.UTF8 });
-      
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Export Earnings',
+      let shared = false;
+      try {
+        const FileSystem = require('expo-file-system');
+        const Sharing = require('expo-sharing');
+        if (FileSystem?.documentDirectory && Sharing?.shareAsync) {
+          const fileUri = FileSystem.documentDirectory + 'store_earnings.csv';
+          await FileSystem.writeAsStringAsync(fileUri, csvString, { encoding: FileSystem.EncodingType.UTF8 });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(fileUri, {
+              mimeType: 'text/csv',
+              dialogTitle: 'Export Earnings',
+            });
+            shared = true;
+          }
+        }
+      } catch (nativeErr) {
+        console.log('Native FileSystem/Sharing not available, falling back to Share:', nativeErr);
+      }
+
+      if (!shared) {
+        const { Share } = require('react-native');
+        await Share.share({
+          title: 'Store Earnings (CSV)',
+          message: csvString,
         });
-      } else {
-        Alert.alert('Error', 'Sharing is not available on this device');
       }
     } catch (error) {
       console.error('Export error:', error);

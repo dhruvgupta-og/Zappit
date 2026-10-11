@@ -4,8 +4,6 @@ import {
   ActivityIndicator, TextInput, Alert, Modal, RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 import { ordersApi } from '../api/orders';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
@@ -113,16 +111,31 @@ const DeliveryDashboardScreen = () => {
 
       const csvString = `${headerString}${rowString}`;
       
-      const fileUri = FileSystem.documentDirectory + 'delivery_earnings.csv';
-      await FileSystem.writeAsStringAsync(fileUri, csvString, { encoding: FileSystem.EncodingType.UTF8 });
-      
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Export Completed Orders',
+      let shared = false;
+      try {
+        const FileSystem = require('expo-file-system');
+        const Sharing = require('expo-sharing');
+        if (FileSystem?.documentDirectory && Sharing?.shareAsync) {
+          const fileUri = FileSystem.documentDirectory + 'delivery_earnings.csv';
+          await FileSystem.writeAsStringAsync(fileUri, csvString, { encoding: FileSystem.EncodingType.UTF8 });
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(fileUri, {
+              mimeType: 'text/csv',
+              dialogTitle: 'Export Completed Orders',
+            });
+            shared = true;
+          }
+        }
+      } catch (nativeErr) {
+        console.log('Native FileSystem/Sharing not available, falling back to Share:', nativeErr);
+      }
+
+      if (!shared) {
+        const { Share } = require('react-native');
+        await Share.share({
+          title: 'Delivery Orders (CSV)',
+          message: csvString,
         });
-      } else {
-        Alert.alert('Error', 'Sharing is not available on this device');
       }
     } catch (error) {
       console.error('Export error:', error);
