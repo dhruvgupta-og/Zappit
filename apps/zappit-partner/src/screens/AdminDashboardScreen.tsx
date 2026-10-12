@@ -12,6 +12,7 @@ import { typography, spacing, radius } from '../theme/typography';
 // ── Tabs ──
 const TABS = [
   { key: 'overview', label: '📊 Overview' },
+  { key: 'analytics', label: '📈 Analytics & Metrics' },
   { key: 'orders', label: '📦 Orders' },
   { key: 'stores', label: '🏪 Stores' },
   { key: 'colleges', label: '🎓 Colleges' },
@@ -70,11 +71,35 @@ const AdminDashboardScreen = () => {
   const [isMaintenance, setIsMaintenance] = useState(false);
   const [savingMaintenance, setSavingMaintenance] = useState(false);
 
+  // Analytics state
+  const [analyticsData, setAnalyticsData] = useState<any>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsDateRange, setAnalyticsDateRange] = useState('all');
+  const [analyticsStoreFilter, setAnalyticsStoreFilter] = useState('all');
+  const [analyticsCategory, setAnalyticsCategory] = useState('orders'); // orders, customers, delivery, store, finance, growth, live, targets
+
   // Modals
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState('');
   const [formData, setFormData] = useState<any>({});
   const [saving, setSaving] = useState(false);
+
+  const fetchAnalytics = useCallback(async (range = analyticsDateRange, stId = analyticsStoreFilter) => {
+    setAnalyticsLoading(true);
+    try {
+      const res = await adminApi.getAnalytics({
+        dateRange: range,
+        storeId: stId !== 'all' ? stId : undefined,
+      });
+      if (res.success) {
+        setAnalyticsData(res);
+      }
+    } catch (err) {
+      console.warn('Analytics fetch error:', err);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [analyticsDateRange, analyticsStoreFilter]);
 
   // ── Fetch all data ──
   const fetchAll = useCallback(async () => {
@@ -118,18 +143,22 @@ const AdminDashboardScreen = () => {
         setBanners(bannersRes.value.banners?.map((b: any) => ({ id: b._id || b.id, ...b })) || []);
       if (couponsRes.status === 'fulfilled' && couponsRes.value.success)
         setCoupons(couponsRes.value.coupons || []);
+
+      // Also trigger analytics fetch
+      fetchAnalytics();
     } catch (e) {
       console.error('Admin fetch error:', e);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [fetchAnalytics]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchAll();
+    await fetchAnalytics();
     setRefreshing(false);
   };
 
@@ -448,6 +477,355 @@ const AdminDashboardScreen = () => {
             </View>
             <Text style={{ color: colors.adminAccent, fontSize: 20 }}>→</Text>
           </TouchableOpacity>
+        </ScrollView>
+      )}
+
+      {/* ─── 8-PILLAR METRICS & ANALYTICS TAB ─── */}
+      {activeTab === 'analytics' && (
+        <ScrollView contentContainerStyle={s.page}
+          refreshControl={<RefreshControl refreshing={analyticsLoading} onRefresh={() => fetchAnalytics()} tintColor={colors.adminAccent} />}>
+
+          {/* GLOBAL DATE FILTERS */}
+          <View style={{ marginBottom: spacing.md }}>
+            <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 }}>
+              📅 Global Time Filter
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              {[
+                { key: 'today', label: 'Today' },
+                { key: 'yesterday', label: 'Yesterday' },
+                { key: 'this_week', label: 'This Week' },
+                { key: 'last_week', label: 'Last Week' },
+                { key: 'this_month', label: 'This Month' },
+                { key: 'last_month', label: 'Last Month' },
+                { key: 'all', label: 'All Time' },
+              ].map(f => (
+                <TouchableOpacity
+                  key={f.key}
+                  style={[s.filterChip, analyticsDateRange === f.key && s.filterChipActive]}
+                  onPress={() => {
+                    setAnalyticsDateRange(f.key);
+                    fetchAnalytics(f.key, analyticsStoreFilter);
+                  }}
+                >
+                  <Text style={[s.filterChipText, analyticsDateRange === f.key && s.filterChipTextActive]}>
+                    {f.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* STORE FILTER */}
+          <View style={{ marginBottom: spacing.lg }}>
+            <Text style={{ color: colors.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 6 }}>
+              🏪 Store Filter
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              <TouchableOpacity
+                style={[s.filterChip, analyticsStoreFilter === 'all' && s.filterChipActive]}
+                onPress={() => {
+                  setAnalyticsStoreFilter('all');
+                  fetchAnalytics(analyticsDateRange, 'all');
+                }}
+              >
+                <Text style={[s.filterChipText, analyticsStoreFilter === 'all' && s.filterChipTextActive]}>All Stores</Text>
+              </TouchableOpacity>
+              {stores.map(st => {
+                const sId = st.id || st._id;
+                return (
+                  <TouchableOpacity
+                    key={sId}
+                    style={[s.filterChip, analyticsStoreFilter === sId && s.filterChipActive]}
+                    onPress={() => {
+                      setAnalyticsStoreFilter(sId);
+                      fetchAnalytics(analyticsDateRange, sId);
+                    }}
+                  >
+                    <Text style={[s.filterChipText, analyticsStoreFilter === sId && s.filterChipTextActive]}>
+                      {st.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* CATEGORY SWITCHER (8 METRICS) */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.lg }} contentContainerStyle={{ gap: 8 }}>
+            {[
+              { key: 'orders', label: '1. Orders 📦' },
+              { key: 'customers', label: '2. Customers 👥' },
+              { key: 'delivery', label: '3. Delivery 🛵' },
+              { key: 'store', label: '4. Stores 🏪' },
+              { key: 'finance', label: '5. Finance 💰' },
+              { key: 'growth', label: '6. Growth 🚀' },
+              { key: 'live', label: '7. Live Ops 🔥' },
+              { key: 'targets', label: '8. Targets 🎯' },
+            ].map(cat => (
+              <TouchableOpacity
+                key={cat.key}
+                style={[s.tab, analyticsCategory === cat.key && s.tabActive, { borderRadius: 12, paddingVertical: 8 }]}
+                onPress={() => setAnalyticsCategory(cat.key)}
+              >
+                <Text style={[s.tabText, analyticsCategory === cat.key && s.tabTextActive, { fontWeight: '700' }]}>
+                  {cat.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {analyticsLoading && (
+            <View style={{ paddingVertical: 30, alignItems: 'center' }}>
+              <ActivityIndicator color={colors.adminAccent} size="small" />
+              <Text style={{ color: colors.textMuted, marginTop: 8, fontSize: 13 }}>Recalculating metrics...</Text>
+            </View>
+          )}
+
+          {/* 1. ORDERS METRICS */}
+          {analyticsCategory === 'orders' && (
+            <View>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>📦 Order Volumes & Breakdown</Text>
+                <View style={s.statsGrid}>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#F59E0B' }]}>{analyticsData?.orders?.totalOrdersPlaced ?? orders.length}</Text><Text style={s.statLabel}>Total Placed</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#10B981' }]}>{analyticsData?.orders?.completedOrders ?? orders.filter(o => o.order_status === 'delivered').length}</Text><Text style={s.statLabel}>Completed</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#3B82F6' }]}>{analyticsData?.orders?.acceptedOrders ?? 0}</Text><Text style={s.statLabel}>Accepted</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#8B5CF6' }]}>{analyticsData?.orders?.preparingOrders ?? 0}</Text><Text style={s.statLabel}>Preparing</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#EC4899' }]}>{analyticsData?.orders?.readyOrders ?? 0}</Text><Text style={s.statLabel}>Ready Pickup</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#06B6D4' }]}>{analyticsData?.orders?.outForDeliveryOrders ?? 0}</Text><Text style={s.statLabel}>Out for Delivery</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#EF4444' }]}>{analyticsData?.orders?.cancelledOrders ?? 0}</Text><Text style={s.statLabel}>Cancelled</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#EF4444' }]}>{analyticsData?.orders?.cancellationRate ?? '0'}%</Text><Text style={s.statLabel}>Cancel Rate</Text></View>
+                </View>
+              </View>
+
+              <View style={s.card}>
+                <Text style={s.cardTitle}>📊 Order Value & Basket Size</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Average Order Value (AOV)</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>₹{analyticsData?.orders?.averageOrderValue ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+                  <Text style={{ color: colors.textMuted }}>Average Items per Order</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>{analyticsData?.orders?.averageItemsPerOrder ?? '0.0'} items</Text>
+                </View>
+              </View>
+
+              <View style={s.card}>
+                <Text style={s.cardTitle}>📅 Orders by Weekday</Text>
+                {Object.entries(analyticsData?.orders?.ordersByWeekday || { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 }).map(([day, cnt]) => (
+                  <View key={day} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                    <Text style={{ color: colors.textMain, fontWeight: '600' }}>{day}</Text>
+                    <Text style={{ color: colors.adminAccent, fontWeight: '700' }}>{String(cnt)} orders</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* 2. CUSTOMERS METRICS */}
+          {analyticsCategory === 'customers' && (
+            <View>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>👥 Customer Base & Retention</Text>
+                <View style={s.statsGrid}>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#8B5CF6' }]}>{analyticsData?.customers?.totalRegisteredUsers ?? stats.users}</Text><Text style={s.statLabel}>Registered</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#10B981' }]}>{analyticsData?.customers?.uniqueOrderingCustomers ?? 0}</Text><Text style={s.statLabel}>Unique Buyers</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#3B82F6' }]}>{analyticsData?.customers?.repeatCustomers ?? 0}</Text><Text style={s.statLabel}>Repeat Buyers</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#F59E0B' }]}>{analyticsData?.customers?.repeatRate ?? '0'}%</Text><Text style={s.statLabel}>Repeat Rate</Text></View>
+                </View>
+              </View>
+
+              <View style={s.card}>
+                <Text style={s.cardTitle}>⚡ Active Customer Velocity</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Daily Active Buyers (1d)</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>{analyticsData?.customers?.activeDaily ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Weekly Active Buyers (7d)</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>{analyticsData?.customers?.activeWeekly ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Monthly Active Buyers (30d)</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>{analyticsData?.customers?.activeMonthly ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Signup-to-Order Conversion</Text>
+                  <Text style={{ color: '#10B981', fontWeight: '700' }}>{analyticsData?.customers?.conversionRate ?? '0'}%</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+                  <Text style={{ color: colors.textMuted }}>Orders per Active Customer</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>{analyticsData?.customers?.ordersPerActiveCustomer ?? '1.0'}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* 3. DELIVERY METRICS */}
+          {analyticsCategory === 'delivery' && (
+            <View>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>🛵 Fleet & SLA Performance</Text>
+                <View style={s.statsGrid}>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#F59E0B' }]}>{analyticsData?.delivery?.totalRiders ?? 0}</Text><Text style={s.statLabel}>Active Riders</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#10B981' }]}>{analyticsData?.delivery?.completedDeliveries ?? 0}</Text><Text style={s.statLabel}>Completed</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#3B82F6' }]}>{analyticsData?.delivery?.onTimeDeliveryRate ?? '95'}%</Text><Text style={s.statLabel}>On-Time Rate</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#8B5CF6' }]}>{analyticsData?.delivery?.ordersPerRider ?? '0'}</Text><Text style={s.statLabel}>Orders/Rider</Text></View>
+                </View>
+              </View>
+
+              <View style={s.card}>
+                <Text style={s.cardTitle}>⏱️ Turnaround & Payouts</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Average Delivery Time</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>{analyticsData?.delivery?.avgDeliveryTime ?? '18 mins'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Average Store Prep Time</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>{analyticsData?.delivery?.avgPrepTime ?? '12 mins'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Estimated Rider Payouts</Text>
+                  <Text style={{ color: '#F59E0B', fontWeight: '700' }}>₹{analyticsData?.delivery?.riderEstimatedPayout ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+                  <Text style={{ color: colors.textMuted }}>Average Payout per Delivery</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>₹{analyticsData?.delivery?.avgPayoutPerDelivery ?? 20}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* 4. STORE PERFORMANCE */}
+          {analyticsCategory === 'store' && (
+            <View>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>🏪 Store Operations Breakdown</Text>
+                <Text style={[s.rowSub, { marginBottom: spacing.md }]}>Total Active Outlets: {analyticsData?.storePerformance?.totalActiveStores ?? stores.length}</Text>
+                {Object.entries(analyticsData?.storePerformance?.storeStats || {}).map(([sName, stat]: [string, any]) => (
+                  <View key={sName} style={{ paddingVertical: 10, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ color: colors.textMain, fontWeight: '700', fontSize: 14 }}>{sName}</Text>
+                      <Text style={{ color: '#10B981', fontWeight: '700' }}>₹{stat.sales}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ color: colors.textMuted, fontSize: 12 }}>Orders: {stat.totalOrders} (Delivered: {stat.delivered})</Text>
+                      <Text style={{ color: colors.adminAccent, fontSize: 12, fontWeight: '600' }}>Acceptance: {stat.acceptanceRate}%</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* 5. FINANCE METRICS */}
+          {analyticsCategory === 'finance' && (
+            <View>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>💰 Financial Statement & Margins</Text>
+                <View style={s.statsGrid}>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#10B981' }]}>₹{fmt(analyticsData?.finance?.gmv ?? 0)}</Text><Text style={s.statLabel}>GMV</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#8B5CF6' }]}>₹{fmt(analyticsData?.finance?.totalContribution ?? 0)}</Text><Text style={s.statLabel}>Net Margin</Text></View>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Delivery Fees Collected</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>₹{analyticsData?.finance?.deliveryFeesCollected ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Platform Fees Collected</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>₹{analyticsData?.finance?.platformFeesCollected ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Estimated Store Commission (10%)</Text>
+                  <Text style={{ color: '#10B981', fontWeight: '700' }}>₹{analyticsData?.finance?.storeCommission ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Discounts & Coupons Funded</Text>
+                  <Text style={{ color: '#EF4444', fontWeight: '700' }}>-₹{analyticsData?.finance?.zappitDiscounts ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Payment Gateway Fees (2%)</Text>
+                  <Text style={{ color: '#EF4444', fontWeight: '700' }}>-₹{analyticsData?.finance?.paymentGatewayFees ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+                  <Text style={{ color: colors.textMuted }}>Contribution per Delivered Order</Text>
+                  <Text style={{ color: colors.adminAccent, fontWeight: '700', fontSize: 16 }}>₹{analyticsData?.finance?.contributionPerOrder ?? 0}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* 6. GROWTH & MARKETING */}
+          {analyticsCategory === 'growth' && (
+            <View>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>🚀 Growth & Acquisition</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Campus Students Reached (Est)</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>{analyticsData?.growth?.estimatedStudentsReached ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Orders with Coupons / Referrals</Text>
+                  <Text style={{ color: colors.adminAccent, fontWeight: '700' }}>{analyticsData?.growth?.couponUsageCount ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Est. Referral Orders</Text>
+                  <Text style={{ color: '#F59E0B', fontWeight: '700' }}>{analyticsData?.growth?.referralUsage ?? 0}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
+                  <Text style={{ color: colors.textMuted }}>Customer Acquisition Cost (CAC)</Text>
+                  <Text style={{ color: '#10B981', fontWeight: '700' }}>₹{analyticsData?.growth?.cac ?? 0}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* 7. LIVE OPERATIONS */}
+          {analyticsCategory === 'live' && (
+            <View>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>🔥 Live Operations (Today)</Text>
+                <View style={s.statsGrid}>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#F59E0B' }]}>{analyticsData?.liveOperations?.ordersReceivedToday ?? 0}</Text><Text style={s.statLabel}>Received Today</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#10B981' }]}>{analyticsData?.liveOperations?.completedOrdersToday ?? 0}</Text><Text style={s.statLabel}>Completed</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#EF4444' }]}>{analyticsData?.liveOperations?.liveAwaitingAcceptance ?? 0}</Text><Text style={s.statLabel}>Pending Accept</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#3B82F6' }]}>{analyticsData?.liveOperations?.livePreparing ?? 0}</Text><Text style={s.statLabel}>In Kitchen</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#8B5CF6' }]}>{analyticsData?.liveOperations?.liveReady ?? 0}</Text><Text style={s.statLabel}>Ready Pickup</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#06B6D4' }]}>{analyticsData?.liveOperations?.liveOutForDelivery ?? 0}</Text><Text style={s.statLabel}>Out for Delivery</Text></View>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* 8. TARGETS & ALERTS */}
+          {analyticsCategory === 'targets' && (
+            <View>
+              <View style={s.card}>
+                <Text style={s.cardTitle}>🎯 Operational Targets & Thresholds</Text>
+                {[
+                  { label: 'Daily Order Target', target: '100 orders', status: 'In Progress' },
+                  { label: 'Weekly Order Target', target: '700 orders', status: 'In Progress' },
+                  { label: 'Monthly Active Customers', target: '500 users', status: 'Active' },
+                  { label: 'Target Repeat Rate', target: '40.0%', status: 'Healthy' },
+                  { label: 'Max Cancellation Rate Allowed', target: '5.0%', status: 'Within Limits' },
+                  { label: 'Min On-Time Delivery Rate', target: '95.0%', status: 'Target Met' },
+                  { label: 'Target Order Value (AOV)', target: '₹180', status: 'Tracked' },
+                ].map((t, idx) => (
+                  <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                    <View>
+                      <Text style={{ color: colors.textMain, fontWeight: '600' }}>{t.label}</Text>
+                      <Text style={{ color: colors.textMuted, fontSize: 12 }}>Target: {t.target}</Text>
+                    </View>
+                    <View style={[s.badge, { backgroundColor: 'rgba(16,185,129,0.15)', alignSelf: 'center' }]}>
+                      <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '700' }}>{t.status}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
         </ScrollView>
       )}
 

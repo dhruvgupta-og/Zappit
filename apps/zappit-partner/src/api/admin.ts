@@ -1,6 +1,12 @@
 import { apiClient } from './client';
 
 export const adminApi = {
+  // Analytics with all 8 metric suites & filters
+  getAnalytics: async (params: any = {}) => {
+    const res = await apiClient.get('/api/admin/analytics', { params });
+    return res.data;
+  },
+
   // Stats
   getDashboardStats: async () => {
     const res = await apiClient.get('/api/admin/dashboard-stats');
