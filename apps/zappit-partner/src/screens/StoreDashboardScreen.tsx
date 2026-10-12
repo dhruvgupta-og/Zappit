@@ -12,6 +12,8 @@ import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order, MenuItem } from '../types';
 import { playOrderAlert } from '../utils/notifications';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 // ── Constants ──
 const ORDER_SUB_TABS = [
@@ -210,48 +212,45 @@ const StoreDashboardScreen = () => {
 
   // ── Actions ──
   const exportToExcel = async () => {
+    if (analyticsOrders.length === 0) {
+      Alert.alert('No Data', 'There are no orders to export for the selected period.');
+      return;
+    }
     try {
       const headerString = 'Order ID,Date,Status,Items,Subtotal\n';
       const rowString = analyticsOrders.map(order => {
         const orderId = order.id || order._id || '';
         const dateStr = getDateObj(order.created_at).toLocaleString();
         const status = order.order_status || '';
-        const items = getItems(order.items).map((item: any) => `${item.qty || item.quantity || 1}x ${item.name || 'Item'}`).join(' | ').replace(/"/g, '""');
+        const items = getItems(order.items)
+          .map((item: any) => `${item.qty || item.quantity || 1}x ${item.name || 'Item'}`)
+          .join(' | ')
+          .replace(/"/g, '""');
         const subtotal = getOrderSubtotal(order);
-        return `${orderId},"${dateStr}",${status},"${items}",${subtotal}`;
+        return `"${orderId}","${dateStr}","${status}","${items}","${subtotal}"`;
       }).join('\n');
 
       const csvString = `${headerString}${rowString}`;
-      
-      let shared = false;
-      try {
-        const FileSystem = require('expo-file-system');
-        const Sharing = require('expo-sharing');
-        if (FileSystem?.documentDirectory && Sharing?.shareAsync) {
-          const fileUri = FileSystem.documentDirectory + 'store_earnings.csv';
-          await FileSystem.writeAsStringAsync(fileUri, csvString, { encoding: FileSystem.EncodingType.UTF8 });
-          if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(fileUri, {
-              mimeType: 'text/csv',
-              dialogTitle: 'Export Earnings',
-            });
-            shared = true;
-          }
-        }
-      } catch (nativeErr) {
-        console.log('Native FileSystem/Sharing not available, falling back to Share:', nativeErr);
-      }
+      const fileName = `store_earnings_${Date.now()}.csv`;
+      const fileUri = FileSystem.documentDirectory + fileName;
 
-      if (!shared) {
-        const { Share } = require('react-native');
-        await Share.share({
-          title: 'Store Earnings (CSV)',
-          message: csvString,
+      await FileSystem.writeAsStringAsync(fileUri, csvString, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Save or Share Earnings CSV',
+          UTI: 'public.comma-separated-values-text',
         });
+      } else {
+        Alert.alert('Saved!', `File saved to: ${fileUri}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Export error:', error);
-      Alert.alert('Error', 'Failed to export data');
+      Alert.alert('Export Failed', error?.message || 'Could not export data. Please try again.');
     }
   };
 
