@@ -130,47 +130,115 @@ router.post('/send-status-notification', async (req, res) => {
       return res.status(200).json({ success: false, skipped: true, error: 'No user_id on order — cannot send push' });
     }
 
-    // 2. Fetch user to get fcmToken
+    // 2. Fetch user to check both expoPushToken (Mobile App) and fcmToken (Web)
     const user = await User.findById(userId);
     if (!user) {
       return res.status(200).json({ success: false, skipped: true, error: 'User not found in MongoDB' });
     }
-    const fcmToken = user.fcmToken;
+    const { expoPushToken, fcmToken } = user;
 
-    if (!fcmToken) {
-      return res.status(200).json({ success: false, skipped: true, error: 'User has no FCM token — notifications not enabled on their device' });
+    if (!expoPushToken && !fcmToken) {
+      return res.status(200).json({ success: false, skipped: true, error: 'User has no push token (neither Expo nor FCM)' });
     }
 
-    // 3. Send FCM push notification
-    const message = {
-      token: fcmToken,
-      notification: {
-        title: msg.title,
-        body: msg.body,
-      },
-      webpush: {
-        notification: {
-          icon: 'https://zappit-dun.vercel.app/zappit-icon.png',
-          badge: 'https://zappit-dun.vercel.app/zappit-icon.png',
-          requireInteraction: false,
-        },
-        fcmOptions: {
-          link: 'https://zappit-dun.vercel.app/orders',
-        },
-      },
-      data: {
-        orderId,
-        status,
-        click_action: 'https://zappit-dun.vercel.app/orders',
-      },
-    };
+    let expoSuccess = false;
+    let fcmSuccess = false;
 
-    const response = await admin.messaging().send(message);
-    console.log(`[Zappit FCM] Push sent for order ${orderId} → status: ${status} | FCM response:`, response);
+    // 3. Send Mobile Expo Push Notification if user has expoPushToken
+    if (expoPushToken && expoPushToken.startsWith('ExponentPushToken')) {
+      try {
+        const https = require('https');
+        const expoMessage = [{
+          to: expoPushToken,
+          title: msg.title,
+          body: msg.body,
+          sound: 'default',
+          priority: 'high',
+          channelId: 'default',
+          data: {
+            orderId,
+            status,
+            type: 'order_status',
+          },
+        }];
 
-    return res.status(200).json({ success: true, message: 'Push notification sent', fcmResponse: response });
+        const postData = JSON.stringify(expoMessage);
+        await new Promise((resolve) => {
+          const options = {
+            hostname: 'exp.host',
+            path: '/--/api/v2/push/send',
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'Accept-Encoding': 'gzip, deflate',
+            },
+          };
+          const expoReq = https.request(options, (r) => {
+            let data = '';
+            r.on('data', chunk => data += chunk);
+            r.on('end', () => {
+              console.log(`[Zappit Expo Push] Sent to ${expoPushToken} for order ${orderId}:`, data);
+              expoSuccess = true;
+              resolve(data);
+            });
+          });
+          expoReq.on('error', (e) => {
+            console.warn('[Zappit Expo Push] Send error:', e.message);
+            resolve(null);
+          });
+          expoReq.write(postData);
+          expoReq.end();
+        });
+      } catch (expoErr) {
+        console.error('[Zappit Expo Push] Exception sending notification:', expoErr);
+      }
+    }
+
+    // 4. Send Web FCM Push Notification if user has fcmToken
+    let fcmResponse = null;
+    if (fcmToken) {
+      try {
+        const message = {
+          token: fcmToken,
+          notification: {
+            title: msg.title,
+            body: msg.body,
+          },
+          webpush: {
+            notification: {
+              icon: 'https://zappit-dun.vercel.app/zappit-icon.png',
+              badge: 'https://zappit-dun.vercel.app/zappit-icon.png',
+              requireInteraction: false,
+            },
+            fcmOptions: {
+              link: 'https://zappit-dun.vercel.app/orders',
+            },
+          },
+          data: {
+            orderId,
+            status,
+            click_action: 'https://zappit-dun.vercel.app/orders',
+          },
+        };
+
+        fcmResponse = await admin.messaging().send(message);
+        console.log(`[Zappit FCM] Push sent for order ${orderId} → status: ${status} | FCM response:`, fcmResponse);
+        fcmSuccess = true;
+      } catch (fcmErr) {
+        console.error('[Zappit FCM] FCM send error:', fcmErr);
+      }
+    }
+
+    return res.status(200).json({
+      success: expoSuccess || fcmSuccess,
+      message: 'Push notification processed',
+      expoSent: expoSuccess,
+      fcmSent: fcmSuccess,
+      fcmResponse
+    });
   } catch (err) {
-    console.error('[Zappit FCM] send-status-notification error:', err);
+    console.error('[Zappit Notification] send-status-notification error:', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
