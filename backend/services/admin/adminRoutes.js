@@ -165,23 +165,27 @@ router.get('/analytics', async (req, res) => {
       const storeName = o.store_name || o.store_id || 'Unknown';
       ordersByStoreMap[storeName] = (ordersByStoreMap[storeName] || 0) + 1;
 
-      if (Array.isArray(o.items)) {
+      if (o.order_status !== 'cancelled' && Array.isArray(o.items)) {
         totalItemsCount += o.items.reduce((sum, it) => sum + (Number(it.qty || it.quantity || 1)), 0);
       }
-      if (['delivered', 'paid', 'completed'].includes(o.order_status) || ['paid', 'completed'].includes(o.payment_status)) {
+      if (o.order_status !== 'cancelled' && (['delivered', 'paid', 'completed'].includes(o.order_status) || ['paid', 'completed'].includes(o.payment_status))) {
         totalDeliveredValue += (Number(o.total_amount) || 0);
       }
     });
 
     const averageOrderValue = completedOrders > 0
       ? Math.round(totalDeliveredValue / completedOrders)
-      : (totalOrdersPlaced > 0 ? Math.round(orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0) / totalOrdersPlaced) : 0);
-    const averageItemsPerOrder = totalOrdersPlaced > 0 ? (totalItemsCount / totalOrdersPlaced).toFixed(1) : '0.0';
+      : (orders.filter(o => o.order_status !== 'cancelled').length > 0
+        ? Math.round(orders.filter(o => o.order_status !== 'cancelled').reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0) / orders.filter(o => o.order_status !== 'cancelled').length)
+        : 0);
+    const averageItemsPerOrder = orders.filter(o => o.order_status !== 'cancelled').length > 0
+      ? (totalItemsCount / orders.filter(o => o.order_status !== 'cancelled').length).toFixed(1)
+      : '0.0';
 
     // ── 2. CUSTOMERS METRICS ──
     const totalRegisteredUsers = allUsers.length;
     const userOrderCounts = {};
-    orders.forEach(o => {
+    orders.filter(o => o.order_status !== 'cancelled').forEach(o => {
       if (o.user_id) {
         userOrderCounts[o.user_id] = (userOrderCounts[o.user_id] || 0) + 1;
       }
@@ -203,9 +207,9 @@ router.get('/analytics', async (req, res) => {
     const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-    const activeDaily = new Set(orders.filter(o => new Date(o.created_at) >= oneDayAgo).map(o => o.user_id)).size;
-    const activeWeekly = new Set(orders.filter(o => new Date(o.created_at) >= sevenDaysAgo).map(o => o.user_id)).size;
-    const activeMonthly = new Set(orders.filter(o => new Date(o.created_at) >= thirtyDaysAgo).map(o => o.user_id)).size;
+    const activeDaily = new Set(orders.filter(o => o.order_status !== 'cancelled' && new Date(o.created_at) >= oneDayAgo).map(o => o.user_id)).size;
+    const activeWeekly = new Set(orders.filter(o => o.order_status !== 'cancelled' && new Date(o.created_at) >= sevenDaysAgo).map(o => o.user_id)).size;
+    const activeMonthly = new Set(orders.filter(o => o.order_status !== 'cancelled' && new Date(o.created_at) >= thirtyDaysAgo).map(o => o.user_id)).size;
     const conversionRate = totalRegisteredUsers > 0 ? ((uniqueOrderingCustomers / totalRegisteredUsers) * 100).toFixed(1) : '0.0';
 
     // ── 3. DELIVERY METRICS ──
@@ -224,7 +228,8 @@ router.get('/analytics', async (req, res) => {
       const sOrders = orders.filter(o => (o.store_id || '').toString() === sId);
       const sDelivered = sOrders.filter(o => o.order_status === 'delivered').length;
       const sCancelled = sOrders.filter(o => o.order_status === 'cancelled').length;
-      const sSales = sOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+      // Exclude cancelled orders from store sales
+      const sSales = sOrders.filter(o => o.order_status !== 'cancelled').reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
       storeStats[st.name || sId] = {
         totalOrders: sOrders.length,
         delivered: sDelivered,
@@ -235,11 +240,13 @@ router.get('/analytics', async (req, res) => {
     });
 
     // ── 5. FINANCE METRICS ──
-    const gmv = orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+    // GMV strictly excludes cancelled orders
+    const nonCancelledOrders = orders.filter(o => o.order_status !== 'cancelled');
+    const gmv = nonCancelledOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
     const deliveryFeesCollected = completedOrders * 20;
     const platformFeesCollected = completedOrders * 5;
     const storeCommission = Math.round(gmv * 0.10); // 10% average commission
-    const zappitDiscounts = orders.reduce((sum, o) => sum + (Number(o.discount_amount) || 0), 0);
+    const zappitDiscounts = nonCancelledOrders.reduce((sum, o) => sum + (Number(o.discount_amount) || 0), 0);
     const paymentGatewayFees = Math.round(gmv * 0.02); // 2% gateway fee
     const totalContribution = platformFeesCollected + storeCommission - zappitDiscounts - paymentGatewayFees;
     const contributionPerOrder = completedOrders > 0 ? Math.round(totalContribution / completedOrders) : 0;
