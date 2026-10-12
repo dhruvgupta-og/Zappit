@@ -11,6 +11,7 @@ import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order, MenuItem } from '../types';
+import { playOrderAlert } from '../utils/notifications';
 
 // ── Constants ──
 const ORDER_SUB_TABS = [
@@ -83,6 +84,7 @@ const StoreDashboardScreen = () => {
         // New order notification
         const newCount = filtered.filter((o: any) => o.order_status === 'confirmed').length;
         if (newCount > prevOrderCount.current && prevOrderCount.current !== -1) {
+          playOrderAlert('🚨 NEW ORDER RECEIVED! 🚨', 'A new order has arrived! Open dashboard to accept.');
           Alert.alert('🔔 New Order!', 'A new order has been received.');
         }
         prevOrderCount.current = newCount;

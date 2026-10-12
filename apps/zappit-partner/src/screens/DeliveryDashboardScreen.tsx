@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList,
   ActivityIndicator, TextInput, Alert, Modal, RefreshControl,
@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order } from '../types';
+import { playOrderAlert } from '../utils/notifications';
 
 const TABS = [
   { key: 'new', label: 'To Pick Up' },
@@ -28,11 +29,23 @@ const DeliveryDashboardScreen = () => {
   const [otpInput, setOtpInput] = useState('');
   const [verifyingOtp, setVerifyingOtp] = useState(false);
 
+  const prevPickupCount = useRef(-1);
+
   const fetchOrders = useCallback(async () => {
     try {
       const res = await ordersApi.getOrders();
       if (res.success) {
         setOrders(res.orders);
+
+        // New pickup order alert for delivery partner
+        const pickupOrders = (res.orders || []).filter(
+          (o: any) => o.order_status === 'ready' || o.order_status === 'out_for_delivery'
+        );
+        if (pickupOrders.length > prevPickupCount.current && prevPickupCount.current !== -1) {
+          playOrderAlert('🛵 NEW DELIVERY ORDER READY! 🛵', 'An order is ready for pickup! Check the "To Pick Up" tab.');
+          Alert.alert('🛵 New Order to Pick Up!', 'An order is ready for pickup! Check the "To Pick Up" tab.');
+        }
+        prevPickupCount.current = pickupOrders.length;
       }
     } catch (err) {
       console.error('Failed to fetch delivery orders:', err);

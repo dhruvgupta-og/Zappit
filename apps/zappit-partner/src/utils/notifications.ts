@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import { Platform, Vibration } from 'react-native';
 
 // Configure how notifications appear while the app is in the foreground
 Notifications.setNotificationHandler({
@@ -53,5 +53,64 @@ export const registerForPushNotificationsAsync = async (): Promise<string | null
   });
 
   return tokenData.data;
+};
+
+/**
+ * Triggers an urgent loud sound and persistent vibration alert
+ * for store and delivery dashboards when a new order arrives.
+ */
+export const playOrderAlert = async (title: string, body: string) => {
+  try {
+    // 1. Urgent vibration pattern
+    Vibration.vibrate([0, 600, 250, 600, 250, 800, 250, 1000]);
+
+    // 2. High-priority Android notification channel with sound and max importance
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('order_loud_alert', {
+        name: 'Urgent Order Alerts',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 600, 250, 600, 250, 800, 250, 1000],
+        sound: 'default',
+        enableVibrate: true,
+        enableLights: true,
+        lightColor: '#EF4444',
+        bypassDnd: true,
+        lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      });
+    }
+
+    // 3. Fire high-priority notification with loud sound immediately
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        sound: true,
+        channelId: 'order_loud_alert',
+        priority: Notifications.AndroidNotificationPriority.MAX,
+        vibrate: [0, 600, 250, 600, 250, 800, 250, 1000],
+      },
+      trigger: null,
+    });
+
+    // 4. Follow-up chime ring after 2.2 seconds to ensure it catches attention
+    setTimeout(async () => {
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title,
+            body,
+            sound: true,
+            channelId: 'order_loud_alert',
+            priority: Notifications.AndroidNotificationPriority.MAX,
+          },
+          trigger: null,
+        });
+        Vibration.vibrate([0, 500, 200, 500]);
+      } catch {}
+    }, 2200);
+  } catch (err) {
+    console.warn('[Notifications] Failed to play order alert notification:', err);
+    Vibration.vibrate([0, 800, 300, 800]);
+  }
 };
 
