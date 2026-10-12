@@ -178,50 +178,40 @@ router.post('/send-broadcast-notification', async (req, res) => {
       }
     }
 
-    // Check delivery receipts after a short delay (Expo processes them async)
-    // This tells us if FCM/APNs actually delivered or rejected the message
-    let receiptErrors = [];
-    if (ticketIds.length > 0) {
-      try {
-        await new Promise(r => setTimeout(r, 3000)); // wait 3s for Expo to process
-        const receiptBody = JSON.stringify({ ids: ticketIds.slice(0, 300) });
-        const receiptResult = await new Promise((resolve, reject) => {
-          const options = {
-            hostname: 'exp.host',
-            path: '/--/api/v2/push/getReceipts',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-            },
-          };
-          const r2 = https.request(options, (resp) => {
-            let data = '';
-            resp.on('data', chunk => data += chunk);
-            resp.on('end', () => {
-              try { resolve(JSON.parse(data)); }
-              catch { resolve({ data: {} }); }
-            });
-          });
-          r2.on('error', reject);
-          r2.write(receiptBody);
-          r2.end();
-        });
+    // Also send to web users with fcmToken
+    try {
+      const fcmQuery = { fcmToken: { $exists: true, $ne: null } };
+      if (college_id) fcmQuery.college_id = college_id;
+      const fcmUsers = await User.find(fcmQuery).select('fcmToken');
+      const fcmTokens = fcmUsers.map(u => u.fcmToken).filter(Boolean);
 
-        const receipts = receiptResult.data || {};
-        for (const [id, receipt] of Object.entries(receipts)) {
-          if (receipt.status === 'error') {
-            receiptErrors.push({ id, error: receipt.message, details: receipt.details });
-            console.error(`[Broadcast] Receipt error for ticket ${id}:`, receipt.message, receipt.details);
-          }
+      for (const fToken of fcmTokens) {
+        try {
+          await admin.messaging().send({
+            token: fToken,
+            notification: { title, body },
+            webpush: {
+              notification: {
+                icon: 'https://zappit-dun.vercel.app/zappit-icon.png',
+                badge: 'https://zappit-dun.vercel.app/zappit-icon.png',
+              },
+              fcmOptions: {
+                link: 'https://zappit-dun.vercel.app/',
+              },
+            },
+            data: { type: 'broadcast' },
+          });
+          totalSent++;
+        } catch (fErr) {
+          console.warn('[Broadcast] FCM web send error:', fErr.message);
         }
-      } catch (receiptErr) {
-        console.warn('[Broadcast] Could not fetch receipts (non-fatal):', receiptErr.message);
       }
+    } catch (fcmBatchErr) {
+      console.warn('[Broadcast] FCM query error:', fcmBatchErr.message);
     }
 
-    console.log(`[Broadcast] Expo push: Sent: ${totalSent}, Failed: ${totalFailed}, Total: ${allTokens.length}, Receipt errors: ${receiptErrors.length}`);
-    res.json({ success: true, sent: totalSent, failed: totalFailed, total: allTokens.length, receiptErrors: receiptErrors.slice(0, 5) });
+    console.log(`[Broadcast] Push complete: Sent: ${totalSent}, Failed: ${totalFailed}, Mobile Tokens: ${allTokens.length}`);
+    res.json({ success: true, sent: totalSent, failed: totalFailed, total: allTokens.length });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
