@@ -12,8 +12,6 @@ import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order, MenuItem } from '../types';
 import { playOrderAlert } from '../utils/notifications';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
 
 // ── Constants ──
 const ORDER_SUB_TABS = [
@@ -231,26 +229,35 @@ const StoreDashboardScreen = () => {
       }).join('\n');
 
       const csvString = `${headerString}${rowString}`;
-      const fileName = `store_earnings_${Date.now()}.csv`;
-      const fileUri = FileSystem.documentDirectory + fileName;
 
-      await FileSystem.writeAsStringAsync(fileUri, csvString, {
-        encoding: FileSystem.EncodingType.UTF8,
+      // Try native file write + share first
+      try {
+        const FS = require('expo-file-system');
+        const Share = require('expo-sharing');
+        if (FS?.documentDirectory) {
+          const fileName = `store_earnings_${Date.now()}.csv`;
+          const fileUri = FS.documentDirectory + fileName;
+          await FS.writeAsStringAsync(fileUri, csvString, { encoding: FS.EncodingType.UTF8 });
+          if (await Share.isAvailableAsync()) {
+            await Share.shareAsync(fileUri, {
+              mimeType: 'text/csv',
+              dialogTitle: 'Save or Share Earnings CSV',
+            });
+            return;
+          }
+        }
+      } catch (_) {}
+
+      // Pure JS fallback — share CSV as text via email/WhatsApp/etc.
+      const { Share } = require('react-native');
+      await Share.share({
+        title: `Store Earnings (${analyticsOrders.length} orders)`,
+        message: csvString,
+        url: undefined,
       });
-
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Save or Share Earnings CSV',
-          UTI: 'public.comma-separated-values-text',
-        });
-      } else {
-        Alert.alert('Saved!', `File saved to: ${fileUri}`);
-      }
     } catch (error: any) {
       console.error('Export error:', error);
-      Alert.alert('Export Failed', error?.message || 'Could not export data. Please try again.');
+      Alert.alert('Export Failed', error?.message || 'Could not export data.');
     }
   };
 
