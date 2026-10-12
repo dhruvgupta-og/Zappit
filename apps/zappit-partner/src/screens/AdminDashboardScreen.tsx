@@ -732,33 +732,25 @@ const AdminDashboardScreen = () => {
           {analyticsCategory === 'finance' && (
             <View>
               <View style={s.card}>
-                <Text style={s.cardTitle}>💰 Financial Statement & Margins</Text>
+                <Text style={s.cardTitle}>💰 Financial Statement & Platform Earnings</Text>
                 <View style={s.statsGrid}>
-                  <View style={s.statCard}><Text style={[s.statValue, { color: '#10B981' }]}>₹{fmt(analyticsData?.finance?.gmv ?? 0)}</Text><Text style={s.statLabel}>GMV</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#10B981' }]}>₹{fmt(analyticsData?.finance?.gmv ?? 0)}</Text><Text style={s.statLabel}>Delivered GMV</Text></View>
                   <View style={s.statCard}><Text style={[s.statValue, { color: '#8B5CF6' }]}>₹{fmt(analyticsData?.finance?.totalContribution ?? 0)}</Text><Text style={s.statLabel}>Net Margin</Text></View>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
+                  <Text style={{ color: colors.textMuted }}>Platform Fees Collected (Delivered Only)</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>₹{analyticsData?.finance?.platformFeesCollected ?? 0}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
                   <Text style={{ color: colors.textMuted }}>Delivery Fees Collected</Text>
                   <Text style={{ color: colors.textMain, fontWeight: '700' }}>₹{analyticsData?.finance?.deliveryFeesCollected ?? 0}</Text>
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
-                  <Text style={{ color: colors.textMuted }}>Platform Fees Collected</Text>
-                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>₹{analyticsData?.finance?.platformFeesCollected ?? 0}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
-                  <Text style={{ color: colors.textMuted }}>Estimated Store Commission (10%)</Text>
-                  <Text style={{ color: '#10B981', fontWeight: '700' }}>₹{analyticsData?.finance?.storeCommission ?? 0}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
                   <Text style={{ color: colors.textMuted }}>Discounts & Coupons Funded</Text>
                   <Text style={{ color: '#EF4444', fontWeight: '700' }}>-₹{analyticsData?.finance?.zappitDiscounts ?? 0}</Text>
                 </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderColor: colors.borderColor }}>
-                  <Text style={{ color: colors.textMuted }}>Payment Gateway Fees (2%)</Text>
-                  <Text style={{ color: '#EF4444', fontWeight: '700' }}>-₹{analyticsData?.finance?.paymentGatewayFees ?? 0}</Text>
-                </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
-                  <Text style={{ color: colors.textMuted }}>Contribution per Delivered Order</Text>
+                  <Text style={{ color: colors.textMuted }}>Net Platform Earnings per Order</Text>
                   <Text style={{ color: colors.adminAccent, fontWeight: '700', fontSize: 16 }}>₹{analyticsData?.finance?.contributionPerOrder ?? 0}</Text>
                 </View>
               </View>

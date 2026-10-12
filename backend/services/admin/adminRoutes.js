@@ -240,16 +240,16 @@ router.get('/analytics', async (req, res) => {
     });
 
     // ── 5. FINANCE METRICS ──
-    // GMV strictly excludes cancelled orders
-    const nonCancelledOrders = orders.filter(o => o.order_status !== 'cancelled');
-    const gmv = nonCancelledOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
-    const deliveryFeesCollected = completedOrders * 20;
-    const platformFeesCollected = completedOrders * 5;
-    const storeCommission = Math.round(gmv * 0.10); // 10% average commission
-    const zappitDiscounts = nonCancelledOrders.reduce((sum, o) => sum + (Number(o.discount_amount) || 0), 0);
-    const paymentGatewayFees = Math.round(gmv * 0.02); // 2% gateway fee
-    const totalContribution = platformFeesCollected + storeCommission - zappitDiscounts - paymentGatewayFees;
-    const contributionPerOrder = completedOrders > 0 ? Math.round(totalContribution / completedOrders) : 0;
+    // Strictly delivered non-cancelled orders for revenue & fee calculations
+    const deliveredOrders = orders.filter(o => o.order_status === 'delivered');
+    const gmv = deliveredOrders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+    const deliveryFeesCollected = deliveredOrders.length * 20;
+    // Platform fee strictly from delivered orders (excludes cancelled)
+    const platformFeesCollected = deliveredOrders.length * 5;
+    const zappitDiscounts = deliveredOrders.reduce((sum, o) => sum + (Number(o.discount_amount) || 0), 0);
+    // No store commission, no payment gateway fees
+    const totalContribution = platformFeesCollected - zappitDiscounts;
+    const contributionPerOrder = deliveredOrders.length > 0 ? Math.round(totalContribution / deliveredOrders.length) : 0;
 
     // ── 6. GROWTH & MARKETING ──
     const couponUsageCount = orders.filter(o => o.coupon_applied).length;
