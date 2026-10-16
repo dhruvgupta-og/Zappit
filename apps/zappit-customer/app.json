@@ -14,7 +14,7 @@
     "updates": {
       "url": "https://u.expo.dev/2e3ea53c-1d6a-470a-8fe6-35bf5a37fb71",
       "enabled": true,
-      "fallbackToCacheTimeout": 0,
+      "fallbackToCacheTimeout": 5000,
       "checkAutomatically": "ON_LOAD"
     },
     "runtimeVersion": {

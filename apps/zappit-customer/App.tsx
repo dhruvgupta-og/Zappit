@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import * as Sentry from '@sentry/react-native';
+import { setupAutoUpdates } from './src/utils/updateManager';
 
 Sentry.init({
   dsn: 'https://b6f5b31b5408027932f0992f5150c8f5@o4512033615052800.ingest.us.sentry.io/4512033623769088',
@@ -23,6 +24,11 @@ Sentry.init({
 });
 
 export default Sentry.wrap(function App() {
+  useEffect(() => {
+    const cleanup = setupAutoUpdates();
+    return cleanup;
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AppNavigator />
