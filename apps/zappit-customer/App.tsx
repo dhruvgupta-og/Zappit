@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import * as Sentry from '@sentry/react-native';
 import { setupAutoUpdates } from './src/utils/updateManager';
@@ -30,7 +30,7 @@ export default Sentry.wrap(function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
+    <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <AppNavigator />
     </SafeAreaProvider>
   );

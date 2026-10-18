@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuthStore, initAuthListener } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
@@ -40,27 +41,31 @@ const CartTabIcon = ({ color, size }: { color: string; size: number }) => {
   );
 };
 
-const MainTabs = () => (
-  <Tab.Navigator
-    screenOptions={{
-      headerShown: false,
-      tabBarStyle: {
-        backgroundColor: colors.cardBg,
-        borderTopColor: colors.borderColor,
-        borderTopWidth: 1,
-        paddingBottom: 6,
-        paddingTop: 8,
-        height: 60,
-      },
-      tabBarActiveTintColor: colors.primary,
-      tabBarInactiveTintColor: colors.textMuted,
-      tabBarLabelStyle: {
-        fontSize: 11,
-        fontWeight: '600',
-        marginTop: 2,
-      },
-    }}
-  >
+const MainTabs = () => {
+  const insets = useSafeAreaInsets();
+  const bottomInset = insets.bottom;
+
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: colors.cardBg,
+          borderTopColor: colors.borderColor,
+          borderTopWidth: 1,
+          paddingTop: 8,
+          paddingBottom: bottomInset > 0 ? bottomInset + 4 : 8,
+          height: bottomInset > 0 ? 62 + bottomInset : 60,
+        },
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
+          marginTop: 2,
+        },
+      }}
+    >
     <Tab.Screen
       name="Home"
       component={HomeScreen}
@@ -98,7 +103,8 @@ const MainTabs = () => (
       }}
     />
   </Tab.Navigator>
-);
+  );
+};
 
 const AppNavigator = () => {
   const { firebaseUser, profileComplete, isLoading, isInitialized } = useAuthStore();
