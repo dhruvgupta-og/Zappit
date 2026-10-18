@@ -392,13 +392,45 @@ const LoginPage = () => {
           {loading ? 'Connecting...' : 'Sign in with Google'}
         </button>
 
-        {/* ── Terms ── */}
-        <p style={{ marginTop: '20px', fontSize: '0.72rem', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6 }}>
+        {/* ── Terms & Important Links from zappit.shop ── */}
+        <p style={{ marginTop: '20px', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', lineHeight: 1.6 }}>
           By continuing, you agree to Zappit's{' '}
-          <span style={{ textDecoration: 'underline', cursor: 'pointer' }}>Terms of Service</span>
+          <a
+            href="https://zappit.shop/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ textDecoration: 'underline', color: 'var(--primary)', fontWeight: 600 }}
+          >
+            Terms of Service
+          </a>
           {' '}and{' '}
-          <Link to="/privacy-policy" style={{ textDecoration: 'underline', cursor: 'pointer', color: 'inherit' }}>Privacy Policy</Link>.
+          <a
+            href="https://zappit.shop/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ textDecoration: 'underline', color: 'var(--primary)', fontWeight: 600 }}
+          >
+            Privacy Policy
+          </a>.
         </p>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.06)', fontSize: '0.75rem' }}>
+          <a
+            href="https://zappit.shop"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500 }}
+          >
+            🌐 zappit.shop
+          </a>
+          <span style={{ color: 'var(--text-muted)', opacity: 0.4 }}>•</span>
+          <a
+            href="mailto:zappt.shop@gmail.com"
+            style={{ color: 'var(--text-muted)', textDecoration: 'none', fontWeight: 500 }}
+          >
+            💬 Support
+          </a>
+        </div>
       </div>
 
       {/* Spin animation */}

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
-  KeyboardAvoidingView, Platform, ScrollView, Image,
+  KeyboardAvoidingView, Platform, ScrollView, Image, Linking,
 } from 'react-native';
 import {
   signInWithEmailAndPassword,
@@ -269,9 +269,45 @@ const LoginScreen = ({ navigation }: any) => {
             </Text>
           </TouchableOpacity>
 
+          {/* Agreement text with direct links to zappit.shop policies */}
           <Text style={styles.terms}>
-            By continuing, you agree to Zappit's Terms of Service and Privacy Policy.
+            By continuing, you agree to Zappit's{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => WebBrowser.openBrowserAsync('https://zappit.shop/terms')}
+            >
+              Terms of Service
+            </Text>
+            {' '}and{' '}
+            <Text
+              style={styles.termsLink}
+              onPress={() => WebBrowser.openBrowserAsync('https://zappit.shop/privacy')}
+            >
+              Privacy Policy
+            </Text>
+            .
           </Text>
+
+          {/* Quick links from zappit.shop */}
+          <View style={styles.legalLinksRow}>
+            <TouchableOpacity
+              onPress={() => WebBrowser.openBrowserAsync('https://zappit.shop')}
+              activeOpacity={0.7}
+              style={styles.legalLinkItem}
+            >
+              <Text style={styles.legalLinkText}>🌐 zappit.shop</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.legalDot}>•</Text>
+
+            <TouchableOpacity
+              onPress={() => Linking.openURL('mailto:zappt.shop@gmail.com')}
+              activeOpacity={0.7}
+              style={styles.legalLinkItem}
+            >
+              <Text style={styles.legalLinkText}>💬 Support</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -363,7 +399,36 @@ const styles = StyleSheet.create({
 
   terms: {
     marginTop: spacing.xl, fontSize: 11, color: colors.textMuted,
-    textAlign: 'center', lineHeight: 16,
+    textAlign: 'center', lineHeight: 18,
+  },
+  termsLink: {
+    color: colors.primary,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
+  },
+  legalLinksRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  legalLinkItem: {
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  legalLinkText: {
+    fontSize: 11,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  legalDot: {
+    color: colors.textMuted,
+    fontSize: 10,
+    opacity: 0.4,
   },
 });
 
