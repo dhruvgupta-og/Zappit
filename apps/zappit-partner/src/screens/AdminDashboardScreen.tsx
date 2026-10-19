@@ -303,7 +303,17 @@ const AdminDashboardScreen = () => {
 
           <View style={s.statsGrid}>
             {[
-              { label: 'Total Orders', value: fmt(orders.filter(o => o.order_status !== 'cancelled').length || stats.orders), emoji: '📦', color: '#F59E0B' },
+              {
+                label: 'Total Orders',
+                value: fmt(
+                  orders.filter(o =>
+                    o.order_status !== 'cancelled' &&
+                    (o.order_status !== 'pending' || ['paid', 'completed'].includes(o.payment_status))
+                  ).length || stats.orders
+                ),
+                emoji: '📦',
+                color: '#F59E0B',
+              },
               {
                 label: 'Revenue',
                 value: `₹${fmt(
@@ -597,8 +607,8 @@ const AdminDashboardScreen = () => {
               <View style={s.card}>
                 <Text style={s.cardTitle}>📦 Order Volumes & Breakdown</Text>
                 <View style={s.statsGrid}>
-                  <View style={s.statCard}><Text style={[s.statValue, { color: '#F59E0B' }]}>{analyticsData?.orders?.totalOrdersPlaced ?? orders.length}</Text><Text style={s.statLabel}>Total Placed</Text></View>
-                  <View style={s.statCard}><Text style={[s.statValue, { color: '#10B981' }]}>{analyticsData?.orders?.completedOrders ?? orders.filter(o => o.order_status === 'delivered').length}</Text><Text style={s.statLabel}>Completed</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#F59E0B' }]}>{analyticsData?.orders?.totalOrdersPlaced ?? 0}</Text><Text style={s.statLabel}>Total Placed</Text></View>
+                  <View style={s.statCard}><Text style={[s.statValue, { color: '#10B981' }]}>{analyticsData?.orders?.completedOrders ?? 0}</Text><Text style={s.statLabel}>Completed</Text></View>
                   <View style={s.statCard}><Text style={[s.statValue, { color: '#3B82F6' }]}>{analyticsData?.orders?.acceptedOrders ?? 0}</Text><Text style={s.statLabel}>Accepted</Text></View>
                   <View style={s.statCard}><Text style={[s.statValue, { color: '#8B5CF6' }]}>{analyticsData?.orders?.preparingOrders ?? 0}</Text><Text style={s.statLabel}>Preparing</Text></View>
                   <View style={s.statCard}><Text style={[s.statValue, { color: '#EC4899' }]}>{analyticsData?.orders?.readyOrders ?? 0}</Text><Text style={s.statLabel}>Ready Pickup</Text></View>

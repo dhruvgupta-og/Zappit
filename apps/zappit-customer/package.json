@@ -1,6 +1,6 @@
 {
   "name": "zappit-customer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "main": "index.ts",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -39,10 +39,12 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "update:preview": "eas update --branch preview --message",
-    "update:prod": "eas update --branch production --message",
-    "build:preview": "eas build --platform android --profile preview",
-    "build:prod": "eas build --platform all --profile production"
+    "update": "npx eas update --branch production --message",
+    "update:preview": "npx eas update --branch production --message",
+    "update:prod": "npx eas update --branch production --message",
+    "build:preview": "npx eas build --platform android --profile preview",
+    "build:apk": "npx eas build --platform android --profile production-apk",
+    "build:prod": "npx eas build --platform all --profile production"
   },
   "private": true
 }

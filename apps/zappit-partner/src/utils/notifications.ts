@@ -6,6 +6,8 @@ import { Platform, Vibration } from 'react-native';
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
@@ -83,10 +85,9 @@ export const playOrderAlert = async (title: string, body: string) => {
         title,
         body,
         sound: true,
-        channelId: 'order_loud_alert',
-        priority: Notifications.AndroidNotificationPriority.MAX,
         vibrate: [0, 600, 250, 600, 250, 800, 250, 1000],
-      },
+        ...(Platform.OS === 'android' ? { data: { channelId: 'order_loud_alert' } } : {}),
+      } as any,
       trigger: null,
     });
 
@@ -98,9 +99,8 @@ export const playOrderAlert = async (title: string, body: string) => {
             title,
             body,
             sound: true,
-            channelId: 'order_loud_alert',
-            priority: Notifications.AndroidNotificationPriority.MAX,
-          },
+            ...(Platform.OS === 'android' ? { data: { channelId: 'order_loud_alert' } } : {}),
+          } as any,
           trigger: null,
         });
         Vibration.vibrate([0, 500, 200, 500]);

@@ -9,6 +9,8 @@ import { College } from '../types';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 
+import { checkAndApplyUpdate, getUpdateInfo } from '../utils/updateManager';
+
 const ProfileScreen = () => {
   const { profile, setProfile, logout, firebaseUser } = useAuthStore();
   const clearCart = useCartStore((state) => state.clearCart);
@@ -20,10 +22,22 @@ const ProfileScreen = () => {
   const [collegeId, setCollegeId] = useState(profile?.college_id || '');
   const [colleges, setColleges] = useState<College[]>([]);
   const [loading, setLoading] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
+
+  const updateInfo = getUpdateInfo();
 
   useEffect(() => {
     storesApi.getColleges().then(setColleges).catch(() => {});
   }, []);
+
+  const handleCheckUpdates = async () => {
+    setCheckingUpdate(true);
+    try {
+      await checkAndApplyUpdate(true);
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -137,6 +151,20 @@ const ProfileScreen = () => {
             <TouchableOpacity style={styles.rowBtn} onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')}>
               <Text style={styles.btnLabel}>Help & Support</Text>
               <Text style={{ color: colors.textMuted }}>→</Text>
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.rowBtn} onPress={handleCheckUpdates} disabled={checkingUpdate}>
+              <View style={{ flex: 1, marginRight: spacing.md }}>
+                <Text style={styles.btnLabel}>Check for Updates</Text>
+                <Text style={{ color: colors.textMuted, fontSize: 12, marginTop: 2 }}>
+                  v1.0.1 • Channel: {updateInfo.channel} • {updateInfo.isEmbeddedLaunch ? 'Base Build' : 'OTA Update'}
+                </Text>
+              </View>
+              {checkingUpdate ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={styles.btnValue}>Check</Text>
+              )}
             </TouchableOpacity>
           </View>
         </View>

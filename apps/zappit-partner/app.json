@@ -45,7 +45,10 @@
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/ce9b1cff-bc10-4261-aadb-1a8100e00046"
+      "url": "https://u.expo.dev/ce9b1cff-bc10-4261-aadb-1a8100e00046",
+      "enabled": true,
+      "fallbackToCacheTimeout": 10000,
+      "checkAutomatically": "ON_LOAD"
     }
   }
 }

@@ -206,6 +206,11 @@ const AdminDashboard = () => {
   // ── FILTERING LOGIC ──
   const getFilteredOrders = () => {
     return orders.filter(o => {
+      // Exclude abandoned/unpaid checkout attempts (order pending and payment not completed)
+      if (o.order_status === 'pending' && !['paid', 'completed'].includes(o.payment_status)) {
+        return false;
+      }
+
       const orderDate = new Date(o.created_at);
       const now = new Date();
       
@@ -235,8 +240,8 @@ const AdminDashboard = () => {
 
   // Analytics based on filtered orders
   const totalRevenue = filteredOrders.filter(o => o.order_status === 'delivered').reduce((s, o) => s + (o.total_amount || 0), 0);
-  const totalOrdersCount = filteredOrders.length;
-  const pendingOrders = filteredOrders.filter(o => ['pending', 'confirmed', 'preparing', 'ready'].includes(o.order_status));
+  const totalOrdersCount = filteredOrders.filter(o => o.order_status !== 'cancelled').length;
+  const pendingOrders = filteredOrders.filter(o => ['confirmed', 'preparing', 'ready'].includes(o.order_status));
 
   // Store payout = sum of (item price × qty) for all delivered orders minus discount
   const storePayout = filteredOrders

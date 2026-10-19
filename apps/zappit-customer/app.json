@@ -7,14 +7,14 @@
       "com.zappit.customer"
     ],
     "owner": "dhruvhereyo-organization",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "updates": {
       "url": "https://u.expo.dev/2e3ea53c-1d6a-470a-8fe6-35bf5a37fb71",
       "enabled": true,
-      "fallbackToCacheTimeout": 5000,
+      "fallbackToCacheTimeout": 10000,
       "checkAutomatically": "ON_LOAD"
     },
     "runtimeVersion": {
@@ -26,6 +26,7 @@
     },
     "android": {
       "package": "com.zappit.customer",
+      "versionCode": 2,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#0B132B",

@@ -11,3 +11,5 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .gemini/
+colleges.json
+stores.json

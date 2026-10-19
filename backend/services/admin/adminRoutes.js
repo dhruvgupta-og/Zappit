@@ -81,32 +81,26 @@ router.get('/analytics', async (req, res) => {
     let endFilterDate = null;
 
     if (dateRange === 'today') {
-      startFilterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      startFilterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
       endFilterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     } else if (dateRange === 'yesterday') {
-      const y = new Date(now);
-      y.setDate(y.getDate() - 1);
-      startFilterDate = new Date(y.getFullYear(), y.getMonth(), y.getDate());
-      endFilterDate = new Date(y.getFullYear(), y.getMonth(), y.getDate(), 23, 59, 59, 999);
+      startFilterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0);
+      endFilterDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
     } else if (dateRange === 'this_week') {
       const day = now.getDay();
       const diff = now.getDate() - day + (day === 0 ? -6 : 1); // Monday
-      startFilterDate = new Date(now.setDate(diff));
-      startFilterDate.setHours(0, 0, 0, 0);
+      startFilterDate = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0);
       endFilterDate = new Date();
     } else if (dateRange === 'last_week') {
       const day = now.getDay();
       const diff = now.getDate() - day + (day === 0 ? -6 : 1) - 7;
-      startFilterDate = new Date(now.setDate(diff));
-      startFilterDate.setHours(0, 0, 0, 0);
-      endFilterDate = new Date(startFilterDate);
-      endFilterDate.setDate(endFilterDate.getDate() + 6);
-      endFilterDate.setHours(23, 59, 59, 999);
+      startFilterDate = new Date(now.getFullYear(), now.getMonth(), diff, 0, 0, 0, 0);
+      endFilterDate = new Date(now.getFullYear(), now.getMonth(), diff + 6, 23, 59, 59, 999);
     } else if (dateRange === 'this_month') {
-      startFilterDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      startFilterDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
       endFilterDate = new Date();
     } else if (dateRange === 'last_month') {
-      startFilterDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      startFilterDate = new Date(now.getFullYear(), now.getMonth() - 1, 1, 0, 0, 0, 0);
       endFilterDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
     } else if (dateRange === 'custom' && startDate && endDate) {
       startFilterDate = new Date(startDate);
@@ -114,14 +108,31 @@ router.get('/analytics', async (req, res) => {
     }
 
     // Build Order match query
-    const matchQuery = {};
+    const matchConditions = [];
     if (startFilterDate && endFilterDate) {
-      matchQuery.created_at = { $gte: startFilterDate, $lte: endFilterDate };
+      matchConditions.push({
+        $or: [
+          { created_at: { $gte: startFilterDate, $lte: endFilterDate } },
+          { created_at: { $gte: startFilterDate.toISOString(), $lte: endFilterDate.toISOString() } }
+        ]
+      });
     }
-    if (storeId && storeId !== 'all') matchQuery.store_id = storeId;
-    if (deliveryId && deliveryId !== 'all') matchQuery.delivery_id = deliveryId;
-    if (orderStatus && orderStatus !== 'all') matchQuery.order_status = orderStatus;
-    if (paymentStatus && paymentStatus !== 'all') matchQuery.payment_status = paymentStatus;
+    if (storeId && storeId !== 'all') matchConditions.push({ store_id: storeId });
+    if (deliveryId && deliveryId !== 'all') matchConditions.push({ delivery_id: deliveryId });
+    if (orderStatus && orderStatus !== 'all') {
+      matchConditions.push({ order_status: orderStatus });
+    } else {
+      // Exclude abandoned/unpaid checkout attempts (order pending + payment pending/failed)
+      matchConditions.push({
+        $or: [
+          { payment_status: { $in: ['paid', 'completed'] } },
+          { order_status: { $in: ['confirmed', 'preparing', 'ready', 'out_for_delivery', 'picked_up', 'delivered', 'cancelled'] } }
+        ]
+      });
+    }
+    if (paymentStatus && paymentStatus !== 'all') matchConditions.push({ payment_status: paymentStatus });
+
+    const matchQuery = matchConditions.length > 0 ? { $and: matchConditions } : {};
 
     // Fetch orders and other collections in parallel
     const [orders, allUsers, allStores, allStaff] = await Promise.all([
@@ -228,8 +239,13 @@ router.get('/analytics', async (req, res) => {
       const sOrders = orders.filter(o => (o.store_id || '').toString() === sId);
       const sDelivered = sOrders.filter(o => o.order_status === 'delivered').length;
       const sCancelled = sOrders.filter(o => o.order_status === 'cancelled').length;
-      // Exclude cancelled orders from store sales
-      const sSales = sOrders.filter(o => o.order_status !== 'cancelled').reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0);
+      // Item food sales for delivered orders (excluding delivery and platform fees)
+      const sSales = sOrders.filter(o => o.order_status === 'delivered').reduce((sum, o) => {
+        const itemTotal = Array.isArray(o.items)
+          ? o.items.reduce((s, it) => s + (Number(it.price || 0) * Number(it.qty || it.quantity || 1)), 0)
+          : 0;
+        return sum + itemTotal;
+      }, 0);
       storeStats[st.name || sId] = {
         totalOrders: sOrders.length,
         delivered: sDelivered,
@@ -247,7 +263,8 @@ router.get('/analytics', async (req, res) => {
     // Platform fee strictly from delivered orders (excludes cancelled)
     const platformFeesCollected = deliveredOrders.length * 5;
     const zappitDiscounts = deliveredOrders.reduce((sum, o) => sum + (Number(o.discount_amount) || 0), 0);
-    // No store commission, no payment gateway fees
+    const storeCommission = 0;
+    const paymentGatewayFees = 0;
     const totalContribution = platformFeesCollected - zappitDiscounts;
     const contributionPerOrder = deliveredOrders.length > 0 ? Math.round(totalContribution / deliveredOrders.length) : 0;
 
@@ -334,10 +351,10 @@ router.get('/analytics', async (req, res) => {
         gmv,
         deliveryFeesCollected,
         platformFeesCollected,
-        storeCommission,
+        storeCommission: 0,
         riderEstimatedPayout,
         zappitDiscounts,
-        paymentGatewayFees,
+        paymentGatewayFees: 0,
         totalContribution,
         contributionPerOrder,
       },
