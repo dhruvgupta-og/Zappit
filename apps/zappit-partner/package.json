@@ -33,7 +33,12 @@
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "update": "npx eas update --branch preview",
+    "update:preview": "npx eas update --branch preview",
+    "update:prod": "npx eas update --branch production",
+    "build:preview": "npx eas-cli build --platform android --profile preview",
+    "build:apk": "npx eas-cli build --platform android --profile preview"
   },
   "private": true
 }
