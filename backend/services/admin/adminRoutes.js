@@ -432,112 +432,143 @@ router.post('/send-broadcast-notification', async (req, res) => {
     const User = require('../../models/User');
     const https = require('https');
 
-    // Query users with Expo push tokens (mobile app tokens, NOT web FCM tokens)
+    // 1. Query users with mobile Expo push tokens
     const query = { expoPushToken: { $exists: true, $ne: null } };
-    if (college_id) query.college_id = college_id;
-
-    const users = await User.find(query).select('expoPushToken name');
-    if (users.length === 0) {
-      return res.json({ success: true, sent: 0, message: 'No mobile app users with push tokens found. Users need to open the app first to register.' });
+    if (college_id) {
+      query.$or = [{ college_id: college_id }, { college: college_id }];
     }
 
-    // Build Expo push messages (max 100 per request)
-    const BATCH_SIZE = 100;
+    const users = await User.find(query).select('expoPushToken name');
+    const allTokens = users
+      .map(u => u.expoPushToken)
+      .filter(t => typeof t === 'string' && (t.startsWith('ExponentPushToken') || t.startsWith('ExpoPushToken')));
+    
+    // Deduplicate tokens so users with multiple profiles on the same device don't get spammed
+    const uniqueMobileTokens = Array.from(new Set(allTokens));
+
+    // 2. Query web users with FCM tokens
+    let uniqueFcmTokens = [];
+    try {
+      const fcmQuery = { fcmToken: { $exists: true, $ne: null } };
+      if (college_id) {
+        fcmQuery.$or = [{ college_id: college_id }, { college: college_id }];
+      }
+      const fcmUsers = await User.find(fcmQuery).select('fcmToken');
+      uniqueFcmTokens = Array.from(new Set(fcmUsers.map(u => u.fcmToken).filter(Boolean)));
+    } catch (fcmQErr) {
+      console.warn('[Broadcast] Error fetching FCM tokens:', fcmQErr.message);
+    }
+
+    if (uniqueMobileTokens.length === 0 && uniqueFcmTokens.length === 0) {
+      return res.json({ success: true, sent: 0, message: 'No registered users with push tokens found.' });
+    }
+
     let totalSent = 0;
     let totalFailed = 0;
-    const ticketIds = []; // collect ticket IDs for receipt checking
 
-    const allTokens = users.map(u => u.expoPushToken).filter(t => t && t.startsWith('ExponentPushToken'));
-
-    for (let i = 0; i < allTokens.length; i += BATCH_SIZE) {
-      const batch = allTokens.slice(i, i + BATCH_SIZE);
-      const messages = batch.map(token => ({
+    // Helper: Send to a single Expo token individually.
+    // CRITICAL: Sending individually prevents Expo error PUSH_TOO_MANY_EXPERIENCE_IDS
+    // when tokens belong to different projects (e.g. zappit vs zappit-partner).
+    const sendSingleExpo = (token) => {
+      const message = [{
         to: token,
         title,
         body,
         sound: 'default',
         priority: 'high',
-        channelId: 'default', // Required for Android — must match channel registered in app
+        channelId: 'default',
         data: { type: 'broadcast' },
-      }));
+      }];
 
+      const postData = JSON.stringify(message);
+
+      return new Promise((resolve) => {
+        const options = {
+          hostname: 'exp.host',
+          path: '/--/api/v2/push/send',
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          timeout: 8000,
+        };
+
+        const reqHttp = https.request(options, (r) => {
+          let data = '';
+          r.on('data', chunk => data += chunk);
+          r.on('end', () => {
+            try {
+              const parsed = JSON.parse(data);
+              const ticket = parsed.data?.[0];
+              if (ticket && ticket.status === 'ok') {
+                resolve({ ok: true });
+              } else {
+                console.warn(`[Broadcast] Expo ticket warning for ${token}:`, ticket?.message || parsed.errors?.[0]?.message);
+                resolve({ ok: false, error: ticket?.message || 'Ticket failed' });
+              }
+            } catch (jsonErr) {
+              resolve({ ok: false, error: 'Invalid response' });
+            }
+          });
+        });
+
+        reqHttp.on('error', (err) => {
+          console.warn(`[Broadcast] Expo HTTP error for ${token}:`, err.message);
+          resolve({ ok: false, error: err.message });
+        });
+        reqHttp.on('timeout', () => {
+          reqHttp.destroy();
+          resolve({ ok: false, error: 'Timeout' });
+        });
+
+        reqHttp.write(postData);
+        reqHttp.end();
+      });
+    };
+
+    // Send mobile push notifications in concurrent batches of 5 to avoid overwhelming the network
+    const CONCURRENCY = 5;
+    for (let i = 0; i < uniqueMobileTokens.length; i += CONCURRENCY) {
+      const chunk = uniqueMobileTokens.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(chunk.map(token => sendSingleExpo(token)));
+      results.forEach(r => {
+        if (r.ok) totalSent++;
+        else totalFailed++;
+      });
+    }
+
+    // Send Web FCM Push notifications
+    for (const fToken of uniqueFcmTokens) {
       try {
-        const postData = JSON.stringify(messages);
-        const result = await new Promise((resolve, reject) => {
-          const options = {
-            hostname: 'exp.host',
-            path: '/--/api/v2/push/send',
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Accept': 'application/json',
-              'Accept-Encoding': 'gzip, deflate',
+        await admin.messaging().send({
+          token: fToken,
+          notification: { title, body },
+          webpush: {
+            notification: {
+              icon: 'https://zappit-dun.vercel.app/zappit-icon.png',
+              badge: 'https://zappit-dun.vercel.app/zappit-icon.png',
             },
-          };
-          const reqHttp = https.request(options, (r) => {
-            let data = '';
-            r.on('data', chunk => data += chunk);
-            r.on('end', () => {
-              try { resolve(JSON.parse(data)); }
-              catch { resolve({ data: [] }); }
-            });
-          });
-          reqHttp.on('error', reject);
-          reqHttp.write(postData);
-          reqHttp.end();
+            fcmOptions: {
+              link: 'https://zappit-dun.vercel.app/',
+            },
+          },
+          data: { type: 'broadcast' },
         });
-
-        const tickets = (result.data || []);
-        tickets.forEach(ticket => {
-          if (ticket.status === 'ok') {
-            totalSent++;
-            if (ticket.id) ticketIds.push(ticket.id);
-          } else {
-            totalFailed++;
-            console.warn('[Broadcast] Ticket error:', ticket.message, ticket.details);
-          }
-        });
-        if (tickets.length === 0) totalSent += batch.length;
-      } catch (batchErr) {
-        console.error('[Broadcast] Expo API batch error:', batchErr.message);
-        totalFailed += batch.length;
+        totalSent++;
+      } catch (fErr) {
+        console.warn('[Broadcast] FCM web send error:', fErr.message);
+        totalFailed++;
       }
     }
 
-    // Also send to web users with fcmToken
-    try {
-      const fcmQuery = { fcmToken: { $exists: true, $ne: null } };
-      if (college_id) fcmQuery.college_id = college_id;
-      const fcmUsers = await User.find(fcmQuery).select('fcmToken');
-      const fcmTokens = fcmUsers.map(u => u.fcmToken).filter(Boolean);
-
-      for (const fToken of fcmTokens) {
-        try {
-          await admin.messaging().send({
-            token: fToken,
-            notification: { title, body },
-            webpush: {
-              notification: {
-                icon: 'https://zappit-dun.vercel.app/zappit-icon.png',
-                badge: 'https://zappit-dun.vercel.app/zappit-icon.png',
-              },
-              fcmOptions: {
-                link: 'https://zappit-dun.vercel.app/',
-              },
-            },
-            data: { type: 'broadcast' },
-          });
-          totalSent++;
-        } catch (fErr) {
-          console.warn('[Broadcast] FCM web send error:', fErr.message);
-        }
-      }
-    } catch (fcmBatchErr) {
-      console.warn('[Broadcast] FCM query error:', fcmBatchErr.message);
-    }
-
-    console.log(`[Broadcast] Push complete: Sent: ${totalSent}, Failed: ${totalFailed}, Mobile Tokens: ${allTokens.length}`);
-    res.json({ success: true, sent: totalSent, failed: totalFailed, total: allTokens.length });
+    console.log(`[Broadcast] Push complete: Sent: ${totalSent}, Failed: ${totalFailed}, Mobile Targets: ${uniqueMobileTokens.length}, Web Targets: ${uniqueFcmTokens.length}`);
+    res.json({
+      success: true,
+      sent: totalSent,
+      failed: totalFailed,
+      total: uniqueMobileTokens.length + uniqueFcmTokens.length
+    });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
