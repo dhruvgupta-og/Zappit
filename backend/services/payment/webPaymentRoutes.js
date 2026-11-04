@@ -269,7 +269,16 @@ router.post('/create-order', async (req, res) => {
 
     // NEW: Batch fetch menu items
     const itemIds = items.map(item => item.id || item._id);
-    const dbItems = await MenuItem.find({ _id: { $in: itemIds } });
+    const queryIds = [];
+    itemIds.forEach(id => {
+      if (!id) return;
+      const idStr = id.toString();
+      queryIds.push(idStr);
+      if (mongoose.Types.ObjectId.isValid(idStr)) {
+        try { queryIds.push(new mongoose.Types.ObjectId(idStr)); } catch (_) {}
+      }
+    });
+    const dbItems = await MenuItem.find({ _id: { $in: queryIds } });
     const dbItemMap = new Map();
     dbItems.forEach(dbItem => {
       dbItemMap.set(dbItem._id.toString(), dbItem);

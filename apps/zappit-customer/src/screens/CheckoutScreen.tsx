@@ -222,7 +222,8 @@ const CheckoutScreen = () => {
       `;
       setPaymentHtml(html);
     } catch (err: any) {
-      Alert.alert('Payment Error', err.message || 'Could not start payment');
+      const errMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Could not start payment';
+      Alert.alert('Payment Error', errMsg);
       setProcessing(false);
     }
   };
