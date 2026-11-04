@@ -80,8 +80,8 @@ export const adminApi = {
     const res = await apiClient.post('/api/save-coupon', data);
     return res.data;
   },
-  deleteCoupon: async (code: string) => {
-    const res = await apiClient.post('/api/delete-coupon', { code });
+  deleteCoupon: async (idOrCode: string) => {
+    const res = await apiClient.post('/api/delete-coupon', { code: idOrCode, id: idOrCode });
     return res.data;
   },
 

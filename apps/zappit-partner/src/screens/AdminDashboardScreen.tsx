@@ -35,7 +35,7 @@ const fmt = (n: number) => n?.toLocaleString('en-IN') || '0';
 const emptyCollege = () => ({ name: '', city: '', isActive: true, blocks: [] });
 const emptyStore = (colleges: any[]) => ({ name: '', description: '', college_id: colleges[0]?.id || '', is_open: true, image: '' });
 const emptyBanner = () => ({ imageUrl: '', coupon_code: '', isActive: true });
-const emptyCoupon = () => ({ code: '', discount: '', type: 'flat', minOrder: '', maxUses: '' });
+const emptyCoupon = () => ({ code: '', discount: '', discount_percent: '', type: 'percent', minOrder: '', maxUses: '' });
 
 // ─────────────────────────────────────────────────────────────────────────────
 const AdminDashboardScreen = () => {
@@ -189,7 +189,12 @@ const AdminDashboardScreen = () => {
         await adminApi.saveBanner(formData);
         Alert.alert('Saved', 'Banner saved successfully.');
       } else if (modalType === 'coupon') {
-        await adminApi.saveCoupon(formData);
+        const val = formData.discount || formData.discount_percent;
+        await adminApi.saveCoupon({
+          ...formData,
+          discount: Number(val),
+          discount_percent: Number(val),
+        });
         Alert.alert('Saved', 'Coupon saved successfully.');
       } else if (modalType === 'storeOwner') {
         if (!formData.email || !formData.password) {
@@ -1044,12 +1049,12 @@ const AdminDashboardScreen = () => {
                 <View style={{ flex: 1 }}>
                   <Text style={[s.listTitle, { color: colors.adminAccent }]}>{c.code}</Text>
                   <Text style={s.rowSub}>
-                    {c.type === 'flat' ? `₹${c.discount} off` : `${c.discount}% off`}
+                    {c.type === 'flat' ? `₹${c.discount || c.discount_percent} off` : `${c.discount || c.discount_percent}% off`}
                     {c.minOrder ? ` • Min ₹${c.minOrder}` : ''}
                   </Text>
                   {c.maxUses ? <Text style={s.rowSub}>Uses: {c.usedCount || 0}/{c.maxUses}</Text> : null}
                 </View>
-                <TouchableOpacity onPress={() => confirmDelete('coupons', c.code, c.code)}>
+                <TouchableOpacity onPress={() => confirmDelete('coupons', c.id || c.code, c.code)}>
                   <Text style={{ color: '#EF4444', fontSize: 13, fontWeight: '600' }}>Delete</Text>
                 </TouchableOpacity>
               </View>

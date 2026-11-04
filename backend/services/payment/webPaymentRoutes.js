@@ -953,6 +953,10 @@ router.get('/get-coupons', async (req, res) => {
       id: c._id.toString(),
       code: c.code,
       discount_percent: c.discount_percent,
+      discount: c.discount !== undefined ? c.discount : c.discount_percent,
+      type: c.type || 'percent',
+      minOrder: c.min_order || 0,
+      maxUses: c.max_uses,
       college_id: c.college_id,
       once_per_user: c.once_per_user,
       active: c.active,
@@ -1002,13 +1006,21 @@ router.post('/save-coupon', async (req, res) => {
     if (!req.user || req.user.role !== 'admin') {
       return res.status(403).json({ success: false, error: 'Forbidden: Admins only' });
     }
-    const { id, code, discount_percent, college_id, once_per_user, active } = req.body;
-    if (!code || discount_percent === undefined) {
-      return res.status(400).json({ success: false, error: 'code and discount_percent are required' });
+    const { id, code, discount_percent, discount, type, minOrder, maxUses, college_id, once_per_user, active } = req.body;
+    const resolvedDiscount = discount_percent !== undefined && discount_percent !== ''
+      ? Number(discount_percent)
+      : (discount !== undefined && discount !== '' ? Number(discount) : undefined);
+
+    if (!code || resolvedDiscount === undefined || isNaN(resolvedDiscount)) {
+      return res.status(400).json({ success: false, error: 'code and discount are required' });
     }
     const mongoData = {
       code: code.toUpperCase().trim(),
-      discount_percent: Number(discount_percent),
+      discount_percent: resolvedDiscount,
+      discount: resolvedDiscount,
+      type: type || 'percent',
+      min_order: Number(minOrder || 0),
+      max_uses: maxUses ? Number(maxUses) : undefined,
       college_id: college_id || 'all',
       once_per_user: once_per_user !== false,
       active: active !== false,
@@ -1033,11 +1045,15 @@ router.post('/delete-coupon', async (req, res) => {
     if (!req.user || req.user.role !== 'admin') {
       return res.status(403).json({ success: false, error: 'Forbidden: Admins only' });
     }
-    const { id } = req.body;
-    if (!id) {
-      return res.status(400).json({ success: false, error: 'id is required' });
+    const { id, code } = req.body;
+    if (!id && !code) {
+      return res.status(400).json({ success: false, error: 'id or code is required' });
     }
-    await Coupon.deleteOne({ _id: id });
+    if (code) {
+      await Coupon.deleteOne({ code: code.toUpperCase().trim() });
+    } else {
+      await Coupon.deleteOne({ _id: id });
+    }
     return res.status(200).json({ success: true, message: 'Coupon deleted from MongoDB', source: 'mongodb' });
   } catch (err) {
     console.error('[Zappit Coupon] delete-coupon error:', err);
