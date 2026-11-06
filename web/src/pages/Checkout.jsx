@@ -149,7 +149,7 @@ const CheckoutPage = () => {
 
       console.log('[Zappit] Order API response:', data);
 
-      const backendUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.MODE === 'production' ? 'https://zappit-backend.onrender.com' : 'http://localhost:5000');
+      const backendUrl = import.meta.env.VITE_API_BASE_URL || (import.meta.env.MODE === 'production' ? 'https://api.zappit.shop' : 'http://localhost:5000');
 
       // 2. Open Razorpay Checkout
       const options = {

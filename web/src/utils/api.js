@@ -10,7 +10,7 @@ import axios from 'axios';
 import { auth } from '../firebase';
 
 export const BASE_URL = import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.MODE === 'production' ? 'https://zappit-backend.onrender.com' : '');
+  (import.meta.env.MODE === 'production' ? 'https://api.zappit.shop' : '');
 
 const api = axios.create({ baseURL: BASE_URL });
 

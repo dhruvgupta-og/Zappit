@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { auth } from '../config/firebase';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://zappit-backend.onrender.com';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'https://api.zappit.shop';
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,

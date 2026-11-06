@@ -1,0 +1,175 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model College {
+  id        String   @id
+  name      String
+  city      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  blocks    Block[]
+  stores    Store[]
+  orders    Order[]
+  staff     Staff[]
+}
+
+model Block {
+  id          String   @id @default(uuid())
+  collegeId   String
+  name        String
+  deliveryFee Float    @default(0)
+
+  college     College  @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+
+  @@index([collegeId])
+}
+
+model Store {
+  id               String     @id
+  collegeId        String
+  name             String
+  description      String?
+  image            String?
+  rating           Float      @default(4.0)
+  deliveryTimeMins String     @default("15-20")
+  isOpen           Boolean    @default(true)
+  tags             String     @default("[]") // JSON string array of tags
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  college          College    @relation(fields: [collegeId], references: [id], onDelete: Cascade)
+  menuItems        MenuItem[]
+  orders           Order[]
+  staff            Staff[]
+
+  @@index([collegeId, isOpen])
+}
+
+model MenuItem {
+  id          String   @id
+  storeId     String
+  name        String
+  price       Float
+  desc        String?
+  category    String?
+  isVeg       Boolean  @default(true)
+  image       String?
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@index([storeId, isAvailable])
+}
+
+model User {
+  id            String    @id // Firebase UID
+  name          String?
+  email         String?
+  phone         String?
+  role          String    @default("user") // "user" | "admin" | "store_owner" | "delivery"
+  collegeId     String?
+  collegeName   String?
+  expoPushToken String?
+  fcmToken      String?
+  usedCoupons   String    @default("[]") // JSON string array of codes
+  isBlocked     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  orders        Order[]
+}
+
+model Staff {
+  id          String   @id // Firebase UID
+  email       String
+  role        String   // "admin" | "store_owner" | "delivery"
+  name        String?
+  phone       String?
+  storeId     String?
+  collegeId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  store       Store?   @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  college     College? @relation(fields: [collegeId], references: [id], onDelete: SetNull)
+
+  @@index([storeId])
+  @@index([collegeId])
+}
+
+model Order {
+  id                String      @id
+  userId            String
+  userName          String?
+  userPhone         String?
+  collegeId         String
+  collegeName       String?
+  storeId           String
+  storeName         String?
+  items             String      // JSON stringified items array
+  totalAmount       Float
+  discountAmount    Float       @default(0)
+  couponApplied     String?
+  address           String
+  deliveryFee       Float       @default(0)
+  paymentStatus     String      @default("pending") // "pending" | "paid" | "failed" | "refunded"
+  orderStatus       String      @default("pending") // "pending" | "preparing" | "ready" | "out_for_delivery" | "delivered" | "cancelled"
+  additionalNote    String?
+  deliveryOtp       String
+  razorpayOrderId   String?     @unique
+  razorpayPaymentId String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  user              User        @relation(fields: [userId], references: [id])
+  college           College     @relation(fields: [collegeId], references: [id])
+  store             Store       @relation(fields: [storeId], references: [id])
+
+  @@index([userId])
+  @@index([storeId, orderStatus])
+  @@index([collegeId, orderStatus])
+}
+
+model Coupon {
+  id              String   @id
+  code            String   @unique
+  discountPercent Float
+  discount        Float?
+  type            String   @default("percent") // "percent" | "flat"
+  minOrder        Float    @default(0)
+  maxUses         Int?
+  usedCount       Int      @default(0)
+  collegeId       String   @default("all")
+  oncePerUser     Boolean  @default(true)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Banner {
+  id         String   @id
+  imageUrl   String
+  couponCode String?
+  collegeId  String   @default("all")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Config {
+  key       String   @id // e.g. "fees", "maintenance"
+  value     String   // JSON stringified value
+  updatedAt DateTime @updatedAt
+}
+

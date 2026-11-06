@@ -1,0 +1,21 @@
+name = "zappit-backend-edge"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+workers_dev = true
+
+routes = [
+  { pattern = "api.zappit.shop", custom_domain = true }
+]
+
+# D1 Database Binding
+[[d1_databases]]
+binding = "DB"
+database_name = "zappit-db"
+database_id = "800f1aec-e255-41ed-81d1-7af599d1c96a"
+
+[vars]
+ENVIRONMENT = "production"
+RAZORPAY_KEY_ID = "rzp_live_T0z5BO2JZ9ZjY0"
+

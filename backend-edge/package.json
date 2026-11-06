@@ -1,0 +1,25 @@
+{
+  "name": "zappit-backend-edge",
+  "version": "1.0.0",
+  "description": "Zappit Cloudflare Edge Backend with Hono and Prisma D1",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply zappit-db --local",
+    "db:migrate:prod": "wrangler d1 migrations apply zappit-db --remote",
+    "prisma:generate": "prisma generate"
+  },
+  "dependencies": {
+    "@prisma/adapter-d1": "^5.22.0",
+    "@prisma/client": "^5.22.0",
+    "hono": "^4.7.2",
+    "jose": "^5.9.6"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "prisma": "^5.22.0",
+    "typescript": "^5.7.3",
+    "wrangler": "^4.158.0"
+  }
+}
