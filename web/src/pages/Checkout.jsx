@@ -153,7 +153,7 @@ const CheckoutPage = () => {
 
       // 2. Open Razorpay Checkout
       const options = {
-        key: data.key_id || import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_T0gdDL6JAF6MCI',
+        key: data.key_id || import.meta.env.VITE_RAZORPAY_KEY_ID,
         amount: data.amount,
         currency: data.currency,
         name: 'Zappit',

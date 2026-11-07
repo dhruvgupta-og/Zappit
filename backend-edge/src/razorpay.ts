@@ -27,6 +27,15 @@ export async function createRazorpayOrder(
   return await res.json();
 }
 
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let c = 0;
+  for (let i = 0; i < a.length; i++) {
+    c |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return c === 0;
+}
+
 export async function verifyRazorpaySignature(
   orderId: string,
   paymentId: string,
@@ -51,7 +60,7 @@ export async function verifyRazorpaySignature(
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 
-  return hashHex === signature;
+  return timingSafeEqual(hashHex, signature);
 }
 
 export async function verifyWebhookSignature(
@@ -76,6 +85,6 @@ export async function verifyWebhookSignature(
     .map((b) => b.toString(16).padStart(2, '0'))
     .join('');
 
-  return hashHex === signature;
+  return timingSafeEqual(hashHex, signature);
 }
 

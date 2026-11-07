@@ -152,7 +152,8 @@ const CheckoutScreen = () => {
 
       if (!res.success) throw new Error(res.error || 'Failed to create order');
 
-      const razorpayKey = res.key_id || 'rzp_test_T0gdDL6JAF6MCI';
+      const razorpayKey = res.key_id;
+      if (!razorpayKey) throw new Error('Payment gateway configuration missing. Please retry.');
 
       // 2. Generate Razorpay Checkout HTML to load in WebView with full error handling
       const html = `

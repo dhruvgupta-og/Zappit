@@ -103,6 +103,10 @@ app.route('/api/admin', admin);
 
 // Alias coupon endpoints to support both /api/get-coupons and /api/admin/get-coupons
 app.get('/api/get-coupons', async (c) => {
+  const user = c.get('user');
+  if (!user || user.role !== 'admin') {
+    return c.json({ success: false, error: 'Forbidden: Admins only' }, 403);
+  }
   const prisma = getPrisma(c.env.DB);
   const list = await prisma.coupon.findMany();
   const mapped = list.map((cp) => ({

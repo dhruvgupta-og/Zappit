@@ -8,6 +8,9 @@ const admin = new Hono<{ Bindings: { DB: D1Database }; Variables: { user: AuthUs
 // GET /api/get-coupons
 admin.get('/get-coupons', async (c) => {
   try {
+    const user = c.get('user');
+    if (user?.role !== 'admin') return c.json({ success: false, error: 'Forbidden' }, 403);
+
     const prisma = getPrisma(c.env.DB);
     const list = await prisma.coupon.findMany();
     const mapped = list.map((cp) => ({
@@ -103,6 +106,11 @@ admin.post('/delete-coupon', async (c) => {
 admin.get('/config/:key', async (c) => {
   try {
     const key = c.req.param('key');
+    const user = c.get('user');
+    // Only 'fees' and 'maintenance' are public configs. Any other key requires admin.
+    if (!['fees', 'maintenance'].includes(key) && user?.role !== 'admin') {
+      return c.json({ success: false, error: 'Forbidden' }, 403);
+    }
     const prisma = getPrisma(c.env.DB);
     const cfg = await prisma.config.findUnique({ where: { key } });
     if (!cfg) return c.json({ success: true, data: null });
