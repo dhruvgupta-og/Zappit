@@ -118,7 +118,7 @@ orders.post('/create-order', async (c) => {
 
     // 4. Create Razorpay Order
     const receipt = `order_${Date.now()}`;
-    const razorpayOrder = await createRazorpayOrder(
+    const razorpayOrder: any = await createRazorpayOrder(
       c.env.RAZORPAY_KEY_ID,
       c.env.RAZORPAY_KEY_SECRET,
       amountInPaise,

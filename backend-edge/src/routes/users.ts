@@ -39,16 +39,24 @@ users.get('/:uid', async (c) => {
       return c.json({ success: true, user: null, exists: false });
     }
 
+    const profileComplete = dbUser.profileComplete !== false && !!(dbUser.phone && dbUser.collegeId);
+
     const userObj = {
       id: dbUser.id,
       _id: dbUser.id,
+      uid: dbUser.id,
       name: dbUser.name,
       email: dbUser.email,
       phone: dbUser.phone,
       role: dbUser.role,
+      college: dbUser.collegeName,
       college_id: dbUser.collegeId,
+      college_name: dbUser.collegeName,
       collegeName: dbUser.collegeName,
       address: dbUser.address,
+      profile_complete: profileComplete,
+      profileComplete: profileComplete,
+      auth_method: 'google',
       expoPushToken: dbUser.expoPushToken,
       fcmToken: dbUser.fcmToken,
       usedCoupons: JSON.parse(dbUser.usedCoupons || '[]'),
@@ -87,6 +95,11 @@ users.post('/:uid', async (c) => {
     if (body.address !== undefined) updateData.address = body.address;
     if (body.expoPushToken !== undefined) updateData.expoPushToken = body.expoPushToken;
     if (body.fcmToken !== undefined) updateData.fcmToken = body.fcmToken;
+    if (body.profile_complete !== undefined) updateData.profileComplete = !!body.profile_complete;
+    if (body.profileComplete !== undefined) updateData.profileComplete = !!body.profileComplete;
+    if (body.phone && (body.college_id || body.collegeId)) {
+      updateData.profileComplete = true;
+    }
 
     if (user.role === 'admin') {
       if (body.role !== undefined) updateData.role = body.role;
@@ -105,22 +118,31 @@ users.post('/:uid', async (c) => {
         address: body.address || null,
         expoPushToken: body.expoPushToken || null,
         fcmToken: body.fcmToken || null,
+        profileComplete: body.profile_complete !== undefined ? !!body.profile_complete : true,
         role: user.role === 'admin' && body.role ? body.role : 'user',
         isBlocked: false,
       },
       update: updateData,
     });
 
+    const isComplete = saved.profileComplete !== false && !!(saved.phone && saved.collegeId);
+
     const userObj = {
       id: saved.id,
       _id: saved.id,
+      uid: saved.id,
       name: saved.name,
       email: saved.email,
       phone: saved.phone,
       role: saved.role,
+      college: saved.collegeName,
       college_id: saved.collegeId,
+      college_name: saved.collegeName,
       collegeName: saved.collegeName,
       address: saved.address,
+      profile_complete: isComplete,
+      profileComplete: isComplete,
+      auth_method: 'google',
       expoPushToken: saved.expoPushToken,
       fcmToken: saved.fcmToken,
       usedCoupons: JSON.parse(saved.usedCoupons || '[]'),

@@ -77,9 +77,11 @@ model User {
   name          String?
   email         String?
   phone         String?
+  address       String?
   role          String    @default("user") // "user" | "admin" | "store_owner" | "delivery"
   collegeId     String?
   collegeName   String?
+  profileComplete Boolean @default(true)
   expoPushToken String?
   fcmToken      String?
   usedCoupons   String    @default("[]") // JSON string array of codes
