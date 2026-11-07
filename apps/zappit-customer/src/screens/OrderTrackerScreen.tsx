@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Linking, TextInput, Alert, ActivityIndicator } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ordersApi } from '../api/orders';
+import { useCartStore } from '../store/cartStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order } from '../types';
@@ -71,6 +72,88 @@ const OrderTrackerScreen = () => {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const pulse = useRef(new Animated.Value(1)).current;
+
+  // Rating & Feedback State
+  const [selectedRating, setSelectedRating] = useState<number>(5);
+  const [ratingFeedback, setRatingFeedback] = useState<string>('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [isSubmittingRating, setIsSubmittingRating] = useState<boolean>(false);
+  const [hasRatedLocally, setHasRatedLocally] = useState<boolean>(false);
+
+  const reorderItems = useCartStore((s) => s.reorderItems);
+  const getCartStoreId = useCartStore((s) => s.getCartStoreId);
+
+  const handleWhatsAppSupport = () => {
+    const orderNum = primaryOrderId ? `#${String(primaryOrderId).slice(-6).toUpperCase()}` : '';
+    const storeName = (order as any)?.store_name || order?.storeName || '';
+    const amount = (order as any)?.total_amount || order?.totalAmount ? ` (₹${(order as any)?.total_amount || order?.totalAmount})` : '';
+    const text = encodeURIComponent(
+      `Hi Zappit Support, I need help with my Order ${orderNum}${storeName ? ` from ${storeName}` : ''}${amount}.`
+    );
+    const url = `whatsapp://send?phone=918463037671&text=${text}`;
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) {
+        Linking.openURL(url);
+      } else {
+        Linking.openURL(`https://wa.me/918463037671?text=${text}`);
+      }
+    }).catch(() => {
+      Linking.openURL(`https://wa.me/918463037671?text=${text}`);
+    });
+  };
+
+  const handleReorder = () => {
+    if (!order || !order.items || order.items.length === 0) return;
+    const currentStoreId = getCartStoreId();
+    const orderStoreId = (order as any).store_id || order.storeId || '';
+    const orderStoreName = (order as any).store_name || order.storeName || 'Campus Store';
+
+    const doReorder = () => {
+      reorderItems(order.items, orderStoreId, orderStoreName);
+      navigation.navigate('CartStack');
+    };
+
+    if (currentStoreId && currentStoreId !== orderStoreId) {
+      Alert.alert(
+        'Replace Current Cart?',
+        `Your cart currently contains items from another store. Replace them with items from ${orderStoreName}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Replace & Re-Order', style: 'destructive', onPress: doReorder },
+        ]
+      );
+    } else {
+      doReorder();
+    }
+  };
+
+  const handleRatingSubmit = async () => {
+    if (!primaryOrderId) return;
+    setIsSubmittingRating(true);
+    try {
+      const combinedFeedback = [
+        ...selectedTags,
+        ratingFeedback.trim(),
+      ].filter(Boolean).join(' • ');
+
+      await ordersApi.submitRating(primaryOrderId, selectedRating, combinedFeedback);
+      setHasRatedLocally(true);
+      Alert.alert('Thank You!', `Your ${selectedRating}-star rating has been submitted.`);
+      fetchOrder();
+    } catch (err: any) {
+      Alert.alert('Rating Error', err?.response?.data?.error || err.message || 'Could not submit rating.');
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  };
+
+  const toggleTag = (tag: string) => {
+    if (selectedTags.includes(tag)) {
+      setSelectedTags(selectedTags.filter((t) => t !== tag));
+    } else {
+      setSelectedTags([...selectedTags, tag]);
+    }
+  };
 
   // Animated pulse for current step
   useEffect(() => {
@@ -282,14 +365,120 @@ const OrderTrackerScreen = () => {
           </View>
         </View>
 
-        {/* ── CTA on Delivered ── */}
+        {/* ── WHATSAPP SUPPORT BUTTON (1-TAP) ── */}
+        <TouchableOpacity
+          style={styles.whatsAppCard}
+          onPress={handleWhatsAppSupport}
+          activeOpacity={0.8}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={styles.whatsAppIconBg}>
+              <Text style={{ fontSize: 20 }}>💬</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: colors.textMain }}>Need Help with this Order?</Text>
+              <Text style={{ fontSize: 12, color: colors.textMuted }}>Chat directly with Zappit Support on WhatsApp</Text>
+            </View>
+            <Text style={{ color: '#25D366', fontWeight: '800', fontSize: 14 }}>Chat →</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* ── POST-DELIVERY STAR RATING (⭐ 1-5 Stars) ── */}
         {isDelivered && (
-          <TouchableOpacity
-            style={[styles.btn, { backgroundColor: colors.primary }]}
-            onPress={() => navigation.navigate('Main', { screen: 'Home' })}
-          >
-            <Text style={{ color: '#0B132B', fontWeight: '800', fontSize: 16 }}>🏠 Back to Home</Text>
-          </TouchableOpacity>
+          ((order as any).rating || hasRatedLocally) ? (
+            <View style={[styles.card, { borderColor: '#10B981', borderWidth: 1.5, alignItems: 'center', paddingVertical: spacing.xl }]}>
+              <Text style={{ fontSize: 32, marginBottom: 6 }}>🎉</Text>
+              <Text style={{ fontSize: 17, fontWeight: '800', color: colors.textMain }}>Thank you for your rating!</Text>
+              <Text style={{ fontSize: 20, color: '#F59E0B', marginTop: 6, letterSpacing: 4 }}>
+                {'⭐'.repeat(Number((order as any).rating || selectedRating))}
+              </Text>
+              {(order as any).rating_feedback ? (
+                <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8, fontStyle: 'italic' }}>
+                  "{(order as any).rating_feedback}"
+                </Text>
+              ) : null}
+            </View>
+          ) : (
+            <View style={[styles.card, { borderColor: colors.primary, borderWidth: 1.5 }]}>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textMain, textAlign: 'center', marginBottom: 4 }}>
+                Rate Your Meal ⭐
+              </Text>
+              <Text style={{ fontSize: 13, color: colors.textMuted, textAlign: 'center', marginBottom: 16 }}>
+                How was your food from {(order as any).store_name || 'the kitchen'}?
+              </Text>
+              
+              {/* Star selector */}
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 16 }}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <TouchableOpacity key={star} onPress={() => setSelectedRating(star)} activeOpacity={0.7}>
+                    <Text style={{ fontSize: 36, opacity: star <= selectedRating ? 1 : 0.25 }}>⭐</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Quick feedback chips */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 14 }}>
+                {['Fast Delivery ⚡', 'Delicious 😋', 'Hot & Fresh ♨️', 'Good Packaging 📦'].map((tag) => (
+                  <TouchableOpacity
+                    key={tag}
+                    onPress={() => toggleTag(tag)}
+                    style={[
+                      styles.ratingTag,
+                      selectedTags.includes(tag) && styles.ratingTagActive,
+                    ]}
+                  >
+                    <Text style={[
+                      styles.ratingTagText,
+                      selectedTags.includes(tag) && styles.ratingTagTextActive,
+                    ]}>{tag}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {/* Optional note */}
+              <TextInput
+                style={styles.ratingInput}
+                placeholder="Any suggestions for the store? (optional)"
+                placeholderTextColor={colors.textMuted}
+                value={ratingFeedback}
+                onChangeText={setRatingFeedback}
+                maxLength={200}
+              />
+
+              <TouchableOpacity
+                style={[styles.submitRatingBtn, isSubmittingRating && { opacity: 0.6 }]}
+                onPress={handleRatingSubmit}
+                disabled={isSubmittingRating}
+              >
+                {isSubmittingRating ? (
+                  <ActivityIndicator color="#0B132B" size="small" />
+                ) : (
+                  <Text style={styles.submitRatingBtnText}>Submit {selectedRating}★ Rating</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )
+        )}
+
+        {/* ── CTA on Delivered: 1-Tap Re-Order & Back to Home ── */}
+        {isDelivered && (
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
+            <TouchableOpacity
+              style={[styles.btn, { flex: 1, backgroundColor: 'rgba(255, 193, 7, 0.15)', borderWidth: 1.5, borderColor: colors.primary }]}
+              onPress={handleReorder}
+              activeOpacity={0.8}
+            >
+              <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 15 }}>🔁 Re-Order</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.btn, { flex: 1, backgroundColor: colors.primary }]}
+              onPress={() => navigation.navigate('Main', { screen: 'Home' })}
+              activeOpacity={0.8}
+            >
+              <Text style={{ color: '#0B132B', fontWeight: '800', fontSize: 15 }}>🏠 Home</Text>
+            </TouchableOpacity>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -353,6 +542,69 @@ const styles = StyleSheet.create({
   btn: {
     paddingVertical: 16, borderRadius: radius.lg,
     alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md,
+  },
+
+  // WhatsApp Support Card
+  whatsAppCard: {
+    backgroundColor: 'rgba(37, 211, 102, 0.1)',
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: 'rgba(37, 211, 102, 0.4)',
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  whatsAppIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(37, 211, 102, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Rating tags & input
+  ratingTag: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+  },
+  ratingTagActive: {
+    backgroundColor: 'rgba(255,193,7,0.18)',
+    borderColor: colors.primary,
+  },
+  ratingTagText: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '600',
+  },
+  ratingTagTextActive: {
+    color: colors.primary,
+  },
+  ratingInput: {
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    color: colors.textMain,
+    fontSize: 13,
+    marginBottom: spacing.md,
+  },
+  submitRatingBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  submitRatingBtnText: {
+    color: '#0B132B',
+    fontWeight: '800',
+    fontSize: 14,
   },
 });
 

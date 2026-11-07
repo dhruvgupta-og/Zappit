@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ordersApi } from '../api/orders';
+import { useCartStore } from '../store/cartStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order } from '../types';
@@ -23,6 +24,38 @@ const OrdersScreen = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  const reorderItems = useCartStore((s) => s.reorderItems);
+  const getCartStoreId = useCartStore((s) => s.getCartStoreId);
+
+  const handleReorder = (order: Order) => {
+    const currentStoreId = getCartStoreId();
+    const orderStoreId = (order as any).store_id || order.storeId || '';
+    const orderStoreName = (order as any).store_name || order.storeName || 'Campus Store';
+
+    if (!order.items || order.items.length === 0) {
+      Alert.alert('Cannot Re-order', 'No items found in this order.');
+      return;
+    }
+
+    const doReorder = () => {
+      reorderItems(order.items, orderStoreId, orderStoreName);
+      navigation.navigate('CartStack');
+    };
+
+    if (currentStoreId && currentStoreId !== orderStoreId) {
+      Alert.alert(
+        'Replace Current Cart?',
+        `Your cart currently contains items from another store. Replace them with items from ${orderStoreName}?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Replace & Re-Order', style: 'destructive', onPress: doReorder },
+        ]
+      );
+    } else {
+      doReorder();
+    }
+  };
 
   const fetchOrders = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -98,11 +131,27 @@ const OrdersScreen = () => {
           <Text style={styles.totalValue}>₹{(item as any).total_amount || item.totalAmount}</Text>
         </View>
 
-        {isActive && (
-          <Text style={{ fontSize: 11, color: cfg.color, fontWeight: '600', marginTop: 6, textAlign: 'right' }}>
-            Tap to track →
-          </Text>
-        )}
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={styles.reorderBtn}
+            onPress={() => handleReorder(item)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.reorderBtnText}>🔁 Re-Order</Text>
+          </TouchableOpacity>
+
+          {isActive ? (
+            <View style={styles.trackPill}>
+              <Text style={{ fontSize: 12, color: cfg.color, fontWeight: '700' }}>
+                Track Live →
+              </Text>
+            </View>
+          ) : (
+            <Text style={{ fontSize: 12, color: colors.textMuted }}>
+              Details →
+            </Text>
+          )}
+        </View>
       </TouchableOpacity>
     );
   };
@@ -170,6 +219,18 @@ const styles = StyleSheet.create({
   footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   totalLabel: { fontSize: 13, color: colors.textMuted, fontWeight: '600' },
   totalValue: { fontSize: 16, color: colors.textMain, fontWeight: '700' },
+  actionsRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  reorderBtn: {
+    backgroundColor: 'rgba(255, 193, 7, 0.15)', borderWidth: 1, borderColor: colors.primary,
+    paddingHorizontal: 14, paddingVertical: 6, borderRadius: radius.full,
+  },
+  reorderBtnText: { color: colors.primary, fontSize: 12, fontWeight: '700' },
+  trackPill: {
+    backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: radius.full,
+  },
 });
 
 export default OrdersScreen;

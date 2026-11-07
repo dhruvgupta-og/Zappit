@@ -22,4 +22,9 @@ export const ordersApi = {
     const res = await apiClient.patch(`/api/orders/${id}`, data);
     return res.data;
   },
+
+  submitRating: async (id: string, rating: number, feedback?: string): Promise<any> => {
+    const res = await apiClient.post(`/api/orders/${id}/rating`, { rating, feedback });
+    return res.data;
+  },
 };

@@ -129,6 +129,8 @@ model Order {
   orderStatus       String      @default("pending") // "pending" | "preparing" | "ready" | "out_for_delivery" | "delivered" | "cancelled"
   additionalNote    String?
   deliveryOtp       String
+  rating            Float?
+  ratingFeedback    String?
   razorpayOrderId   String?     @unique
   razorpayPaymentId String?
   createdAt         DateTime    @default(now())

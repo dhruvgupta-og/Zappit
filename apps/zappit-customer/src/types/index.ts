@@ -41,8 +41,8 @@ export interface MenuItem {
   desc?: string;
   description?: string;
   price: number;
-  image: string;
-  category: string;
+  image?: string;
+  category?: string;
   isVeg: boolean;
   isAvailable?: boolean;
   available?: boolean;
@@ -86,6 +86,8 @@ export interface Order {
   payment_status?: string;
   coupon_code?: string;
   otp?: string;
+  rating?: number;
+  rating_feedback?: string;
   created_at?: string;
   createdAt?: string;
   updated_at?: string;

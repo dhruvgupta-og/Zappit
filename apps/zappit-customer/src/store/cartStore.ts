@@ -13,12 +13,38 @@ export interface CartState {
   getCartStoreId: () => string | null;
   getCartStoreName: () => string | null;
   getCartItems: () => CartItem[];
+  reorderItems: (items: any[], storeId: string, storeName: string) => void;
 }
 
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       items: {},
+
+      reorderItems: (orderItems: any[], storeId: string, storeName: string) => {
+        const newMap: Record<string, CartItem> = {};
+        for (const item of orderItems) {
+          const itemId = item.id || item._id || item.item_id || item.itemId || item.name;
+          const key = `${storeId}_${itemId}`;
+          newMap[key] = {
+            menuItem: {
+              id: itemId,
+              _id: itemId,
+              name: item.name,
+              price: item.price,
+              image: item.image || '',
+              category: item.category || 'Dishes',
+              isVeg: item.isVeg !== undefined ? item.isVeg : true,
+              isAvailable: true,
+              storeId,
+            },
+            qty: item.qty || item.quantity || 1,
+            storeId,
+            storeName,
+          };
+        }
+        set({ items: newMap });
+      },
 
       addToCart: (item: MenuItem, storeId: string, storeName: string) => {
         set((state) => {

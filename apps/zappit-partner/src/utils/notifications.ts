@@ -112,3 +112,34 @@ export const playOrderAlert = async (title: string, body: string) => {
   }
 };
 
+let kitchenAlarmTimer: any = null;
+
+/**
+ * Starts a repeating loud sound & vibration alarm for store kitchens
+ * whenever there are unacknowledged orders waiting.
+ */
+export const startKitchenAlarm = (orderCount: number) => {
+  stopKitchenAlarm();
+  const ring = () => {
+    playOrderAlert(
+      `🚨 ${orderCount} NEW ORDER${orderCount > 1 ? 'S' : ''} WAITING!`,
+      'Kitchen action required: Tap to start cooking now!'
+    );
+  };
+  ring();
+  kitchenAlarmTimer = setInterval(ring, 4500);
+};
+
+/**
+ * Stops the repeating kitchen alarm immediately.
+ */
+export const stopKitchenAlarm = () => {
+  if (kitchenAlarmTimer) {
+    clearInterval(kitchenAlarmTimer);
+    kitchenAlarmTimer = null;
+  }
+  try {
+    Vibration.cancel();
+  } catch {}
+};
+

@@ -11,7 +11,7 @@ import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order, MenuItem } from '../types';
-import { playOrderAlert } from '../utils/notifications';
+import { playOrderAlert, startKitchenAlarm, stopKitchenAlarm } from '../utils/notifications';
 
 // ── Constants ──
 const ORDER_SUB_TABS = [
@@ -55,6 +55,7 @@ const StoreDashboardScreen = () => {
   // Advanced store controls
   const [orderSearch, setOrderSearch] = useState('');
   const [soundAlerts, setSoundAlerts] = useState(true);
+  const [isAlarmSilenced, setIsAlarmSilenced] = useState(false);
   const [ordersDateFilter, setOrdersDateFilter] = useState<'today' | 'all'>('today');
 
   // Menu form state
@@ -82,20 +83,26 @@ const StoreDashboardScreen = () => {
         );
         setOrders(filtered);
 
-        // Sound & visual chime for new order arrival
-        const newCount = filtered.filter((o: any) => o.order_status === 'confirmed').length;
-        if (newCount > prevOrderCount.current && prevOrderCount.current !== -1) {
-          if (soundAlerts) {
-            playOrderAlert('🚨 NEW ORDER RECEIVED! 🚨', 'A new paid order is waiting in the kitchen queue.');
-          }
-          Alert.alert('🔔 New Paid Order!', 'A new student order has arrived. Start preparing!');
+        // Loud kitchen repeating buzzer alert for waiting orders
+        const waitingConfirmed = filtered.filter((o: any) => o.order_status === 'confirmed');
+        const waitingCount = waitingConfirmed.length;
+
+        if (waitingCount > 0 && soundAlerts && !isAlarmSilenced) {
+          startKitchenAlarm(waitingCount);
+        } else if (waitingCount === 0) {
+          stopKitchenAlarm();
+          setIsAlarmSilenced(false);
         }
-        prevOrderCount.current = newCount;
+
+        if (waitingCount > prevOrderCount.current && prevOrderCount.current !== -1) {
+          Alert.alert('🔔 New Student Order!', `${waitingCount} order(s) waiting in your kitchen queue.`);
+        }
+        prevOrderCount.current = waitingCount;
       }
     } catch (err) {
       console.error('[StoreDashboard] Failed to fetch orders:', err);
     }
-  }, [staffStoreId, soundAlerts]);
+  }, [staffStoreId, soundAlerts, isAlarmSilenced]);
 
   // ── Fetch store data & menu ──
   const fetchStoreData = useCallback(async () => {
@@ -117,7 +124,10 @@ const StoreDashboardScreen = () => {
     fetchOrders();
     fetchStoreData();
     const interval = setInterval(fetchOrders, 10000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      stopKitchenAlarm();
+    };
   }, [staffStoreId, fetchOrders, fetchStoreData]);
 
   const onRefresh = async () => {
@@ -257,6 +267,14 @@ const StoreDashboardScreen = () => {
   };
 
   const updateOrderStatus = async (orderId: string, status: string) => {
+    // If accepting order, stop kitchen alarm
+    if (status === 'preparing') {
+      const remainingWaiting = orders.filter(o => o.order_status === 'confirmed' && o.id !== orderId && o._id !== orderId).length;
+      if (remainingWaiting === 0) {
+        stopKitchenAlarm();
+        setIsAlarmSilenced(false);
+      }
+    }
     // Optimistic update
     setOrders(prev => prev.map(o => (o.id === orderId || o._id === orderId) ? { ...o, order_status: status } : o));
     try {
@@ -566,7 +584,12 @@ const StoreDashboardScreen = () => {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           {/* Sound Alert Toggle */}
           <TouchableOpacity
-            onPress={() => setSoundAlerts(!soundAlerts)}
+            onPress={() => {
+              if (soundAlerts) {
+                stopKitchenAlarm();
+              }
+              setSoundAlerts(!soundAlerts);
+            }}
             style={[styles.iconButton, soundAlerts && styles.iconButtonActive]}
           >
             <Text style={{ fontSize: 16 }}>{soundAlerts ? '🔔' : '🔕'}</Text>
@@ -588,6 +611,40 @@ const StoreDashboardScreen = () => {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* ── EMERGENCY KITCHEN LOUD ALARM BANNER ── */}
+      {newOrders.length > 0 && (
+        <View style={styles.emergencyAlarmBanner}>
+          <View style={{ flex: 1, marginRight: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={styles.alarmRedDot} />
+              <Text style={styles.emergencyAlarmTitle}>
+                {newOrders.length} NEW ORDER{newOrders.length > 1 ? 'S' : ''} WAITING!
+              </Text>
+            </View>
+            <Text style={styles.emergencyAlarmSub}>
+              {isAlarmSilenced || !soundAlerts ? '🔕 Buzzer silenced' : '🔊 Loud buzzer sounding until accepted'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[styles.silenceAlarmBtn, isAlarmSilenced && { backgroundColor: 'rgba(255,255,255,0.1)' }]}
+            onPress={() => {
+              if (isAlarmSilenced) {
+                setIsAlarmSilenced(false);
+                if (soundAlerts) startKitchenAlarm(newOrders.length);
+              } else {
+                setIsAlarmSilenced(true);
+                stopKitchenAlarm();
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.silenceAlarmBtnText}>
+              {isAlarmSilenced ? '🔔 Unmute' : '🔕 Silence'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ── ADVANCED METRICS BANNER ── */}
       <View style={styles.statsRow}>
@@ -1145,6 +1202,49 @@ const styles = StyleSheet.create({
   catChipText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   catChipTextActive: { color: colors.storeAccent },
   modalBtn: { paddingVertical: 14, borderRadius: radius.md, alignItems: 'center' },
+
+  // Emergency Alarm Banner
+  emergencyAlarmBanner: {
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderBottomWidth: 1.5,
+    borderTopWidth: 1.5,
+    borderColor: '#EF4444',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  alarmRedDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#EF4444',
+  },
+  emergencyAlarmTitle: {
+    color: '#EF4444',
+    fontWeight: '900',
+    fontSize: 14,
+    letterSpacing: 0.5,
+  },
+  emergencyAlarmSub: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  silenceAlarmBtn: {
+    backgroundColor: 'rgba(239, 68, 68, 0.3)',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+  },
+  silenceAlarmBtnText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 12,
+  },
 });
 
 export default StoreDashboardScreen;

@@ -39,6 +39,22 @@ const ProfileScreen = () => {
     }
   };
 
+  const handleWhatsAppSupport = () => {
+    const text = encodeURIComponent(
+      `Hi Zappit Support, I need help with my account (${profile?.name || 'Customer'}, Phone: ${profile?.phone || 'N/A'}, College: ${profile?.college_name || 'N/A'}).`
+    );
+    const url = `whatsapp://send?phone=918463037671&text=${text}`;
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) {
+        Linking.openURL(url);
+      } else {
+        Linking.openURL(`https://wa.me/918463037671?text=${text}`);
+      }
+    }).catch(() => {
+      Linking.openURL(`https://wa.me/918463037671?text=${text}`);
+    });
+  };
+
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
       { text: 'Cancel', style: 'cancel' },
@@ -148,9 +164,12 @@ const ProfileScreen = () => {
               <Text style={{ color: colors.textMuted }}>→</Text>
             </TouchableOpacity>
             <View style={styles.divider} />
-            <TouchableOpacity style={styles.rowBtn} onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')}>
-              <Text style={styles.btnLabel}>Help & Support</Text>
-              <Text style={{ color: colors.textMuted }}>→</Text>
+            <TouchableOpacity style={styles.rowBtn} onPress={handleWhatsAppSupport}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ fontSize: 18 }}>💬</Text>
+                <Text style={styles.btnLabel}>Help & WhatsApp Support</Text>
+              </View>
+              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Chat Now →</Text>
             </TouchableOpacity>
             <View style={styles.divider} />
             <TouchableOpacity style={styles.rowBtn} onPress={handleCheckUpdates} disabled={checkingUpdate}>

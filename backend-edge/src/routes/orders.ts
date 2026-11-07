@@ -455,10 +455,68 @@ orders.get('/orders', async (c) => {
       delivery_otp: o.deliveryOtp,
       requires_otp: !!o.deliveryOtp,
       razorpay_order_id: o.razorpayOrderId,
+      rating: (o as any).rating || null,
+      rating_feedback: (o as any).ratingFeedback || null,
       created_at: o.createdAt.toISOString(),
     }));
 
     return c.json({ success: true, orders: formatted });
+  } catch (err: any) {
+    return c.json({ success: false, error: err.message }, 500);
+  }
+});
+
+// POST /api/orders/:id/rating
+orders.post('/orders/:id/rating', async (c) => {
+  try {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    const { rating, feedback } = await c.req.json();
+
+    const ratingNum = Number(rating);
+    if (!ratingNum || ratingNum < 1 || ratingNum > 5) {
+      return c.json({ success: false, error: 'Rating must be between 1 and 5' }, 400);
+    }
+
+    const prisma = getPrisma(c.env.DB);
+    const order = await prisma.order.findUnique({ where: { id } });
+    if (!order) return c.json({ success: false, error: 'Order not found' }, 404);
+
+    if (order.userId !== user.uid && user.role !== 'admin') {
+      return c.json({ success: false, error: 'Forbidden: You can only rate your own orders' }, 403);
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        rating: ratingNum,
+        ratingFeedback: feedback ? String(feedback).slice(0, 500) : null,
+      },
+    });
+
+    // Update store average rating
+    try {
+      const allRatings = await prisma.order.findMany({
+        where: {
+          storeId: order.storeId,
+          rating: { not: null },
+        },
+        select: { rating: true },
+      });
+
+      if (allRatings.length > 0) {
+        const avg = allRatings.reduce((sum, r) => sum + (r.rating || 0), 0) / allRatings.length;
+        const roundedAvg = Math.round(avg * 10) / 10;
+        await prisma.store.update({
+          where: { id: order.storeId },
+          data: { rating: roundedAvg },
+        });
+      }
+    } catch (storeRatingErr) {
+      console.warn('[Zappit] Could not update store avg rating:', storeRatingErr);
+    }
+
+    return c.json({ success: true, order: updated });
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
