@@ -202,7 +202,7 @@ const CheckoutScreen = () => {
                   },
                   modal: {
                     ondismiss: function() {
-                      postToApp({ status: 'cancelled' });
+                      postToApp({ status: 'cancelled', razorpay_order_id: "${res.order_id}" });
                     }
                   }
                 };
@@ -210,7 +210,7 @@ const CheckoutScreen = () => {
                 var rzp = new Razorpay(options);
                 rzp.on('payment.failed', function(response) {
                   var errDesc = response.error ? (response.error.description || response.error.reason || 'Payment failed') : 'Payment failed';
-                  postToApp({ status: 'failed', error: errDesc });
+                  postToApp({ status: 'failed', razorpay_order_id: "${res.order_id}", error: errDesc });
                 });
                 rzp.open();
               } catch (err) {
@@ -243,10 +243,16 @@ const CheckoutScreen = () => {
       if (data.status === 'cancelled') {
         setPaymentHtml(null);
         setProcessing(false);
+        if (data.razorpay_order_id) {
+          apiClient.post('/api/orders/cancel-unpaid', { razorpay_order_id: data.razorpay_order_id }).catch(() => {});
+        }
         Alert.alert('Cancelled', 'Payment was cancelled.');
       } else if (data.status === 'failed') {
         setPaymentHtml(null);
         setProcessing(false);
+        if (data.razorpay_order_id) {
+          apiClient.post('/api/orders/cancel-unpaid', { razorpay_order_id: data.razorpay_order_id }).catch(() => {});
+        }
         Alert.alert('Payment Failed', data.error || 'Payment failed.');
       } else if (data.status === 'success') {
         // Immediately show animation screen to avoid form flicker

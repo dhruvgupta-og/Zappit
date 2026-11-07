@@ -86,7 +86,11 @@ app.use('/api/create-order', authMiddleware);
 app.use('/api/verify-payment', authMiddleware);
 app.use('/api/verify-coupon', authMiddleware);
 app.use('/api/orders', authMiddleware);
-app.use('/api/orders/*', authMiddleware);
+app.use('/api/orders/*', async (c, next) => {
+  if (c.req.path === '/api/orders/cancel-unpaid') return next();
+  return authMiddleware(c, next);
+});
+app.use('/api/cancel-unpaid', async (c, next) => next());
 app.use('/api/send-status-notification', authMiddleware);
 app.use('/api/get-coupons', authMiddleware);
 app.use('/api/save-coupon', authMiddleware);

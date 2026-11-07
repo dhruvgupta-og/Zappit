@@ -217,6 +217,9 @@ const CheckoutPage = () => {
         },
         modal: {
           ondismiss: function() {
+            if (data.order_id) {
+              api.post('/api/orders/cancel-unpaid', { razorpay_order_id: data.order_id }).catch(() => {});
+            }
             alert('Payment cancelled by user');
             setPaymentProcessing(false);
           }
@@ -227,6 +230,9 @@ const CheckoutPage = () => {
 
       paymentObject.on('payment.failed', function(response) {
         console.error('Razorpay payment.failed:', response.error);
+        if (data.order_id) {
+          api.post('/api/orders/cancel-unpaid', { razorpay_order_id: data.order_id }).catch(() => {});
+        }
         alert('Payment failed: ' + (response.error.description || response.error.reason || 'Unknown error'));
         setPaymentProcessing(false);
       });

@@ -381,18 +381,49 @@ orders.get('/orders', async (c) => {
     const prisma = getPrisma(c.env.DB);
     const isAdminQuery = c.req.query('admin') === 'true';
 
+    // Auto-cancel abandoned checkout attempts older than 5 minutes
+    try {
+      const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
+      await prisma.order.updateMany({
+        where: {
+          paymentStatus: 'pending',
+          orderStatus: { not: 'cancelled' },
+          createdAt: { lt: fiveMinsAgo },
+        },
+        data: { orderStatus: 'cancelled' },
+      });
+    } catch (cleanErr) {
+      console.warn('Auto-cancel unpaid orders failed (non-critical):', cleanErr);
+    }
+
     let where: any = {};
 
     if (user.role === 'admin' || isAdminQuery) {
-      // Return all orders (optional college filter)
+      // Admins see all orders (optional college filter)
       const colId = c.req.query('college_id');
       if (colId) where.collegeId = colId;
-    } else if (user.role === 'store_owner' && user.staff_store_id) {
-      where.storeId = user.staff_store_id;
-    } else if (user.role === 'delivery' && user.staff_college_id) {
-      where.collegeId = user.staff_college_id;
+    } else if (user.role === 'store_owner') {
+      const storeId = c.req.query('store_id') || user.staff_store_id;
+      if (!storeId || storeId === 'UNASSIGNED_STORE') {
+        return c.json({ success: true, orders: [] });
+      }
+      where.storeId = storeId;
+      // Store owners only see orders where payment is done
+      where.paymentStatus = { in: ['paid', 'completed'] };
+      where.orderStatus = { not: 'cancelled' };
+    } else if (user.role === 'delivery') {
+      const collegeId = c.req.query('college_id') || user.staff_college_id;
+      if (!collegeId || collegeId === 'UNASSIGNED_COLLEGE') {
+        return c.json({ success: true, orders: [] });
+      }
+      where.collegeId = collegeId;
+      // Delivery partners only see orders where payment is done
+      where.paymentStatus = { in: ['paid', 'completed'] };
+      where.orderStatus = { not: 'cancelled' };
     } else {
+      // Customers: only show orders where payment was completed
       where.userId = user.uid;
+      where.paymentStatus = { in: ['paid', 'completed'] };
     }
 
     const orderList = await prisma.order.findMany({
@@ -489,6 +520,42 @@ orders.get('/track/:orderIds', async (c) => {
   }
 });
 
+// POST /api/cancel-unpaid or /api/orders/cancel-unpaid
+const cancelUnpaidHandler = async (c: any) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { razorpay_order_id, order_ids } = body;
+    const prisma = getPrisma(c.env.DB);
+
+    if (razorpay_order_id) {
+      await prisma.order.updateMany({
+        where: {
+          razorpayOrderId: razorpay_order_id,
+          paymentStatus: 'pending',
+        },
+        data: { orderStatus: 'cancelled' },
+      });
+    }
+
+    if (Array.isArray(order_ids) && order_ids.length > 0) {
+      await prisma.order.updateMany({
+        where: {
+          id: { in: order_ids },
+          paymentStatus: 'pending',
+        },
+        data: { orderStatus: 'cancelled' },
+      });
+    }
+
+    return c.json({ success: true, message: 'Unpaid orders cancelled' });
+  } catch (err: any) {
+    return c.json({ success: false, error: err.message }, 500);
+  }
+};
+
+orders.post('/cancel-unpaid', cancelUnpaidHandler);
+orders.post('/orders/cancel-unpaid', cancelUnpaidHandler);
+
 // POST /api/razorpay-webhook (Bulletproof Payment Fail-Safe)
 orders.post('/razorpay-webhook', async (c) => {
   try {
@@ -502,12 +569,13 @@ orders.post('/razorpay-webhook', async (c) => {
     }
 
     const event = JSON.parse(rawBody);
+    const prisma = getPrisma(c.env.DB);
+
     if (event.event === 'payment.captured' || event.event === 'order.paid') {
       const payment = event.payload.payment.entity;
       const razorpayOrderId = payment.order_id;
       const razorpayPaymentId = payment.id;
 
-      const prisma = getPrisma(c.env.DB);
       await prisma.order.updateMany({
         where: { razorpayOrderId },
         data: {
@@ -516,6 +584,15 @@ orders.post('/razorpay-webhook', async (c) => {
           razorpayPaymentId,
         },
       });
+    } else if (event.event === 'payment.failed') {
+      const payment = event.payload.payment?.entity;
+      const razorpayOrderId = payment?.order_id;
+      if (razorpayOrderId) {
+        await prisma.order.updateMany({
+          where: { razorpayOrderId, paymentStatus: 'pending' },
+          data: { orderStatus: 'cancelled' },
+        });
+      }
     }
 
     return c.json({ status: 'ok' });
