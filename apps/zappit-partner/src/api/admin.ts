@@ -122,4 +122,20 @@ export const adminApi = {
     const res = await apiClient.post('/api/admin/config/maintenance', { isMaintenanceMode });
     return res.data;
   },
+
+  // App Version & APK Release
+  getAppVersionConfig: async () => {
+    const res = await apiClient.get('/api/admin/config/app_version');
+    return res.data?.data || res.data;
+  },
+  saveAppVersionConfig: async (config: {
+    latestVersion: string;
+    minVersion: string;
+    forceUpdate: boolean;
+    downloadUrl: string;
+    releaseNotes: string;
+  }) => {
+    const res = await apiClient.post('/api/admin/config/app_version', config);
+    return res.data;
+  },
 };

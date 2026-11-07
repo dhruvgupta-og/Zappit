@@ -71,6 +71,16 @@ const AdminDashboardScreen = () => {
   const [isMaintenance, setIsMaintenance] = useState(false);
   const [savingMaintenance, setSavingMaintenance] = useState(false);
 
+  // App Version & APK Release Config
+  const [appVersionForm, setAppVersionForm] = useState({
+    latestVersion: '1.0.1',
+    minVersion: '1.0.0',
+    forceUpdate: false,
+    downloadUrl: 'https://zappit.shop/download',
+    releaseNotes: 'Faster order tracking, loud kitchen alerts, star ratings, and 1-tap re-order!',
+  });
+  const [savingAppVersion, setSavingAppVersion] = useState(false);
+
   // Analytics state
   const [analyticsData, setAnalyticsData] = useState<any>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
@@ -123,6 +133,20 @@ const AdminDashboardScreen = () => {
       try {
         const maintenanceRes = await adminApi.getMaintenance();
         setIsMaintenance(maintenanceRes.isMaintenanceMode === true);
+      } catch (e) { /* ignore */ }
+
+      // Load app version config
+      try {
+        const vConfig = await adminApi.getAppVersionConfig();
+        if (vConfig) {
+          setAppVersionForm({
+            latestVersion: vConfig.latestVersion || '1.0.1',
+            minVersion: vConfig.minVersion || '1.0.0',
+            forceUpdate: vConfig.forceUpdate === true,
+            downloadUrl: vConfig.downloadUrl || 'https://zappit.shop/download',
+            releaseNotes: vConfig.releaseNotes || '',
+          });
+        }
       } catch (e) { /* ignore */ }
 
       if (statsRes.status === 'fulfilled' && statsRes.value.success) {
@@ -1205,6 +1229,86 @@ const AdminDashboardScreen = () => {
             {savingMaintenance && (
               <ActivityIndicator color={colors.adminAccent} style={{ marginTop: 8 }} />
             )}
+          </View>
+
+          {/* ── APP VERSION & APK RELEASE MANAGER ── */}
+          <View style={[s.card, { borderWidth: 1.5, borderColor: colors.adminAccent, marginTop: spacing.lg }]}>
+            <Text style={s.cardTitle}>📱 App Version & APK Release Manager</Text>
+            <Text style={[s.rowSub, { marginBottom: spacing.lg }]}>
+              Control which version of the Android APK users must have. When you publish a new build, update the version below to require students to download it from your website.
+            </Text>
+
+            <Text style={s.formLabel}>Latest Published Version</Text>
+            <TextInput
+              style={s.formInput}
+              value={appVersionForm.latestVersion}
+              onChangeText={v => setAppVersionForm(p => ({ ...p, latestVersion: v }))}
+              placeholder="e.g. 1.0.2"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <Text style={s.formLabel}>Minimum Required Version (Blocks older builds)</Text>
+            <TextInput
+              style={s.formInput}
+              value={appVersionForm.minVersion}
+              onChangeText={v => setAppVersionForm(p => ({ ...p, minVersion: v }))}
+              placeholder="e.g. 1.0.1"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginVertical: spacing.md }}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={[s.listTitle, { fontSize: 15 }]}>Force Update Older Builds</Text>
+                <Text style={s.rowSub}>If ON, blocks any user with an older build until they update.</Text>
+              </View>
+              <Switch
+                value={appVersionForm.forceUpdate}
+                onValueChange={v => setAppVersionForm(p => ({ ...p, forceUpdate: v }))}
+                trackColor={{ false: '#374151', true: 'rgba(139,92,246,0.5)' }}
+                thumbColor={appVersionForm.forceUpdate ? colors.adminAccent : '#9CA3AF'}
+              />
+            </View>
+
+            <Text style={s.formLabel}>Download Page / APK Link</Text>
+            <TextInput
+              style={s.formInput}
+              value={appVersionForm.downloadUrl}
+              onChangeText={v => setAppVersionForm(p => ({ ...p, downloadUrl: v }))}
+              placeholder="https://zappit.shop/download"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <Text style={s.formLabel}>What's New in this Build (Release Notes)</Text>
+            <TextInput
+              style={[s.formInput, { height: 70, textAlignVertical: 'top' }]}
+              multiline
+              value={appVersionForm.releaseNotes}
+              onChangeText={v => setAppVersionForm(p => ({ ...p, releaseNotes: v }))}
+              placeholder="e.g. Added star ratings, 1-tap re-order, faster tracking!"
+              placeholderTextColor={colors.textMuted}
+            />
+
+            <TouchableOpacity
+              style={[s.modalBtn, { backgroundColor: colors.adminAccent, marginTop: spacing.md }]}
+              disabled={savingAppVersion}
+              onPress={async () => {
+                setSavingAppVersion(true);
+                try {
+                  await adminApi.saveAppVersionConfig(appVersionForm);
+                  Alert.alert('✅ Saved!', `App version config updated to v${appVersionForm.latestVersion}.`);
+                } catch (err: any) {
+                  Alert.alert('Error', err.message || 'Failed to save version config.');
+                } finally {
+                  setSavingAppVersion(false);
+                }
+              }}
+            >
+              {savingAppVersion ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Save APK Release Config</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </ScrollView>
       )}

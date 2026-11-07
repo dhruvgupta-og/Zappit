@@ -20,11 +20,12 @@ import OnboardingPage from './pages/Onboarding';
 import StaffLogin from './pages/StaffLogin';
 import PaymentCallback from './pages/PaymentCallback';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import DownloadPage from './pages/Download';
 
-const DASHBOARD_PATHS = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin-secure-dashboard', '/onboarding', '/staff-login', '/payment-callback'];
+const DASHBOARD_PATHS = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin-secure-dashboard', '/onboarding', '/staff-login', '/payment-callback', '/download', '/app'];
 
 // Routes that bypass maintenance mode (admin/staff only)
-const BYPASS_MAINTENANCE_PATHS = ['/admin-secure-dashboard', '/store-dashboard', '/delivery-dashboard', '/staff-login'];
+const BYPASS_MAINTENANCE_PATHS = ['/admin-secure-dashboard', '/store-dashboard', '/delivery-dashboard', '/staff-login', '/download', '/app'];
 
 // ── Maintenance Screen
 const MaintenancePage = () => (
@@ -75,7 +76,7 @@ const MaintenancePage = () => (
 // ── Auth Guard: redirects to login if not authenticated, onboarding if profile incomplete
 const AuthGuard = ({ children, user, profileComplete, checkingAuth }) => {
   const location = useLocation();
-  const publicPaths = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin-secure-dashboard', '/staff-login', '/privacy-policy'];
+  const publicPaths = ['/login', '/store-dashboard', '/delivery-dashboard', '/admin-secure-dashboard', '/staff-login', '/privacy-policy', '/download', '/app'];
 
   if (checkingAuth) {
     return (
@@ -209,6 +210,8 @@ function App() {
                   <Route path="/admin-secure-dashboard" element={<AdminDashboard />} />
                   <Route path="/payment-callback" element={<PaymentCallback />} />
                   <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                  <Route path="/download" element={<DownloadPage />} />
+                  <Route path="/app" element={<DownloadPage />} />
                 </Routes>
               </AuthGuard>
             </div>

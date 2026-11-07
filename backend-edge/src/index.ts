@@ -55,16 +55,100 @@ app.get('/api/health', (c) => {
   });
 });
 
-// ── App Status (Maintenance check for customer/partner apps) ──
+// ── App Status & App Version (Maintenance & Update checks for mobile apps) ──
 app.get('/api/app-status', async (c) => {
   try {
     const prisma = getPrisma(c.env.DB);
-    const config = await prisma.config.findUnique({ where: { key: 'maintenance' } });
-    if (!config) return c.json({ success: true, isMaintenanceMode: false });
-    const parsed = JSON.parse(config.value);
-    return c.json({ success: true, isMaintenanceMode: parsed.isMaintenanceMode === true });
+    const [maintenanceConfig, versionConfig] = await Promise.all([
+      prisma.config.findUnique({ where: { key: 'maintenance' } }),
+      prisma.config.findUnique({ where: { key: 'app_version' } }),
+    ]);
+
+    let isMaintenanceMode = false;
+    if (maintenanceConfig) {
+      try {
+        const parsed = JSON.parse(maintenanceConfig.value);
+        isMaintenanceMode = parsed.isMaintenanceMode === true;
+      } catch {}
+    }
+
+    let appVersion = {
+      latestVersion: '1.0.1',
+      minVersion: '1.0.0',
+      forceUpdate: false,
+      downloadUrl: 'https://zappit.shop/download',
+      releaseNotes: 'Faster order tracking, loud kitchen alerts, star ratings, and 1-tap re-order!',
+    };
+
+    if (versionConfig) {
+      try {
+        const parsedV = JSON.parse(versionConfig.value);
+        appVersion = {
+          latestVersion: parsedV.latestVersion || appVersion.latestVersion,
+          minVersion: parsedV.minVersion || appVersion.minVersion,
+          forceUpdate: parsedV.forceUpdate === true,
+          downloadUrl: parsedV.downloadUrl || appVersion.downloadUrl,
+          releaseNotes: parsedV.releaseNotes || appVersion.releaseNotes,
+        };
+      } catch {}
+    }
+
+    return c.json({
+      success: true,
+      isMaintenanceMode,
+      appVersion,
+    });
   } catch {
-    return c.json({ success: true, isMaintenanceMode: false });
+    return c.json({
+      success: true,
+      isMaintenanceMode: false,
+      appVersion: {
+        latestVersion: '1.0.1',
+        minVersion: '1.0.0',
+        forceUpdate: false,
+        downloadUrl: 'https://zappit.shop/download',
+        releaseNotes: 'New updates available!',
+      },
+    });
+  }
+});
+
+app.get('/api/app-version', async (c) => {
+  try {
+    const prisma = getPrisma(c.env.DB);
+    const versionConfig = await prisma.config.findUnique({ where: { key: 'app_version' } });
+
+    let appVersion = {
+      latestVersion: '1.0.1',
+      minVersion: '1.0.0',
+      forceUpdate: false,
+      downloadUrl: 'https://zappit.shop/download',
+      releaseNotes: 'Faster order tracking, loud kitchen alerts, star ratings, and 1-tap re-order!',
+    };
+
+    if (versionConfig) {
+      try {
+        const parsed = JSON.parse(versionConfig.value);
+        appVersion = {
+          latestVersion: parsed.latestVersion || appVersion.latestVersion,
+          minVersion: parsed.minVersion || appVersion.minVersion,
+          forceUpdate: parsed.forceUpdate === true,
+          downloadUrl: parsed.downloadUrl || appVersion.downloadUrl,
+          releaseNotes: parsed.releaseNotes || appVersion.releaseNotes,
+        };
+      } catch {}
+    }
+
+    return c.json({ success: true, ...appVersion });
+  } catch {
+    return c.json({
+      success: true,
+      latestVersion: '1.0.1',
+      minVersion: '1.0.0',
+      forceUpdate: false,
+      downloadUrl: 'https://zappit.shop/download',
+      releaseNotes: 'New updates available!',
+    });
   }
 });
 

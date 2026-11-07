@@ -21,7 +21,22 @@ import OrderTrackerScreen from '../screens/OrderTrackerScreen';
 import OrdersScreen from '../screens/OrdersScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import MaintenanceScreen from '../screens/MaintenanceScreen';
+import UpdateRequiredScreen from '../screens/UpdateRequiredScreen';
+import Constants from 'expo-constants';
 import { apiClient } from '../api/client';
+
+function isVersionOlder(current: string, target: string): boolean {
+  if (!target) return false;
+  const cParts = (current || '0.0.0').split('.').map(n => parseInt(n, 10) || 0);
+  const tParts = target.split('.').map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < Math.max(cParts.length, tParts.length); i++) {
+    const c = cParts[i] || 0;
+    const t = tParts[i] || 0;
+    if (c < t) return true;
+    if (c > t) return false;
+  }
+  return false;
+}
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -110,6 +125,11 @@ const AppNavigator = () => {
   const { firebaseUser, profileComplete, isLoading, isInitialized } = useAuthStore();
   const [isMaintenance, setIsMaintenance] = React.useState(false);
   const [checkingMaintenance, setCheckingMaintenance] = React.useState(true);
+  const [updateRequired, setUpdateRequired] = React.useState<{
+    required: boolean;
+    info: any;
+    installedVersion: string;
+  } | null>(null);
 
   useEffect(() => {
     const unsubscribe = initAuthListener();
@@ -117,11 +137,26 @@ const AppNavigator = () => {
   }, []);
 
   useEffect(() => {
-    const checkMaintenance = async () => {
+    const checkAppStatus = async () => {
       try {
         const res = await apiClient.get('/api/app-status');
-        if (res.data.isMaintenanceMode) {
+        if (res.data?.isMaintenanceMode) {
           setIsMaintenance(true);
+        }
+
+        const versionInfo = res.data?.appVersion;
+        if (versionInfo) {
+          const installedVer = Constants.expoConfig?.version || '1.0.1';
+          const isOlderThanMin = versionInfo.minVersion && isVersionOlder(installedVer, versionInfo.minVersion);
+          const isOlderThanLatest = versionInfo.latestVersion && isVersionOlder(installedVer, versionInfo.latestVersion);
+
+          if (isOlderThanMin || (versionInfo.forceUpdate && isOlderThanLatest)) {
+            setUpdateRequired({
+              required: true,
+              info: versionInfo,
+              installedVersion: installedVer,
+            });
+          }
         }
       } catch (e) {
         // ignore — if check fails, let the app open normally
@@ -129,7 +164,7 @@ const AppNavigator = () => {
         setCheckingMaintenance(false);
       }
     };
-    checkMaintenance();
+    checkAppStatus();
   }, []);
 
   if (!isInitialized || isLoading || checkingMaintenance) {
@@ -142,6 +177,16 @@ const AppNavigator = () => {
 
   if (isMaintenance) {
     return <MaintenanceScreen />;
+  }
+
+  if (updateRequired?.required) {
+    return (
+      <UpdateRequiredScreen
+        currentVersion={updateRequired.installedVersion}
+        updateInfo={updateRequired.info}
+        onDismiss={() => setUpdateRequired(null)}
+      />
+    );
   }
 
   return (

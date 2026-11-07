@@ -107,8 +107,8 @@ admin.get('/config/:key', async (c) => {
   try {
     const key = c.req.param('key');
     const user = c.get('user');
-    // Only 'fees' and 'maintenance' are public configs. Any other key requires admin.
-    if (!['fees', 'maintenance'].includes(key) && user?.role !== 'admin') {
+    // 'fees', 'maintenance', and 'app_version' are public configs. Any other key requires admin.
+    if (!['fees', 'maintenance', 'app_version'].includes(key) && user?.role !== 'admin') {
       return c.json({ success: false, error: 'Forbidden' }, 403);
     }
     const prisma = getPrisma(c.env.DB);
