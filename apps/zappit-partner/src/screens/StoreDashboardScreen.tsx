@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList,
-  ActivityIndicator, TextInput, Alert, Switch, Modal, RefreshControl,
+  ActivityIndicator, TextInput, Alert, Switch, Modal, RefreshControl, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ordersApi } from '../api/orders';
@@ -16,7 +16,7 @@ import { playOrderAlert } from '../utils/notifications';
 // ── Constants ──
 const ORDER_SUB_TABS = [
   { key: 'new', label: '🆕 New' },
-  { key: 'preparing', label: '👨‍🍳 Prep' },
+  { key: 'preparing', label: '👨‍🍳 In Prep' },
   { key: 'ready', label: '🛵 Ready' },
   { key: 'done', label: '✅ Done' },
 ];
@@ -24,19 +24,19 @@ const ORDER_SUB_TABS = [
 const MAIN_TABS = [
   { key: 'orders', label: '📦 Orders' },
   { key: 'menu', label: '🍽️ Menu' },
-  { key: 'analytics', label: '📊 Stats' },
+  { key: 'analytics', label: '📊 Earnings & Stats' },
 ];
 
 const CATEGORIES = ['Snacks', 'Beverages', 'Main Course', 'Desserts', 'Combos', 'Other'];
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  confirmed: { bg: '#FFF7ED', text: '#C2410C', label: '🆕 New Order' },
-  preparing: { bg: '#FEF9C3', text: '#854D0E', label: '👨‍🍳 Preparing' },
-  ready: { bg: '#E0F2FE', text: '#075985', label: '✅ Ready' },
-  out_for_delivery: { bg: '#D1FAE5', text: '#065F46', label: '🛵 Out for Delivery' },
-  picked_up: { bg: '#DBEAFE', text: '#1E3A8A', label: '🚴 En Route' },
-  delivered: { bg: '#DCFCE7', text: '#14532D', label: '✅ Delivered' },
-  cancelled: { bg: '#FEE2E2', text: '#991B1B', label: 'Cancelled' },
+  confirmed: { bg: 'rgba(245,158,11,0.15)', text: '#F59E0B', label: '🆕 New Order' },
+  preparing: { bg: 'rgba(59,130,246,0.15)', text: '#60A5FA', label: '👨‍🍳 Preparing' },
+  ready: { bg: 'rgba(16,185,129,0.15)', text: '#34D399', label: '🛵 Ready for Rider' },
+  out_for_delivery: { bg: 'rgba(139,92,246,0.15)', text: '#A78BFA', label: '🚴 Out for Delivery' },
+  picked_up: { bg: 'rgba(139,92,246,0.15)', text: '#A78BFA', label: '🚴 En Route' },
+  delivered: { bg: 'rgba(16,185,129,0.2)', text: '#10B981', label: '✅ Delivered' },
+  cancelled: { bg: 'rgba(239,68,68,0.15)', text: '#F87171', label: 'Cancelled' },
 };
 
 const StoreDashboardScreen = () => {
@@ -44,7 +44,6 @@ const StoreDashboardScreen = () => {
   const logout = useAuthStore(s => s.logout);
   const staffStoreId = (profile as any)?.store_id;
 
-  const [ordersDateFilter, setOrdersDateFilter] = useState<'today' | 'all'>('today');
   const [isOpen, setIsOpen] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
@@ -53,58 +52,58 @@ const StoreDashboardScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Advanced store controls
+  const [orderSearch, setOrderSearch] = useState('');
+  const [soundAlerts, setSoundAlerts] = useState(true);
+  const [ordersDateFilter, setOrdersDateFilter] = useState<'today' | 'all'>('today');
+
   // Menu form state
   const [showMenuForm, setShowMenuForm] = useState(false);
   const [menuForm, setMenuForm] = useState({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
   const [editingMenuId, setEditingMenuId] = useState<string | null>(null);
   const [menuSaving, setMenuSaving] = useState(false);
   const [menuCategoryFilter, setMenuCategoryFilter] = useState('All');
-  const [timeFilter, setTimeFilter] = useState('today');
+  const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
 
   const prevOrderCount = useRef(-1);
 
-  // ── Init: set loading false once staffStoreId is resolved from authStore ──
   useEffect(() => {
-    // staffStoreId comes from authStore profile which is resolved asynchronously.
-    // Once it's available (or confirmed to be absent), we can clear the loading state.
     setLoading(false);
   }, [staffStoreId]);
 
-  // ── Fetch data ──
+  // ── Fetch orders ──
   const fetchOrders = useCallback(async () => {
     if (!staffStoreId) return;
     try {
       const res = await ordersApi.getOrders(staffStoreId);
       if (res.success) {
-        const filtered = res.orders.filter(
-          (o: any) => o.payment_status === 'completed' || o.payment_status === 'paid' || o.payment_status === 'pending'
+        const filtered = (res.orders || []).filter(
+          (o: any) => o.payment_status === 'completed' || o.payment_status === 'paid'
         );
         setOrders(filtered);
 
-        // New order notification
+        // Sound & visual chime for new order arrival
         const newCount = filtered.filter((o: any) => o.order_status === 'confirmed').length;
         if (newCount > prevOrderCount.current && prevOrderCount.current !== -1) {
-          playOrderAlert('🚨 NEW ORDER RECEIVED! 🚨', 'A new order has arrived! Open dashboard to accept.');
-          Alert.alert('🔔 New Order!', 'A new order has been received.');
+          if (soundAlerts) {
+            playOrderAlert('🚨 NEW ORDER RECEIVED! 🚨', 'A new paid order is waiting in the kitchen queue.');
+          }
+          Alert.alert('🔔 New Paid Order!', 'A new student order has arrived. Start preparing!');
         }
         prevOrderCount.current = newCount;
       }
     } catch (err) {
-      console.error('Failed to fetch orders:', err);
+      console.error('[StoreDashboard] Failed to fetch orders:', err);
     }
-  }, [staffStoreId]);
+  }, [staffStoreId, soundAlerts]);
 
+  // ── Fetch store data & menu ──
   const fetchStoreData = useCallback(async () => {
-    if (!staffStoreId) {
-      console.log('[StoreDashboard] fetchStoreData skipped: no staffStoreId');
-      return;
-    }
+    if (!staffStoreId) return;
     try {
-      console.log('[StoreDashboard] fetching store data for', staffStoreId);
       const res = await storesApi.getStoreById(staffStoreId);
-      console.log('[StoreDashboard] store res:', res.success, 'menu count:', (res.menu || []).length);
       if (res.success) {
-        setIsOpen(res.store.is_open !== false);
+        setIsOpen(res.store?.is_open !== false);
         const items = (res.menu || []).map((m: any) => ({ ...m, id: m._id || m.id }));
         setMenuItems(items);
       }
@@ -128,10 +127,28 @@ const StoreDashboardScreen = () => {
   };
 
   // ── Helpers ──
-  const getDateObj = (val: any) => {
+  const getDateObj = (val: any): Date => {
     if (!val) return new Date(0);
     if (val.toDate) return val.toDate();
     return new Date(val);
+  };
+
+  const isToday = (dateVal: any): boolean => {
+    const d = getDateObj(dateVal);
+    const now = new Date();
+    return d.getDate() === now.getDate() &&
+      d.getMonth() === now.getMonth() &&
+      d.getFullYear() === now.getFullYear();
+  };
+
+  const getTimeAgo = (dateVal: any): string => {
+    const diffMs = Math.max(0, Date.now() - getDateObj(dateVal).getTime());
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
   };
 
   const getItems = (items: any) => {
@@ -140,29 +157,32 @@ const StoreDashboardScreen = () => {
     return Object.entries(items).map(([id, qty]) => ({ id, name: id, qty, price: 0 }));
   };
 
-  const getOrderSubtotal = (order: any) => {
+  const getOrderSubtotal = (order: any): number => {
+    if (order.total_amount !== undefined && order.total_amount > 0) {
+      return Number(order.total_amount);
+    }
     const itemsList = getItems(order.items);
     return itemsList.reduce((sum: number, item: any) => sum + ((item.price || 0) * (item.qty || item.quantity || 1)), 0);
   };
 
-  // ── Order Buckets ──
-  const filterOrdersByDate = (list: any[]) => {
-    if (ordersDateFilter === 'today') {
-      const todayStr = new Date().toDateString();
-      return list.filter(o => getDateObj(o.created_at).toDateString() === todayStr);
-    }
-    return list;
-  };
-
+  // ── Orders & Metrics Calculation ──
   const activeAndCompleted = orders.filter(o => o.order_status !== 'cancelled' && o.order_status !== 'pending');
 
-  // Active orders (new, preparing, ready) should ALWAYS show, regardless of date, so they don't get lost
+  const todayOrdersList = activeAndCompleted.filter(o => isToday(o.created_at));
+  const todayEarnings = todayOrdersList.reduce((sum, o) => sum + getOrderSubtotal(o), 0);
+  const totalLifetimeEarnings = activeAndCompleted.reduce((sum, o) => sum + getOrderSubtotal(o), 0);
+  const todayDeliveredCount = todayOrdersList.filter(o => ['delivered', 'completed'].includes(o.order_status)).length;
+  const totalLifetimeDelivered = activeAndCompleted.filter(o => ['delivered', 'completed'].includes(o.order_status)).length;
+  const inKitchenCount = activeAndCompleted.filter(o => ['confirmed', 'preparing'].includes(o.order_status)).length;
+  const avgOrderValue = todayOrdersList.length > 0
+    ? Math.round(todayEarnings / todayOrdersList.length)
+    : (activeAndCompleted.length > 0 ? Math.round(totalLifetimeEarnings / activeAndCompleted.length) : 0);
+
+  // Sub-tabs
   const newOrders = activeAndCompleted.filter(o => o.order_status === 'confirmed');
   const preparingOrders = activeAndCompleted.filter(o => o.order_status === 'preparing');
   const readyOrders = activeAndCompleted.filter(o => ['ready', 'out_for_delivery', 'picked_up'].includes(o.order_status));
-  
-  // Completed orders can be filtered by date
-  const completedOrders = filterOrdersByDate(activeAndCompleted.filter(o => ['delivered', 'completed'].includes(o.order_status)));
+  const completedOrders = activeAndCompleted.filter(o => ['delivered', 'completed'].includes(o.order_status));
 
   const tabOrders = orderSubTab === 'new' ? newOrders
     : orderSubTab === 'preparing' ? preparingOrders
@@ -176,61 +196,159 @@ const StoreDashboardScreen = () => {
     done: completedOrders.length,
   };
 
-  // ── Analytics ──
+  // Filtered by search query
+  const filteredTabOrders = tabOrders.filter(o => {
+    if (!orderSearch.trim()) return true;
+    const q = orderSearch.toLowerCase().trim();
+    const id = String(o.id || o._id || '').toLowerCase();
+    const userName = String(o.user_name || '').toLowerCase();
+    const userPhone = String(o.user_phone || '');
+    const addr = String(o.delivery_address || o.address || '').toLowerCase();
+    const itemMatch = getItems(o.items).some((it: any) => String(it.name || '').toLowerCase().includes(q));
+    return id.includes(q) || userName.includes(q) || userPhone.includes(q) || addr.includes(q) || itemMatch;
+  });
+
+  // ── Analytics Tab Calculation ──
   const getFilteredAnalyticsOrders = () => {
     return activeAndCompleted.filter(o => {
       const orderDate = getDateObj(o.created_at);
       const now = new Date();
-      if (timeFilter === 'today') return orderDate.toDateString() === now.toDateString();
+      if (timeFilter === 'today') return isToday(orderDate);
       if (timeFilter === 'week') {
-        const weekAgo = new Date(); weekAgo.setDate(now.getDate() - 7);
+        const weekAgo = new Date();
+        weekAgo.setDate(now.getDate() - 7);
         return orderDate >= weekAgo;
       }
-      if (timeFilter === 'month') return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
+      if (timeFilter === 'month') {
+        return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
+      }
       return true;
     });
   };
 
   const analyticsOrders = getFilteredAnalyticsOrders();
-
-  const totalRevenue = analyticsOrders.reduce((s, o) => s + getOrderSubtotal(o), 0);
+  const analyticsRevenue = analyticsOrders.reduce((s, o) => s + getOrderSubtotal(o), 0);
 
   const dishStats = analyticsOrders.reduce((acc: any, o: any) => {
     getItems(o.items).forEach((item: any) => {
       if (item?.name) {
         if (!acc[item.name]) acc[item.name] = { count: 0, revenue: 0 };
-        const qty = item.qty || item.quantity || 1;
+        const qty = Number(item.qty || item.quantity || 1);
         acc[item.name].count += qty;
-        acc[item.name].revenue += (item.price || 0) * qty;
+        acc[item.name].revenue += (Number(item.price) || 0) * qty;
       }
     });
     return acc;
   }, {});
-  const topDishes = Object.entries(dishStats).sort((a: any, b: any) => b[1].count - a[1].count).slice(0, 10);
+
+  const topDishes = Object.entries(dishStats).sort((a: any, b: any) => b[1].count - a[1].count).slice(0, 8);
+  const maxDishCount = topDishes.length > 0 ? (topDishes[0][1] as any).count : 1;
 
   // ── Actions ──
+  const toggleStoreStatus = async () => {
+    if (!staffStoreId) return;
+    const newStatus = !isOpen;
+    try {
+      await storesApi.updateStore({ id: staffStoreId, is_open: newStatus });
+      setIsOpen(newStatus);
+    } catch {
+      Alert.alert('Error', 'Failed to toggle store online/offline status.');
+    }
+  };
+
+  const updateOrderStatus = async (orderId: string, status: string) => {
+    // Optimistic update
+    setOrders(prev => prev.map(o => (o.id === orderId || o._id === orderId) ? { ...o, order_status: status } : o));
+    try {
+      await ordersApi.updateOrderStatus(orderId, status);
+      await ordersApi.sendStatusNotification(orderId, status);
+    } catch {
+      Alert.alert('Error', 'Failed to update order status.');
+      fetchOrders();
+    }
+  };
+
+  const toggleAvailability = async (item: any) => {
+    const nextVal = !item.is_available;
+    // Optimistic update
+    setMenuItems(prev => prev.map(m => (m.id === item.id || m._id === item.id) ? { ...m, is_available: nextVal } : m));
+    try {
+      await menuApi.toggleAvailability(item.id || item._id, nextVal);
+    } catch {
+      Alert.alert('Error', 'Failed to update stock availability.');
+      fetchStoreData();
+    }
+  };
+
+  const saveMenuItem = async () => {
+    if (!menuForm.name || !menuForm.price || !staffStoreId) {
+      Alert.alert('Missing Info', 'Please fill in item name and price.');
+      return;
+    }
+    setMenuSaving(true);
+    const data: any = {
+      ...menuForm,
+      price: Number(menuForm.price),
+      is_available: true,
+      store_id: staffStoreId,
+    };
+    if (editingMenuId) data.id = editingMenuId;
+    try {
+      const res = await menuApi.saveMenuItem(data);
+      if (!res.success) {
+        Alert.alert('Error', res.error || 'Failed to save item');
+        return;
+      }
+      setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
+      setEditingMenuId(null);
+      setShowMenuForm(false);
+      fetchStoreData();
+    } catch (err: any) {
+      Alert.alert('Error', err.response?.data?.error || err.message || 'Failed to save.');
+    } finally {
+      setMenuSaving(false);
+    }
+  };
+
+  const deleteMenuItem = (id: string) => {
+    Alert.alert('Delete Dish', 'Are you sure you want to remove this item from your store menu?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete', style: 'destructive', onPress: async () => {
+          try {
+            await menuApi.deleteMenuItem(id);
+            fetchStoreData();
+          } catch {
+            Alert.alert('Error', 'Failed to delete item.');
+          }
+        }
+      },
+    ]);
+  };
+
   const exportToExcel = async () => {
     if (analyticsOrders.length === 0) {
       Alert.alert('No Data', 'There are no orders to export for the selected period.');
       return;
     }
     try {
-      const headerString = 'Order ID,Date,Status,Items,Subtotal\n';
+      const headerString = 'Order ID,Date,Status,Customer Name,Phone,Items,Subtotal\n';
       const rowString = analyticsOrders.map(order => {
         const orderId = order.id || order._id || '';
         const dateStr = getDateObj(order.created_at).toLocaleString();
         const status = order.order_status || '';
+        const cName = (order.user_name || 'Student').replace(/"/g, '""');
+        const cPhone = order.user_phone || '';
         const items = getItems(order.items)
           .map((item: any) => `${item.qty || item.quantity || 1}x ${item.name || 'Item'}`)
           .join(' | ')
           .replace(/"/g, '""');
         const subtotal = getOrderSubtotal(order);
-        return `"${orderId}","${dateStr}","${status}","${items}","${subtotal}"`;
+        return `"${orderId}","${dateStr}","${status}","${cName}","${cPhone}","${items}","${subtotal}"`;
       }).join('\n');
 
       const csvString = `${headerString}${rowString}`;
 
-      // Try native file write + share first
       try {
         const FS = require('expo-file-system');
         const Share = require('expo-sharing');
@@ -248,12 +366,10 @@ const StoreDashboardScreen = () => {
         }
       } catch (_) {}
 
-      // Pure JS fallback — share CSV as text via email/WhatsApp/etc.
       const { Share } = require('react-native');
       await Share.share({
         title: `Store Earnings (${analyticsOrders.length} orders)`,
         message: csvString,
-        url: undefined,
       });
     } catch (error: any) {
       console.error('Export error:', error);
@@ -261,80 +377,171 @@ const StoreDashboardScreen = () => {
     }
   };
 
-  const toggleStoreStatus = async () => {
-    if (!staffStoreId) return;
-    const newStatus = !isOpen;
-    try {
-      await storesApi.updateStore({ id: staffStoreId, is_open: newStatus });
-      setIsOpen(newStatus);
-    } catch {
-      Alert.alert('Error', 'Failed to toggle store status.');
-    }
+  // ── Render: Order Card ──
+  const renderOrderCard = ({ item: order }: { item: any }) => {
+    const statusInfo = STATUS_COLORS[order.order_status] || { bg: '#333', text: '#fff', label: order.order_status };
+    const items = getItems(order.items);
+    const orderId = order.id || order._id;
+    const timeAgo = getTimeAgo(order.created_at);
+
+    return (
+      <View style={styles.orderCard}>
+        <View style={styles.orderHeader}>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.orderIdText}>#{String(orderId).slice(-6).toUpperCase()}</Text>
+              <View style={styles.paidBadge}>
+                <Text style={styles.paidBadgeText}>✓ PAID</Text>
+              </View>
+            </View>
+            <Text style={styles.orderTime}>
+              ⏱️ {timeAgo} • {getDateObj(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </View>
+          <View style={[styles.statusBadge, { backgroundColor: statusInfo.bg }]}>
+            <Text style={[styles.statusBadgeText, { color: statusInfo.text }]}>{statusInfo.label}</Text>
+          </View>
+        </View>
+
+        {/* Customer Info & Direct Call */}
+        {(order.user_name || order.user_phone) && (
+          <View style={styles.customerRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.customerName}>👤 {order.user_name || 'Campus Student'}</Text>
+              {order.address || order.delivery_address ? (
+                <Text style={styles.customerAddress} numberOfLines={1}>
+                  📍 {order.delivery_address || order.address}
+                </Text>
+              ) : null}
+            </View>
+            {order.user_phone ? (
+              <TouchableOpacity
+                style={styles.callBtn}
+                onPress={() => Linking.openURL(`tel:${order.user_phone}`)}
+              >
+                <Text style={styles.callBtnText}>📞 Call</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        )}
+
+        {/* Special Cooking Note */}
+        {order.additional_note ? (
+          <View style={styles.noteBox}>
+            <Text style={styles.noteTitle}>📝 COOKING NOTE:</Text>
+            <Text style={styles.noteContent}>"{order.additional_note}"</Text>
+          </View>
+        ) : null}
+
+        {/* Items List */}
+        <View style={styles.orderItems}>
+          {items.map((item: any, i: number) => (
+            <View key={i} style={styles.itemRow}>
+              <Text style={styles.itemQty}>{item.qty || item.quantity || 1}×</Text>
+              <Text style={styles.itemName} numberOfLines={1}>{item.name || 'Dish'}</Text>
+              <Text style={styles.itemPrice}>₹{(Number(item.price) || 0) * (Number(item.qty || item.quantity || 1))}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Footer Actions */}
+        <View style={styles.orderFooter}>
+          <View>
+            <Text style={styles.footerLabel}>ORDER TOTAL</Text>
+            <Text style={styles.orderTotal}>₹{getOrderSubtotal(order)}</Text>
+          </View>
+
+          {order.order_status === 'confirmed' && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: colors.storeAccent }]}
+              onPress={() => updateOrderStatus(orderId, 'preparing')}
+            >
+              <Text style={styles.actionBtnText}>👨‍🍳 Accept & Cook</Text>
+            </TouchableOpacity>
+          )}
+
+          {order.order_status === 'preparing' && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#3B82F6' }]}
+              onPress={() => updateOrderStatus(orderId, 'ready')}
+            >
+              <Text style={styles.actionBtnText}>🛵 Ready for Rider</Text>
+            </TouchableOpacity>
+          )}
+
+          {order.order_status === 'ready' && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#8B5CF6' }]}
+              onPress={() => updateOrderStatus(orderId, 'out_for_delivery')}
+            >
+              <Text style={styles.actionBtnText}>📦 Hand to Rider</Text>
+            </TouchableOpacity>
+          )}
+
+          {order.order_status === 'delivered' && (
+            <View style={styles.deliveredBadge}>
+              <Text style={styles.deliveredBadgeText}>Delivered ✓</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    );
   };
 
-  const updateOrderStatus = async (orderId: string, status: string) => {
-    // Optimistic update
-    setOrders(prev => prev.map(o => (o.id === orderId || o._id === orderId) ? { ...o, order_status: status } : o));
-    try {
-      await ordersApi.updateOrderStatus(orderId, status);
-      await ordersApi.sendStatusNotification(orderId, status);
-    } catch {
-      Alert.alert('Error', 'Failed to update order status.');
-      fetchOrders(); // Revert
-    }
+  // ── Render: Menu Item ──
+  const renderMenuItem = ({ item }: { item: any }) => {
+    const isAvail = item.is_available !== false;
+    return (
+      <View style={[styles.menuCard, !isAvail && styles.menuCardUnavailable]}>
+        <View style={{ flex: 1, paddingRight: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <View style={[styles.vegBadge, { borderColor: item.isVeg ? colors.vegGreen : colors.nonVegRed }]}>
+              <View style={[styles.vegDot, { backgroundColor: item.isVeg ? colors.vegGreen : colors.nonVegRed }]} />
+            </View>
+            <Text style={[styles.menuItemName, !isAvail && { color: colors.textMuted }]}>{item.name}</Text>
+            {!isAvail && (
+              <View style={styles.soldOutBadge}>
+                <Text style={styles.soldOutText}>SOLD OUT</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.menuItemPrice}>₹{item.price}</Text>
+          {item.desc ? <Text style={styles.menuItemDesc} numberOfLines={2}>{item.desc}</Text> : null}
+          <Text style={styles.menuItemCategory}>{item.category || 'Snacks'}</Text>
+        </View>
+
+        <View style={styles.menuActions}>
+          <View style={{ alignItems: 'center', marginBottom: 8 }}>
+            <Text style={{ fontSize: 10, color: isAvail ? colors.storeAccent : colors.textMuted, fontWeight: '700', marginBottom: 2 }}>
+              {isAvail ? 'IN STOCK' : 'OUT'}
+            </Text>
+            <Switch
+              value={isAvail}
+              onValueChange={() => toggleAvailability(item)}
+              trackColor={{ false: '#374151', true: 'rgba(16,185,129,0.3)' }}
+              thumbColor={isAvail ? colors.storeAccent : '#9CA3AF'}
+            />
+          </View>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity onPress={() => {
+              setMenuForm({
+                name: item.name, price: String(item.price), desc: item.desc || '',
+                category: item.category || 'Snacks', isVeg: item.isVeg !== false,
+              });
+              setEditingMenuId(item.id || item._id);
+              setShowMenuForm(true);
+            }}>
+              <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '700' }}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => deleteMenuItem(item.id || item._id)}>
+              <Text style={{ color: colors.error, fontSize: 13, fontWeight: '700' }}>Delete</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
   };
 
-  const saveMenuItem = async () => {
-    if (!menuForm.name || !menuForm.price || !staffStoreId) {
-      Alert.alert('Missing Info', 'Please fill in name and price.');
-      return;
-    }
-    setMenuSaving(true);
-    const data: any = { ...menuForm, price: Number(menuForm.price), is_available: true, store_id: staffStoreId };
-    if (editingMenuId) data.id = editingMenuId;
-    try {
-      const res = await menuApi.saveMenuItem(data);
-      if (!res.success) {
-        Alert.alert('Error', res.error || 'Unknown error');
-        return;
-      }
-      setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
-      setEditingMenuId(null);
-      setShowMenuForm(false);
-      fetchStoreData();
-    } catch (err: any) {
-      Alert.alert('Error', err.response?.data?.error || err.message || 'Failed to save.');
-    } finally {
-      setMenuSaving(false);
-    }
-  };
-
-  const deleteMenuItem = (id: string) => {
-    Alert.alert('Delete Item', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete', style: 'destructive', onPress: async () => {
-          try {
-            await menuApi.deleteMenuItem(id);
-            fetchStoreData();
-          } catch {
-            Alert.alert('Error', 'Failed to delete item.');
-          }
-        }
-      },
-    ]);
-  };
-
-  const toggleAvailability = async (item: any) => {
-    try {
-      await menuApi.toggleAvailability(item.id || item._id, !item.is_available);
-      fetchStoreData();
-    } catch {
-      Alert.alert('Error', 'Failed to toggle availability.');
-    }
-  };
-
-  // ── Loading State ──
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -345,154 +552,83 @@ const StoreDashboardScreen = () => {
     );
   }
 
-  // ── Render: Order Card ──
-  const renderOrderCard = ({ item: order }: { item: any }) => {
-    const statusInfo = STATUS_COLORS[order.order_status] || { bg: '#333', text: '#fff', label: order.order_status };
-    const items = getItems(order.items);
-    const orderId = order.id || order._id;
-
-    return (
-      <View style={styles.orderCard}>
-        <View style={styles.orderHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.orderIdText}>#{(orderId || '').slice(-6).toUpperCase()}</Text>
-            <Text style={styles.orderTime}>
-              {getDateObj(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          </View>
-          <View style={[styles.statusBadge, { backgroundColor: statusInfo.bg }]}>
-            <Text style={[styles.statusBadgeText, { color: statusInfo.text }]}>{statusInfo.label}</Text>
-          </View>
-        </View>
-
-        <View style={styles.orderItems}>
-          {items.map((item: any, i: number) => (
-            <Text key={i} style={styles.orderItemText}>
-              {item.qty || item.quantity || 1}x {item.name || 'Item'}
-              {item.price ? ` — ₹${item.price}` : ''}
-            </Text>
-          ))}
-        </View>
-
-        {order.delivery_address && (
-          <Text style={styles.orderAddress}>📍 {order.delivery_address}</Text>
-        )}
-
-        {order.additional_note ? (
-          <View style={{ backgroundColor: '#FEF9C3', padding: spacing.sm, borderRadius: radius.sm, marginBottom: spacing.sm }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#854D0E', marginBottom: 2 }}>NOTE FROM CUSTOMER:</Text>
-            <Text style={{ fontSize: 13, color: '#854D0E', fontStyle: 'italic' }}>{order.additional_note}</Text>
-          </View>
-        ) : null}
-
-        <View style={styles.orderFooter}>
-          <View>
-            <Text style={{ fontSize: 10, color: colors.textMuted, fontWeight: '600' }}>ITEMS TOTAL</Text>
-            <Text style={styles.orderTotal}>₹{getOrderSubtotal(order)}</Text>
-          </View>
-
-          {order.order_status === 'confirmed' && (
-            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: colors.storeAccent }]}
-              onPress={() => updateOrderStatus(orderId, 'preparing')}>
-              <Text style={styles.actionBtnText}>Start Preparing</Text>
-            </TouchableOpacity>
-          )}
-          {order.order_status === 'preparing' && (
-            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#3B82F6' }]}
-              onPress={() => updateOrderStatus(orderId, 'ready')}>
-              <Text style={styles.actionBtnText}>Mark Ready</Text>
-            </TouchableOpacity>
-          )}
-          {order.order_status === 'ready' && (
-            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#8B5CF6' }]}
-              onPress={() => updateOrderStatus(orderId, 'out_for_delivery')}>
-              <Text style={styles.actionBtnText}>Hand to Delivery</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
-    );
-  };
-
-  // ── Render: Menu Item ──
-  const renderMenuItem = ({ item }: { item: any }) => (
-    <View style={styles.menuCard}>
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <View style={[styles.vegBadge, { borderColor: item.isVeg ? colors.vegGreen : colors.nonVegRed }]}>
-            <View style={[styles.vegDot, { backgroundColor: item.isVeg ? colors.vegGreen : colors.nonVegRed }]} />
-          </View>
-          <Text style={styles.menuItemName}>{item.name}</Text>
-        </View>
-        <Text style={styles.menuItemPrice}>₹{item.price}</Text>
-        {item.desc && <Text style={styles.menuItemDesc}>{item.desc}</Text>}
-        <Text style={styles.menuItemCategory}>{item.category || 'Uncategorized'}</Text>
-      </View>
-      <View style={styles.menuActions}>
-        <Switch
-          value={item.is_available !== false}
-          onValueChange={() => toggleAvailability(item)}
-          trackColor={{ false: '#374151', true: 'rgba(16,185,129,0.3)' }}
-          thumbColor={item.is_available !== false ? colors.storeAccent : '#9CA3AF'}
-        />
-        <TouchableOpacity onPress={() => {
-          setMenuForm({
-            name: item.name, price: String(item.price), desc: item.desc || '',
-            category: item.category || 'Snacks', isVeg: item.isVeg !== false,
-          });
-          setEditingMenuId(item.id || item._id);
-          setShowMenuForm(true);
-        }}>
-          <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600' }}>Edit</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => deleteMenuItem(item.id || item._id)}>
-          <Text style={{ color: colors.error, fontSize: 13, fontWeight: '600' }}>Delete</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* ── TOP BAR ── */}
       <View style={styles.topBar}>
         <View style={{ flex: 1, paddingRight: 8 }}>
-          <Text style={styles.topBarSubtitle}>🏪 Store Partner</Text>
-          <Text style={styles.topBarTitle} numberOfLines={1}>{(profile as any)?.store_name || 'Dashboard'}</Text>
+          <Text style={styles.topBarSubtitle}>🏪 Campus Store Partner</Text>
+          <Text style={styles.topBarTitle} numberOfLines={1}>
+            {(profile as any)?.store_name || 'Kitchen Dashboard'}
+          </Text>
         </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <TouchableOpacity onPress={toggleStoreStatus} style={[styles.statusToggle, { backgroundColor: isOpen ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)' }]}>
-            <View style={[styles.statusDot, { backgroundColor: isOpen ? '#86EFAC' : '#FCA5A5' }]} />
-            <Text style={[styles.statusToggleText, { color: isOpen ? '#86EFAC' : '#FCA5A5' }]}>{isOpen ? 'OPEN' : 'CLOSED'}</Text>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {/* Sound Alert Toggle */}
+          <TouchableOpacity
+            onPress={() => setSoundAlerts(!soundAlerts)}
+            style={[styles.iconButton, soundAlerts && styles.iconButtonActive]}
+          >
+            <Text style={{ fontSize: 16 }}>{soundAlerts ? '🔔' : '🔕'}</Text>
           </TouchableOpacity>
+
+          {/* Store Open/Close Toggle */}
+          <TouchableOpacity
+            onPress={toggleStoreStatus}
+            style={[styles.statusToggle, { backgroundColor: isOpen ? 'rgba(16,185,129,0.2)' : 'rgba(239,68,68,0.2)' }]}
+          >
+            <View style={[styles.statusDot, { backgroundColor: isOpen ? '#86EFAC' : '#FCA5A5' }]} />
+            <Text style={[styles.statusToggleText, { color: isOpen ? '#86EFAC' : '#FCA5A5' }]}>
+              {isOpen ? 'ONLINE' : 'OFFLINE'}
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
             <Text style={{ fontSize: 16 }}>⚙️</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* ── STATS ROW ── */}
+      {/* ── ADVANCED METRICS BANNER ── */}
       <View style={styles.statsRow}>
-        {[
-          { label: 'Orders', value: orders.length, emoji: '📦' },
-          { label: 'Revenue', value: `₹${totalRevenue}`, emoji: '💰' },
-          { label: 'New', value: newOrders.length, emoji: '🆕' },
-          { label: 'Menu', value: menuItems.length, emoji: '🍽️' },
-        ].map(s => (
-          <View key={s.label} style={styles.statCard}>
-            <Text style={{ fontSize: 16 }}>{s.emoji}</Text>
-            <Text style={styles.statValue}>{s.value}</Text>
-            <Text style={styles.statLabel}>{s.label}</Text>
-          </View>
-        ))}
+        <View style={[styles.statCard, { borderLeftColor: colors.storeAccent, borderLeftWidth: 3 }]}>
+          <Text style={styles.statLabel}>Today's Earnings</Text>
+          <Text style={[styles.statValue, { color: colors.storeAccent }]}>₹{todayEarnings}</Text>
+          <Text style={styles.statSubText}>{todayOrdersList.length} orders today</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>Total Orders</Text>
+          <Text style={styles.statValue}>{activeAndCompleted.length}</Text>
+          <Text style={styles.statSubText}>Lifetime completed</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>In Kitchen</Text>
+          <Text style={[styles.statValue, { color: inKitchenCount > 0 ? '#F59E0B' : colors.textMain }]}>
+            {inKitchenCount}
+          </Text>
+          <Text style={styles.statSubText}>{newOrders.length} awaiting</Text>
+        </View>
+
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>Avg Ticket</Text>
+          <Text style={styles.statValue}>₹{avgOrderValue}</Text>
+          <Text style={styles.statSubText}>Per order</Text>
+        </View>
       </View>
 
       {/* ── MAIN TABS ── */}
       <View style={styles.mainTabs}>
         {MAIN_TABS.map(t => (
-          <TouchableOpacity key={t.key} onPress={() => setActiveTab(t.key)}
-            style={[styles.mainTab, activeTab === t.key && styles.mainTabActive]}>
-            <Text style={[styles.mainTabText, activeTab === t.key && styles.mainTabTextActive]}>{t.label}</Text>
+          <TouchableOpacity
+            key={t.key}
+            onPress={() => setActiveTab(t.key)}
+            style={[styles.mainTab, activeTab === t.key && styles.mainTabActive]}
+          >
+            <Text style={[styles.mainTabText, activeTab === t.key && styles.mainTabTextActive]}>
+              {t.label}
+            </Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -500,39 +636,53 @@ const StoreDashboardScreen = () => {
       {/* ── ORDERS TAB ── */}
       {activeTab === 'orders' && (
         <View style={{ flex: 1 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingRight: spacing.md }}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll} contentContainerStyle={styles.subTabsContainer}>
-              {ORDER_SUB_TABS.map(t => (
-                <TouchableOpacity key={t.key} onPress={() => setOrderSubTab(t.key)}
-                  style={[styles.subTab, orderSubTab === t.key && styles.subTabActive]}>
-                  <Text style={[styles.subTabText, orderSubTab === t.key && styles.subTabTextActive]}>
-                    {t.label} ({tabCounts[t.key]})
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            
-            {orderSubTab === 'completed' && (
+          {/* Sub Tabs */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subTabsScroll} contentContainerStyle={styles.subTabsContainer}>
+            {ORDER_SUB_TABS.map(t => (
               <TouchableOpacity
-                style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: colors.borderColor }}
-                onPress={() => setOrdersDateFilter(prev => prev === 'today' ? 'all' : 'today')}
+                key={t.key}
+                onPress={() => setOrderSubTab(t.key)}
+                style={[styles.subTab, orderSubTab === t.key && styles.subTabActive]}
               >
-                <Text style={{ fontSize: 11, fontWeight: '700', color: colors.storeAccent }}>
-                  {ordersDateFilter === 'today' ? 'TODAY' : 'ALL TIME'}
+                <Text style={[styles.subTabText, orderSubTab === t.key && styles.subTabTextActive]}>
+                  {t.label} ({tabCounts[t.key]})
                 </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Search Bar */}
+          <View style={styles.searchBarContainer}>
+            <TextInput
+              style={styles.searchInput}
+              value={orderSearch}
+              onChangeText={setOrderSearch}
+              placeholder="🔍 Search orders by student, phone, dish or #ID..."
+              placeholderTextColor={colors.textMuted}
+            />
+            {orderSearch.length > 0 && (
+              <TouchableOpacity onPress={() => setOrderSearch('')} style={styles.clearSearchBtn}>
+                <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '700' }}>✕</Text>
               </TouchableOpacity>
             )}
           </View>
+
+          {/* Orders FlatList */}
           <FlatList
-            data={tabOrders}
+            data={filteredTabOrders}
             renderItem={renderOrderCard}
             keyExtractor={item => item.id || item._id}
             contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40 }}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.storeAccent} />}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Text style={{ fontSize: 40, marginBottom: 8 }}>📭</Text>
-                <Text style={styles.emptyText}>No orders in this category</Text>
+                <Text style={{ fontSize: 44, marginBottom: 8 }}>👨‍🍳</Text>
+                <Text style={styles.emptyTitle}>
+                  {orderSearch ? 'No matching orders found' : 'Queue is all clear'}
+                </Text>
+                <Text style={styles.emptyText}>
+                  {orderSearch ? 'Try a different student name or order ID' : 'New student orders will appear here automatically'}
+                </Text>
               </View>
             }
           />
@@ -543,20 +693,27 @@ const StoreDashboardScreen = () => {
       {activeTab === 'menu' && (
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.lg, gap: 12 }}>
-            <TouchableOpacity style={[styles.addMenuBtn, { flex: 1, marginBottom: 0 }]} onPress={() => {
-              setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
-              setEditingMenuId(null);
-              setShowMenuForm(true);
-            }}>
-              <Text style={styles.addMenuBtnText}>+ Add Item</Text>
+            <TouchableOpacity
+              style={[styles.addMenuBtn, { flex: 1, marginBottom: 0 }]}
+              onPress={() => {
+                setMenuForm({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
+                setEditingMenuId(null);
+                setShowMenuForm(true);
+              }}
+            >
+              <Text style={styles.addMenuBtnText}>+ Add New Dish</Text>
             </TouchableOpacity>
           </View>
 
+          {/* Category Filter Pills */}
           <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md }}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
               {['All', ...CATEGORIES].map(cat => (
-                <TouchableOpacity key={cat} onPress={() => setMenuCategoryFilter(cat)}
-                  style={[styles.catChip, menuCategoryFilter === cat && styles.catChipActive]}>
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => setMenuCategoryFilter(cat)}
+                  style={[styles.catChip, menuCategoryFilter === cat && styles.catChipActive]}
+                >
                   <Text style={[styles.catChipText, menuCategoryFilter === cat && styles.catChipTextActive]}>{cat}</Text>
                 </TouchableOpacity>
               ))}
@@ -572,7 +729,8 @@ const StoreDashboardScreen = () => {
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <Text style={{ fontSize: 40, marginBottom: 8 }}>🍽️</Text>
-                <Text style={styles.emptyText}>No menu items yet</Text>
+                <Text style={styles.emptyTitle}>No menu items found</Text>
+                <Text style={styles.emptyText}>Add your first dish to start receiving campus orders</Text>
               </View>
             }
           />
@@ -581,59 +739,80 @@ const StoreDashboardScreen = () => {
 
       {/* ── ANALYTICS TAB ── */}
       {activeTab === 'analytics' && (
-        <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40 }}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.storeAccent} />}>
-          
+        <ScrollView
+          contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.storeAccent} />}
+        >
+          {/* Time Filter Pills */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 8, marginBottom: spacing.md }}>
             {[
-              { key: 'today', label: 'Today' },
-              { key: 'week', label: 'Week' },
-              { key: 'month', label: 'Month' },
-              { key: 'all', label: 'All Time' },
+              { key: 'today', label: "Today's Summary" },
+              { key: 'week', label: 'Last 7 Days' },
+              { key: 'month', label: 'This Month' },
+              { key: 'all', label: 'All Time Lifetime' },
             ].map(t => (
-              <TouchableOpacity key={t.key} onPress={() => setTimeFilter(t.key as any)}
-                style={[styles.subTab, timeFilter === t.key && styles.subTabActive]}>
+              <TouchableOpacity
+                key={t.key}
+                onPress={() => setTimeFilter(t.key as any)}
+                style={[styles.subTab, timeFilter === t.key && styles.subTabActive]}
+              >
                 <Text style={[styles.subTabText, timeFilter === t.key && styles.subTabTextActive]}>{t.label}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
 
-          <TouchableOpacity onPress={exportToExcel} style={{ backgroundColor: colors.storeAccent, padding: 12, borderRadius: radius.md, marginBottom: spacing.md, alignItems: 'center' }}>
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 16 }}>📊 Export Earnings to Excel</Text>
-          </TouchableOpacity>
-
+          {/* Revenue Summary Card */}
           <View style={styles.analyticsCard}>
-            <Text style={styles.analyticsTitle}>📊 Summary</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
+              <Text style={styles.analyticsTitle}>💰 Financial Performance</Text>
+              <View style={styles.periodPill}>
+                <Text style={styles.periodPillText}>{timeFilter.toUpperCase()}</Text>
+              </View>
+            </View>
+
             <View style={styles.analyticsRow}>
               <View style={styles.analyticsStat}>
-                <Text style={styles.analyticsStatValue}>₹{totalRevenue}</Text>
-                <Text style={styles.analyticsStatLabel}>Revenue</Text>
+                <Text style={styles.analyticsStatValue}>₹{analyticsRevenue}</Text>
+                <Text style={styles.analyticsStatLabel}>Net Revenue</Text>
               </View>
               <View style={styles.analyticsStat}>
                 <Text style={styles.analyticsStatValue}>{analyticsOrders.length}</Text>
-                <Text style={styles.analyticsStatLabel}>Orders</Text>
+                <Text style={styles.analyticsStatLabel}>Paid Orders</Text>
               </View>
               <View style={styles.analyticsStat}>
-                <Text style={styles.analyticsStatValue}>{analyticsOrders.filter(o => ['delivered', 'completed'].includes(o.order_status)).length}</Text>
+                <Text style={styles.analyticsStatValue}>
+                  {analyticsOrders.filter(o => ['delivered', 'completed'].includes(o.order_status)).length}
+                </Text>
                 <Text style={styles.analyticsStatLabel}>Delivered</Text>
               </View>
             </View>
           </View>
 
+          {/* Export Button */}
+          <TouchableOpacity onPress={exportToExcel} style={styles.exportBtn}>
+            <Text style={styles.exportBtnText}>📥 Export Orders to Excel / CSV</Text>
+          </TouchableOpacity>
+
+          {/* Top Selling Dishes */}
           <View style={styles.analyticsCard}>
             <Text style={styles.analyticsTitle}>🏆 Top Selling Dishes</Text>
             {topDishes.length === 0 ? (
-              <Text style={styles.emptyText}>No data yet</Text>
+              <Text style={styles.emptyText}>No sales recorded for this period</Text>
             ) : (
-              topDishes.map(([name, stats]: [string, any], i) => (
-                <View key={name} style={styles.dishRow}>
-                  <Text style={styles.dishRank}>#{i + 1}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.dishName}>{name}</Text>
-                    <Text style={styles.dishStat}>{stats.count} sold • ₹{stats.revenue}</Text>
+              topDishes.map(([name, stats]: [string, any], i) => {
+                const pct = Math.round((stats.count / maxDishCount) * 100);
+                return (
+                  <View key={name} style={styles.dishLeaderboardRow}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={styles.dishName}>#{i + 1} {name}</Text>
+                      <Text style={styles.dishStatHighlight}>₹{stats.revenue} ({stats.count} sold)</Text>
+                    </View>
+                    <View style={styles.progressBarTrack}>
+                      <View style={[styles.progressBarFill, { width: `${pct}%` }]} />
+                    </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
         </ScrollView>
@@ -643,44 +822,72 @@ const StoreDashboardScreen = () => {
       <Modal visible={showMenuForm} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingMenuId ? 'Edit Item' : 'Add New Item'}</Text>
+            <Text style={styles.modalTitle}>{editingMenuId ? 'Edit Dish' : 'Add New Dish'}</Text>
 
-            <Text style={styles.formLabel}>Name *</Text>
-            <TextInput style={styles.formInput} value={menuForm.name} onChangeText={t => setMenuForm(p => ({ ...p, name: t }))}
-              placeholder="e.g. Paneer Tikka" placeholderTextColor={colors.textMuted} />
+            <Text style={styles.formLabel}>Dish Name *</Text>
+            <TextInput
+              style={styles.formInput}
+              value={menuForm.name}
+              onChangeText={t => setMenuForm(p => ({ ...p, name: t }))}
+              placeholder="e.g. Cheese Burger / Cold Coffee"
+              placeholderTextColor={colors.textMuted}
+            />
 
             <Text style={styles.formLabel}>Price (₹) *</Text>
-            <TextInput style={styles.formInput} value={menuForm.price} onChangeText={t => setMenuForm(p => ({ ...p, price: t }))}
-              placeholder="e.g. 120" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
+            <TextInput
+              style={styles.formInput}
+              value={menuForm.price}
+              onChangeText={t => setMenuForm(p => ({ ...p, price: t }))}
+              placeholder="e.g. 99"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="numeric"
+            />
 
             <Text style={styles.formLabel}>Description</Text>
-            <TextInput style={styles.formInput} value={menuForm.desc} onChangeText={t => setMenuForm(p => ({ ...p, desc: t }))}
-              placeholder="Optional description" placeholderTextColor={colors.textMuted} />
+            <TextInput
+              style={styles.formInput}
+              value={menuForm.desc}
+              onChangeText={t => setMenuForm(p => ({ ...p, desc: t }))}
+              placeholder="Short description (ingredients, size)"
+              placeholderTextColor={colors.textMuted}
+            />
 
             <Text style={styles.formLabel}>Category</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: spacing.md }}>
               {CATEGORIES.map(cat => (
-                <TouchableOpacity key={cat} onPress={() => setMenuForm(p => ({ ...p, category: cat }))}
-                  style={[styles.catChip, menuForm.category === cat && styles.catChipActive]}>
+                <TouchableOpacity
+                  key={cat}
+                  onPress={() => setMenuForm(p => ({ ...p, category: cat }))}
+                  style={[styles.catChip, menuForm.category === cat && styles.catChipActive]}
+                >
                   <Text style={[styles.catChipText, menuForm.category === cat && styles.catChipTextActive]}>{cat}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
 
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.lg }}>
-              <Text style={styles.formLabel}>Vegetarian</Text>
-              <Switch value={menuForm.isVeg} onValueChange={v => setMenuForm(p => ({ ...p, isVeg: v }))}
-                trackColor={{ false: '#374151', true: 'rgba(16,185,129,0.3)' }} thumbColor={menuForm.isVeg ? colors.vegGreen : '#9CA3AF'} />
+              <Text style={styles.formLabel}>Vegetarian (Green mark)</Text>
+              <Switch
+                value={menuForm.isVeg}
+                onValueChange={v => setMenuForm(p => ({ ...p, isVeg: v }))}
+                trackColor={{ false: '#374151', true: 'rgba(16,185,129,0.3)' }}
+                thumbColor={menuForm.isVeg ? colors.vegGreen : '#9CA3AF'}
+              />
             </View>
 
             <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.borderColor, flex: 1 }]}
-                onPress={() => setShowMenuForm(false)}>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: colors.borderColor, flex: 1 }]}
+                onPress={() => setShowMenuForm(false)}
+              >
                 <Text style={{ color: colors.textMain, fontWeight: '700' }}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.modalBtn, { backgroundColor: colors.storeAccent, flex: 1 }]}
-                onPress={saveMenuItem} disabled={menuSaving}>
-                {menuSaving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Save</Text>}
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: colors.storeAccent, flex: 1 }]}
+                onPress={saveMenuItem}
+                disabled={menuSaving}
+              >
+                {menuSaving ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '700' }}>Save Dish</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -695,86 +902,244 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgColor },
 
   // Top Bar
-  topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.borderColor },
-  topBarSubtitle: { fontSize: 11, color: colors.storeAccent, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderColor,
+  },
+  topBarSubtitle: { fontSize: 11, color: colors.storeAccent, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.8 },
   topBarTitle: { ...typography.h2, color: colors.textMain },
   statusToggle: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 6 },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusToggleText: { fontWeight: '800', fontSize: 12 },
+  statusToggleText: { fontWeight: '800', fontSize: 11, letterSpacing: 0.5 },
+  iconButton: { padding: 8, borderRadius: 10, backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.borderColor },
+  iconButtonActive: { borderColor: colors.storeAccent },
   logoutBtn: { padding: 8 },
 
-  // Stats
+  // Stats Row
   statsRow: { flexDirection: 'row', padding: spacing.md, gap: 8 },
-  statCard: { flex: 1, backgroundColor: colors.cardBg, borderRadius: radius.md, padding: spacing.sm, alignItems: 'center', borderWidth: 1, borderColor: colors.borderColor },
-  statValue: { ...typography.h3, color: colors.textMain, marginTop: 2 },
-  statLabel: { fontSize: 10, color: colors.textMuted, fontWeight: '600', textTransform: 'uppercase' },
+  statCard: {
+    flex: 1,
+    backgroundColor: colors.cardBg,
+    borderRadius: radius.md,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+  },
+  statValue: { fontSize: 17, fontWeight: '800', color: colors.textMain, marginTop: 2 },
+  statLabel: { fontSize: 9, color: colors.textMuted, fontWeight: '700', textTransform: 'uppercase' },
+  statSubText: { fontSize: 10, color: colors.textMuted, marginTop: 2 },
 
   // Main Tabs
   mainTabs: { flexDirection: 'row', paddingHorizontal: spacing.md, gap: 8, marginBottom: 4 },
-  mainTab: { flex: 1, paddingVertical: spacing.sm, alignItems: 'center', borderRadius: radius.md, backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.borderColor },
+  mainTab: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: radius.md,
+    backgroundColor: colors.cardBg,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+  },
   mainTabActive: { backgroundColor: colors.storeAccent, borderColor: colors.storeAccent },
   mainTabText: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
   mainTabTextActive: { color: '#fff' },
 
-  // Order Sub Tabs
+  // Sub Tabs
   subTabsScroll: { maxHeight: 44 },
   subTabsContainer: { paddingHorizontal: spacing.md, gap: 8, paddingVertical: 6 },
-  subTab: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.borderColor },
+  subTab: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: colors.cardBg,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+  },
   subTabActive: { backgroundColor: 'rgba(16,185,129,0.15)', borderColor: colors.storeAccent },
   subTabText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
-  subTabTextActive: { color: colors.storeAccent },
+  subTabTextActive: { color: colors.storeAccent, fontWeight: '700' },
+
+  // Search Bar
+  searchBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: spacing.md,
+    marginVertical: 4,
+    backgroundColor: colors.cardBg,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+    paddingHorizontal: spacing.md,
+  },
+  searchInput: { flex: 1, height: 40, fontSize: 13, color: colors.textMain },
+  clearSearchBtn: { padding: 6 },
 
   // Order Card
-  orderCard: { backgroundColor: colors.cardBg, borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.borderColor },
-  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
-  orderIdText: { ...typography.h4, color: colors.textMain, fontFamily: 'monospace' },
-  orderTime: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  orderCard: {
+    backgroundColor: colors.cardBg,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+  },
+  orderHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  orderIdText: { fontSize: 16, fontWeight: '800', color: colors.textMain, fontFamily: 'monospace' },
+  paidBadge: { backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  paidBadgeText: { color: colors.storeAccent, fontSize: 10, fontWeight: '800' },
+  orderTime: { fontSize: 11, color: colors.textMuted, marginTop: 2 },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
   statusBadgeText: { fontSize: 11, fontWeight: '700' },
-  orderItems: { marginBottom: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.borderColor },
-  orderItemText: { fontSize: 14, color: colors.textMain, marginBottom: 2 },
-  orderAddress: { fontSize: 13, color: colors.textMuted, marginBottom: spacing.sm },
-  orderFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.borderColor },
-  orderTotal: { ...typography.h3, color: colors.storeAccent },
-  actionBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
+
+  // Customer row
+  customerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    padding: 8,
+    borderRadius: radius.sm,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
+  },
+  customerName: { fontSize: 13, fontWeight: '700', color: colors.textMain },
+  customerAddress: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
+  callBtn: {
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(16,185,129,0.3)',
+  },
+  callBtnText: { color: colors.storeAccent, fontSize: 12, fontWeight: '700' },
+
+  // Note Box
+  noteBox: {
+    backgroundColor: 'rgba(245,158,11,0.1)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#F59E0B',
+    padding: 8,
+    borderRadius: radius.sm,
+    marginBottom: 8,
+  },
+  noteTitle: { fontSize: 11, fontWeight: '800', color: '#F59E0B' },
+  noteContent: { fontSize: 12, color: '#FDE68A', fontStyle: 'italic', marginTop: 1 },
+
+  // Items
+  orderItems: { marginBottom: spacing.sm, paddingTop: 4, borderTopWidth: 1, borderTopColor: colors.borderColor },
+  itemRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 2 },
+  itemQty: { width: 28, fontSize: 13, fontWeight: '800', color: colors.storeAccent },
+  itemName: { flex: 1, fontSize: 13, color: colors.textMain },
+  itemPrice: { fontSize: 13, fontWeight: '700', color: colors.textMuted },
+
+  // Order Footer
+  orderFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.borderColor,
+  },
+  footerLabel: { fontSize: 9, color: colors.textMuted, fontWeight: '700', textTransform: 'uppercase' },
+  orderTotal: { fontSize: 18, fontWeight: '800', color: colors.storeAccent },
+  actionBtn: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 10 },
   actionBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  deliveredBadge: { backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
+  deliveredBadgeText: { color: colors.storeAccent, fontWeight: '700', fontSize: 12 },
 
   // Menu Card
-  menuCard: { flexDirection: 'row', backgroundColor: colors.cardBg, borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.borderColor },
-  vegBadge: { width: 16, height: 16, borderRadius: 3, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  vegDot: { width: 8, height: 8, borderRadius: 4 },
-  menuItemName: { ...typography.h4, color: colors.textMain },
+  menuCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.cardBg,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+  },
+  menuCardUnavailable: { opacity: 0.65 },
+  vegBadge: { width: 14, height: 14, borderRadius: 3, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
+  vegDot: { width: 6, height: 6, borderRadius: 3 },
+  menuItemName: { fontSize: 15, fontWeight: '700', color: colors.textMain },
+  soldOutBadge: { backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  soldOutText: { color: '#EF4444', fontSize: 9, fontWeight: '800' },
   menuItemPrice: { color: colors.storeAccent, fontWeight: '700', fontSize: 15, marginTop: 2 },
-  menuItemDesc: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
+  menuItemDesc: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   menuItemCategory: { fontSize: 11, color: colors.primary, fontWeight: '600', marginTop: 4 },
-  menuActions: { alignItems: 'flex-end', justifyContent: 'space-between', paddingLeft: spacing.md },
+  menuActions: { alignItems: 'flex-end', justifyContent: 'space-between', paddingLeft: spacing.sm },
 
   // Add Menu Button
-  addMenuBtn: { backgroundColor: colors.storeAccent, marginHorizontal: spacing.lg, marginTop: spacing.sm, marginBottom: 4, paddingVertical: 10, borderRadius: radius.md, alignItems: 'center' },
-  addMenuBtnText: { color: '#fff', fontWeight: '800', fontSize: 15 },
+  addMenuBtn: {
+    backgroundColor: colors.storeAccent,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  addMenuBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
 
   // Analytics
-  analyticsCard: { backgroundColor: colors.cardBg, borderRadius: radius.lg, padding: spacing.lg, marginBottom: spacing.lg, borderWidth: 1, borderColor: colors.borderColor },
-  analyticsTitle: { ...typography.h4, color: colors.textMain, marginBottom: spacing.md },
-  analyticsRow: { flexDirection: 'row', justifyContent: 'space-around' },
+  analyticsCard: {
+    backgroundColor: colors.cardBg,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+  },
+  analyticsTitle: { ...typography.h4, color: colors.textMain },
+  periodPill: { backgroundColor: 'rgba(16,185,129,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  periodPillText: { color: colors.storeAccent, fontSize: 10, fontWeight: '800' },
+  analyticsRow: { flexDirection: 'row', justifyContent: 'space-around', marginTop: spacing.sm },
   analyticsStat: { alignItems: 'center' },
-  analyticsStatValue: { ...typography.h2, color: colors.storeAccent },
-  analyticsStatLabel: { fontSize: 12, color: colors.textMuted, fontWeight: '600', marginTop: 2 },
-  dishRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.borderColor },
-  dishRank: { fontSize: 14, fontWeight: '800', color: colors.primary, width: 30 },
-  dishName: { fontSize: 15, fontWeight: '600', color: colors.textMain },
-  dishStat: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  analyticsStatValue: { fontSize: 24, fontWeight: '800', color: colors.storeAccent },
+  analyticsStatLabel: { fontSize: 11, color: colors.textMuted, fontWeight: '600', marginTop: 2 },
+  exportBtn: {
+    backgroundColor: colors.cardBg,
+    padding: 13,
+    borderRadius: radius.md,
+    marginBottom: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.storeAccent,
+  },
+  exportBtnText: { color: colors.storeAccent, fontWeight: '800', fontSize: 14 },
+  dishLeaderboardRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.borderColor },
+  dishName: { fontSize: 14, fontWeight: '700', color: colors.textMain },
+  dishStatHighlight: { fontSize: 12, fontWeight: '700', color: colors.storeAccent },
+  progressBarTrack: { height: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 3, overflow: 'hidden', marginTop: 4 },
+  progressBarFill: { height: '100%', backgroundColor: colors.storeAccent, borderRadius: 3 },
 
   // Empty State
-  emptyState: { alignItems: 'center', paddingVertical: 60 },
-  emptyText: { color: colors.textMuted, fontSize: 15 },
+  emptyState: { alignItems: 'center', paddingVertical: 50 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.textMain, marginBottom: 4 },
+  emptyText: { color: colors.textMuted, fontSize: 13, textAlign: 'center' },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: colors.cardBg, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.xxl, paddingBottom: 40 },
   modalTitle: { ...typography.h2, color: colors.textMain, marginBottom: spacing.lg },
   formLabel: { ...typography.label, color: colors.textMuted, marginBottom: 4, marginTop: spacing.sm },
-  formInput: { backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderColor, paddingHorizontal: spacing.md, paddingVertical: 12, fontSize: 15, color: colors.textMain, marginBottom: spacing.sm },
+  formInput: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: colors.textMain,
+    marginBottom: spacing.sm,
+  },
   catChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.cardBg, borderWidth: 1, borderColor: colors.borderColor, marginRight: 8 },
   catChipActive: { backgroundColor: 'rgba(16,185,129,0.15)', borderColor: colors.storeAccent },
   catChipText: { fontSize: 13, fontWeight: '600', color: colors.textMuted },

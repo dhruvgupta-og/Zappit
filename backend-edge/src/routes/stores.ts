@@ -108,9 +108,7 @@ stores.get('/:id', async (c) => {
     const store = await prisma.store.findUnique({
       where: { id },
       include: {
-        menuItems: {
-          where: { isAvailable: true },
-        },
+        menuItems: true,
       },
     });
 

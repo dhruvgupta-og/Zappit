@@ -408,28 +408,30 @@ admin.post('/menu', async (c) => {
     const prisma = getPrisma(c.env.DB);
     const id = data.id || data._id || `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
 
+    const updateData: any = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.price !== undefined && !isNaN(Number(data.price))) updateData.price = Number(data.price);
+    if (data.desc !== undefined) updateData.desc = data.desc;
+    if (data.category !== undefined) updateData.category = data.category;
+    if (data.isVeg !== undefined) updateData.isVeg = data.isVeg !== false;
+    if (data.image !== undefined) updateData.image = data.image;
+    if (data.is_available !== undefined) updateData.isAvailable = data.is_available === true;
+    if (data.isAvailable !== undefined) updateData.isAvailable = data.isAvailable === true;
+
     const saved = await prisma.menuItem.upsert({
       where: { id },
       create: {
         id,
         storeId: data.store_id || data.storeId,
-        name: data.name,
-        price: Number(data.price),
+        name: data.name || 'Item',
+        price: Number(data.price || 0),
         desc: data.desc || '',
         category: data.category || 'Other',
         isVeg: data.isVeg !== false,
         image: data.image || '',
-        isAvailable: data.is_available !== false,
+        isAvailable: data.is_available !== false && data.isAvailable !== false,
       },
-      update: {
-        name: data.name,
-        price: Number(data.price),
-        desc: data.desc,
-        category: data.category,
-        isVeg: data.isVeg !== false,
-        image: data.image,
-        isAvailable: data.is_available !== false,
-      },
+      update: updateData,
     });
 
     return c.json({ success: true, menuItem: saved });

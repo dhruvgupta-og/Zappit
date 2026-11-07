@@ -447,16 +447,58 @@ orders.get('/orders', async (c) => {
       discount_amount: o.discountAmount,
       coupon_applied: o.couponApplied,
       address: o.address,
+      delivery_address: o.address,
       delivery_fee: o.deliveryFee,
       payment_status: o.paymentStatus,
       order_status: o.orderStatus,
       additional_note: o.additionalNote,
       delivery_otp: o.deliveryOtp,
+      requires_otp: !!o.deliveryOtp,
       razorpay_order_id: o.razorpayOrderId,
       created_at: o.createdAt.toISOString(),
     }));
 
     return c.json({ success: true, orders: formatted });
+  } catch (err: any) {
+    return c.json({ success: false, error: err.message }, 500);
+  }
+});
+
+// POST /api/orders/:id/verify-otp
+orders.post('/orders/:id/verify-otp', async (c) => {
+  try {
+    const user = c.get('user');
+    const id = c.req.param('id');
+    const { otp } = await c.req.json();
+
+    const isStaff = ['admin', 'delivery', 'store_owner'].includes(user?.role);
+    if (!isStaff) return c.json({ success: false, error: 'Forbidden: Staff only' }, 403);
+
+    const prisma = getPrisma(c.env.DB);
+    const existing = await prisma.order.findUnique({ where: { id } });
+    if (!existing) return c.json({ success: false, error: 'Order not found' }, 404);
+
+    if (existing.deliveryOtp && String(existing.deliveryOtp).trim() !== String(otp).trim()) {
+      return c.json({ success: false, error: 'Invalid PIN. Please ask customer for correct 4-digit PIN.' }, 400);
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: { orderStatus: 'delivered' },
+    });
+
+    // Notify customer
+    const customer = await prisma.user.findUnique({ where: { id: existing.userId } });
+    if (customer?.expoPushToken) {
+      sendExpoPushNotification(
+        customer.expoPushToken,
+        '🎉 Order Delivered!',
+        'Your order has been delivered successfully. Enjoy your meal!',
+        { orderId: id }
+      );
+    }
+
+    return c.json({ success: true, order: updated });
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
