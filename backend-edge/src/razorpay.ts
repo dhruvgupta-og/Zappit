@@ -93,25 +93,31 @@ export async function createRazorpayQrCode(
   keySecret: string,
   amountInPaise: number,
   description = 'Zappit Order Payment',
-  notes: Record<string, any> = {}
+  notes?: Record<string, any>
 ) {
   const credentials = btoa(`${keyId}:${keySecret}`);
+  const payload: any = {
+    type: 'upi_qr',
+    name: 'Zappit Campus Delivery',
+    usage: 'single_use',
+    fixed_amount: true,
+    payment_amount: amountInPaise,
+    description,
+    close_by: Math.floor(Date.now() / 1000) + 900, // 15 mins expiry
+    notes: {
+      app: 'zappit',
+      purpose: 'campus_delivery_order',
+      ...(notes || {}),
+    },
+  };
+
   const res = await fetch('https://api.razorpay.com/v1/payments/qr_codes', {
     method: 'POST',
     headers: {
       Authorization: `Basic ${credentials}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      type: 'upi_qr',
-      name: 'Zappit Campus Delivery',
-      usage: 'single_use',
-      fixed_amount: true,
-      payment_amount: amountInPaise,
-      description,
-      close_by: Math.floor(Date.now() / 1000) + 900, // 15 mins expiry
-      notes,
-    }),
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {

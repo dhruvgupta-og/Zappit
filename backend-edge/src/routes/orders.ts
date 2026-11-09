@@ -126,7 +126,11 @@ orders.post('/create-order', async (c) => {
         c.env.RAZORPAY_KEY_ID,
         c.env.RAZORPAY_KEY_SECRET,
         amountInPaise,
-        `Zappit Order ₹${amountToPay}`
+        `Zappit Order ₹${amountToPay}`,
+        {
+          order_amount: amountToPay.toString(),
+          college_id: college_id || 'campus',
+        }
       );
       paymentRefId = qrData.id;
       qrImageUrl = qrData.image_url;
