@@ -19,20 +19,20 @@ const app = new Hono<{ Bindings: Bindings; Variables: { user: AuthUser } }>();
 // ── CORS Middleware ──
 app.use('*', cors({
   origin: (origin) => {
-    if (!origin) return '*';
-    const allowed = [
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'https://zappit.shop',
-      'https://www.zappit.shop',
-      'https://zappit-dun.vercel.app',
-    ];
-    const isRazorpay = /^https:\/\/([a-z0-9-]+\.)*razorpay\.com$/.test(origin);
-    if (allowed.includes(origin) || isRazorpay) return origin;
-    return '*';
+    // Echo incoming origin back to safely support Access-Control-Allow-Credentials: true
+    return origin || '*';
   },
   allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'x-razorpay-signature'],
+  allowHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-razorpay-signature',
+    'Accept',
+    'X-Requested-With',
+    'sec-ch-ua',
+    'sec-ch-ua-mobile',
+    'sec-ch-ua-platform',
+  ],
   exposeHeaders: ['Content-Length'],
   maxAge: 86400,
   credentials: true,

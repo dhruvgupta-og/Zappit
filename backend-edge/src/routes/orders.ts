@@ -133,7 +133,9 @@ orders.post('/create-order', async (c) => {
         }
       );
       paymentRefId = qrData.id;
-      qrImageUrl = qrData.image_url;
+      qrImageUrl = qrData.id
+        ? `https://api.razorpay.com/v1/l/qrcode/${qrData.id}`
+        : qrData.image_url;
     } else {
       const receipt = `order_${Date.now()}`;
       const razorpayOrder: any = await createRazorpayOrder(

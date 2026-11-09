@@ -305,7 +305,10 @@ const CheckoutScreen = () => {
       `;
       setPaymentHtml(html);
     } catch (err: any) {
-      const errMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Could not start payment';
+      let errMsg = err.response?.data?.error || err.response?.data?.message || err.message || 'Could not start payment';
+      if (err.message === 'Network Error' || err.code === 'ECONNABORTED') {
+        errMsg = 'Connection timed out or network unavailable. Please verify your internet connection and try again.';
+      }
       Alert.alert('Payment Error', errMsg);
       setProcessing(false);
     }
@@ -502,9 +505,9 @@ const CheckoutScreen = () => {
 
             {/* QR Code Container */}
             <View style={styles.qrImageContainer}>
-              {qrData.qr_image_url ? (
+              {qrData.qr_image_url || qrData.qr_id ? (
                 <Image
-                  source={{ uri: qrData.qr_image_url }}
+                  source={{ uri: qrData.qr_id ? `https://api.razorpay.com/v1/l/qrcode/${qrData.qr_id}` : qrData.qr_image_url }}
                   style={{ width: 230, height: 230, borderRadius: 12 }}
                   resizeMode="contain"
                 />
