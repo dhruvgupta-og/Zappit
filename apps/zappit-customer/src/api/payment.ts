@@ -13,8 +13,14 @@ export const paymentApi = {
     couponCode?: string;
     college_id?: string;
     additionalNote?: string;
+    payment_method?: 'intent' | 'qr';
   }): Promise<any> => {
     const res = await apiClient.post('/api/create-order', data);
+    return res.data;
+  },
+
+  checkQrPayment: async (qrId: string): Promise<any> => {
+    const res = await apiClient.get(`/api/check-qr-payment/${qrId}`);
     return res.data;
   },
 

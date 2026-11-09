@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { getPrisma } from '../db';
-import { createRazorpayOrder, verifyRazorpaySignature, verifyWebhookSignature } from '../razorpay';
+import { createRazorpayOrder, createRazorpayQrCode, fetchRazorpayQrPayments, verifyRazorpaySignature, verifyWebhookSignature } from '../razorpay';
 import { sendExpoPushNotification } from '../push';
 import { AuthUser } from '../auth';
 
@@ -26,7 +26,7 @@ orders.post('/create-order', async (c) => {
   try {
     const user = c.get('user');
     const body = await c.req.json();
-    const { items, coupon_code, address, college_id, additionalNote } = body;
+    const { items, coupon_code, address, college_id, additionalNote, payment_method } = body;
 
     if (!items || !items.length) {
       return c.json({ success: false, error: 'Items are required' }, 400);
@@ -116,14 +116,30 @@ orders.post('/create-order', async (c) => {
     const amountToPay = Math.max(1, Math.round(subtotal - discount + totalFees));
     const amountInPaise = amountToPay * 100;
 
-    // 4. Create Razorpay Order
-    const receipt = `order_${Date.now()}`;
-    const razorpayOrder: any = await createRazorpayOrder(
-      c.env.RAZORPAY_KEY_ID,
-      c.env.RAZORPAY_KEY_SECRET,
-      amountInPaise,
-      receipt
-    );
+    // 4. Create Razorpay Payment (Standard Order or Dynamic UPI QR Code)
+    const isQrPayment = payment_method === 'qr';
+    let paymentRefId = '';
+    let qrImageUrl: string | null = null;
+
+    if (isQrPayment) {
+      const qrData: any = await createRazorpayQrCode(
+        c.env.RAZORPAY_KEY_ID,
+        c.env.RAZORPAY_KEY_SECRET,
+        amountInPaise,
+        `Zappit Order ₹${amountToPay}`
+      );
+      paymentRefId = qrData.id;
+      qrImageUrl = qrData.image_url;
+    } else {
+      const receipt = `order_${Date.now()}`;
+      const razorpayOrder: any = await createRazorpayOrder(
+        c.env.RAZORPAY_KEY_ID,
+        c.env.RAZORPAY_KEY_SECRET,
+        amountInPaise,
+        receipt
+      );
+      paymentRefId = razorpayOrder.id;
+    }
 
     // 5. Fetch User Profile
     let orderUserName = 'Guest';
@@ -190,7 +206,7 @@ orders.post('/create-order', async (c) => {
           orderStatus: 'pending',
           additionalNote: additionalNote || '',
           deliveryOtp,
-          razorpayOrderId: razorpayOrder.id,
+          razorpayOrderId: paymentRefId,
         },
       });
 
@@ -200,10 +216,13 @@ orders.post('/create-order', async (c) => {
 
     return c.json({
       success: true,
-      order_id: razorpayOrder.id,
-      amount: razorpayOrder.amount,
-      currency: razorpayOrder.currency,
+      payment_method: isQrPayment ? 'qr' : 'intent',
+      order_id: paymentRefId,
+      amount: amountInPaise,
+      currency: 'INR',
       key_id: c.env.RAZORPAY_KEY_ID,
+      qr_id: isQrPayment ? paymentRefId : null,
+      qr_image_url: qrImageUrl,
       db_order_ids: orderIds,
       fees_breakdown: feesBreakdown,
     });
@@ -212,6 +231,97 @@ orders.post('/create-order', async (c) => {
     return c.json({ success: false, error: err.message || 'Error creating order' }, 500);
   }
 });
+
+// GET /api/check-qr-payment/:qrId
+orders.get('/check-qr-payment/:qrId', async (c) => {
+  try {
+    const qrId = c.req.param('qrId');
+    if (!qrId) {
+      return c.json({ success: false, error: 'qrId is required' }, 400);
+    }
+
+    const prisma = getPrisma(c.env.DB);
+    const matchedOrders = await prisma.order.findMany({
+      where: { razorpayOrderId: qrId },
+    });
+
+    if (matchedOrders.length === 0) {
+      return c.json({ success: false, error: 'No orders found for this QR' }, 404);
+    }
+
+    // Check if already paid
+    const isAlreadyPaid = matchedOrders.some((o) => o.paymentStatus === 'paid');
+    if (isAlreadyPaid) {
+      return c.json({
+        success: true,
+        paid: true,
+        orderIds: matchedOrders.map((o) => o.id),
+        deliveryOtp: matchedOrders[0]?.deliveryOtp,
+      });
+    }
+
+    // Check payments against this QR Code from Razorpay
+    const paymentsData: any = await fetchRazorpayQrPayments(
+      c.env.RAZORPAY_KEY_ID,
+      c.env.RAZORPAY_KEY_SECRET,
+      qrId
+    );
+
+    const successfulPayment = paymentsData?.items?.find(
+      (p: any) => p.status === 'captured' || p.status === 'authorized'
+    );
+
+    if (successfulPayment) {
+      // Mark orders as paid!
+      await prisma.order.updateMany({
+        where: { razorpayOrderId: qrId },
+        data: {
+          paymentStatus: 'paid',
+          orderStatus: 'preparing',
+          razorpayPaymentId: successfulPayment.id,
+        },
+      });
+
+      // Notify Store Staff via high-priority push (with loud alert sound)
+      for (const ord of matchedOrders) {
+        try {
+          const storeStaff = await prisma.staff.findMany({
+            where: { storeId: ord.storeId },
+          });
+          const staffTokens = storeStaff.map((s) => s.id);
+          const usersWithTokens = await prisma.user.findMany({
+            where: { id: { in: staffTokens }, expoPushToken: { not: null } },
+          });
+          const validTokens = usersWithTokens.map((u) => u.expoPushToken!).filter(Boolean);
+          if (validTokens.length > 0) {
+            await sendExpoPushNotification(
+              validTokens,
+              '⚡ NEW ORDER #' + ord.id.slice(-4),
+              `Order for ₹${ord.totalAmount} received! Tap to prepare.`,
+              { orderId: ord.id, channelId: 'order_loud_alert' }
+            );
+          }
+        } catch (pushErr) {
+          console.warn('[QR Payment Push Error]:', pushErr);
+        }
+      }
+
+      return c.json({
+        success: true,
+        paid: true,
+        orderIds: matchedOrders.map((o) => o.id),
+        deliveryOtp: matchedOrders[0]?.deliveryOtp,
+        paymentId: successfulPayment.id,
+      });
+    }
+
+    return c.json({ success: true, paid: false });
+  } catch (err: any) {
+    console.error('Check QR Payment Error:', err);
+    return c.json({ success: false, paid: false, error: err.message || 'Error checking payment status' }, 500);
+  }
+});
+
 
 // POST /api/verify-payment
 orders.post('/verify-payment', async (c) => {
@@ -671,19 +781,22 @@ orders.post('/razorpay-webhook', async (c) => {
     const event = JSON.parse(rawBody);
     const prisma = getPrisma(c.env.DB);
 
-    if (event.event === 'payment.captured' || event.event === 'order.paid') {
-      const payment = event.payload.payment.entity;
-      const razorpayOrderId = payment.order_id;
-      const razorpayPaymentId = payment.id;
+    if (event.event === 'payment.captured' || event.event === 'order.paid' || event.event === 'qr_code.paid') {
+      const payment = event.payload.payment?.entity;
+      const qrCode = event.payload.qr_code?.entity;
+      const razorpayOrderId = payment?.order_id || qrCode?.id;
+      const razorpayPaymentId = payment?.id;
 
-      await prisma.order.updateMany({
-        where: { razorpayOrderId },
-        data: {
-          paymentStatus: 'paid',
-          orderStatus: 'preparing',
-          razorpayPaymentId,
-        },
-      });
+      if (razorpayOrderId) {
+        await prisma.order.updateMany({
+          where: { razorpayOrderId },
+          data: {
+            paymentStatus: 'paid',
+            orderStatus: 'preparing',
+            razorpayPaymentId: razorpayPaymentId || null,
+          },
+        });
+      }
     } else if (event.event === 'payment.failed') {
       const payment = event.payload.payment?.entity;
       const razorpayOrderId = payment?.order_id;

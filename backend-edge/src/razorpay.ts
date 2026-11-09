@@ -88,3 +88,78 @@ export async function verifyWebhookSignature(
   return timingSafeEqual(hashHex, signature);
 }
 
+export async function createRazorpayQrCode(
+  keyId: string,
+  keySecret: string,
+  amountInPaise: number,
+  description = 'Zappit Order Payment',
+  notes: Record<string, any> = {}
+) {
+  const credentials = btoa(`${keyId}:${keySecret}`);
+  const res = await fetch('https://api.razorpay.com/v1/payments/qr_codes', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      type: 'upi_qr',
+      name: 'Zappit Campus Delivery',
+      usage: 'single_use',
+      fixed_amount: true,
+      payment_amount: amountInPaise,
+      description,
+      close_by: Math.floor(Date.now() / 1000) + 900, // 15 mins expiry
+      notes,
+    }),
+  });
+
+  if (!res.ok) {
+    const errorData: any = await res.json().catch(() => ({}));
+    throw new Error(errorData.error?.description || `Razorpay QR Code creation failed with status ${res.status}`);
+  }
+
+  return await res.json();
+}
+
+export async function fetchRazorpayQrPayments(
+  keyId: string,
+  keySecret: string,
+  qrId: string
+) {
+  const credentials = btoa(`${keyId}:${keySecret}`);
+  const res = await fetch(`https://api.razorpay.com/v1/payments/qr_codes/${qrId}/payments`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Basic ${credentials}`,
+    },
+  });
+
+  if (!res.ok) {
+    const errorData: any = await res.json().catch(() => ({}));
+    throw new Error(errorData.error?.description || `Failed to fetch QR payments with status ${res.status}`);
+  }
+
+  return await res.json();
+}
+
+export async function fetchRazorpayQrCode(
+  keyId: string,
+  keySecret: string,
+  qrId: string
+) {
+  const credentials = btoa(`${keyId}:${keySecret}`);
+  const res = await fetch(`https://api.razorpay.com/v1/payments/qr_codes/${qrId}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Basic ${credentials}`,
+    },
+  });
+
+  if (!res.ok) {
+    const errorData: any = await res.json().catch(() => ({}));
+    throw new Error(errorData.error?.description || `Failed to fetch QR code with status ${res.status}`);
+  }
+
+  return await res.json();
+}

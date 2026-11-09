@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator,
-  TextInput, Alert, Animated,
+  TextInput, Alert, Animated, Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { WebView } from 'react-native-webview';
@@ -42,10 +42,77 @@ const CheckoutScreen = () => {
   const [applying, setApplying] = useState(false);
 
   const [processing, setProcessing] = useState(false);
+  const [paymentMode, setPaymentMode] = useState<'apps' | 'qr'>('apps');
+  const [qrData, setQrData] = useState<{ qr_id: string; qr_image_url: string; amount: number; orderIds: string[] } | null>(null);
+  const [qrSecondsLeft, setQrSecondsLeft] = useState(900);
   const [paymentHtml, setPaymentHtml] = useState<string | null>(null);
   const [animationPhase, setAnimationPhase] = useState(0); // 0=none,1=placed,2=zapp,3=confirmed
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
+
+  // Poll for QR Code Payment
+  useEffect(() => {
+    if (!qrData?.qr_id) return;
+
+    const timer = setInterval(() => {
+      setQrSecondsLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setQrData(null);
+          setProcessing(false);
+          Alert.alert('QR Expired', 'The QR code has expired. Please try placing your order again.');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const check = await paymentApi.checkQrPayment(qrData.qr_id);
+        if (check.success && check.paid) {
+          clearInterval(pollInterval);
+          clearInterval(timer);
+          const confirmedOrderIds = check.orderIds || qrData.orderIds || [];
+          setQrData(null);
+          clearCart();
+
+          // Send confirmation email
+          try {
+            await apiClient.post('/api/send-order-email', { orderIds: confirmedOrderIds });
+          } catch {}
+
+          // Success animation
+          setAnimationPhase(1);
+          triggerPopAnimation();
+
+          setTimeout(() => {
+            setAnimationPhase(2);
+            triggerPopAnimation();
+          }, 1200);
+
+          setTimeout(() => {
+            setAnimationPhase(3);
+            triggerPopAnimation();
+          }, 2600);
+
+          setTimeout(() => {
+            setAnimationPhase(0);
+            setProcessing(false);
+            navigation.replace('OrderTracker', { orderIds: confirmedOrderIds });
+          }, 4200);
+        }
+      } catch (err) {
+        console.warn('[QR Poll Error]:', err);
+      }
+    }, 2500);
+
+    return () => {
+      clearInterval(timer);
+      clearInterval(pollInterval);
+    };
+  }, [qrData?.qr_id]);
+
 
   useEffect(() => {
     AsyncStorage.getItem('userAddress').then((v) => v && setAddress(v));
@@ -109,7 +176,8 @@ const CheckoutScreen = () => {
 
   const legacyDeliveryFee = computedFees.find(f => f.name?.toLowerCase().includes('delivery'))?.amount || deliveryFee;
 
-  const startPayment = async () => {
+  const startPayment = async (modeOverride?: 'apps' | 'qr') => {
+    const activeMode = modeOverride || paymentMode;
     const hasBlocks = collegeDetails?.blocks && collegeDetails.blocks.length > 0;
     if (hasBlocks) {
       if (!roomDetails.trim()) {
@@ -148,9 +216,23 @@ const CheckoutScreen = () => {
         couponCode: appliedCoupon?.code,
         additionalNote: additionalNote.trim(),
         college_id: userCollegeId,
+        payment_method: activeMode === 'qr' ? 'qr' : 'intent',
       });
 
       if (!res.success) throw new Error(res.error || 'Failed to create order');
+
+      if (activeMode === 'qr') {
+        if (!res.qr_image_url) throw new Error('Could not generate UPI QR Code. Please try using UPI Apps.');
+        setQrData({
+          qr_id: res.qr_id,
+          qr_image_url: res.qr_image_url,
+          amount: totalToPay,
+          orderIds: res.db_order_ids || [],
+        });
+        setQrSecondsLeft(900);
+        setProcessing(false);
+        return;
+      }
 
       const razorpayKey = res.key_id;
       if (!razorpayKey) throw new Error('Payment gateway configuration missing. Please retry.');
@@ -385,10 +467,137 @@ const CheckoutScreen = () => {
     );
   }
 
+  // ── QR CODE PAYMENT SCREEN (FRIEND CAN SCAN & PAY) ─────────────────────
+  if (qrData) {
+    const mins = Math.floor(qrSecondsLeft / 60);
+    const secs = qrSecondsLeft % 60;
+    const timeFormatted = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+    return (
+      <View style={[styles.container, { backgroundColor: colors.bgColor }]}>
+        <View style={{ height: insets.top }} />
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => {
+              setQrData(null);
+              setProcessing(false);
+            }}
+            style={styles.backBtn}
+          >
+            <Text style={{ fontSize: 20, color: colors.textMain }}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>Scan to Pay</Text>
+          <View style={{ width: 32 }} />
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: spacing.xl, alignItems: 'center' }} showsVerticalScrollIndicator={false}>
+          <View style={styles.qrCard}>
+            <View style={styles.qrBadge}>
+              <Text style={styles.qrBadgeText}>👥 FRIEND CAN PAY</Text>
+            </View>
+            <Text style={styles.qrTitle}>Scan UPI QR Code</Text>
+            <Text style={styles.qrSubtitle}>
+              Ask your friend or open Google Pay, PhonePe, Paytm, or BHIM on any phone to scan this code.
+            </Text>
+
+            {/* QR Code Container */}
+            <View style={styles.qrImageContainer}>
+              {qrData.qr_image_url ? (
+                <Image
+                  source={{ uri: qrData.qr_image_url }}
+                  style={{ width: 230, height: 230, borderRadius: 12 }}
+                  resizeMode="contain"
+                />
+              ) : (
+                <ActivityIndicator size="large" color={colors.primary} />
+              )}
+            </View>
+
+            {/* Total to pay amount badge */}
+            <View style={styles.qrAmountBox}>
+              <Text style={{ fontSize: 11, color: colors.textMuted, fontWeight: '700', letterSpacing: 1 }}>
+                EXACT AMOUNT TO PAY
+              </Text>
+              <Text style={{ fontSize: 32, fontWeight: '900', color: colors.primary, marginTop: 4 }}>
+                ₹{qrData.amount}
+              </Text>
+            </View>
+
+            {/* Live Polling Status */}
+            <View style={styles.qrStatusRow}>
+              <ActivityIndicator size="small" color={colors.primary} />
+              <Text style={styles.qrStatusText}>
+                Listening for payment... ({timeFormatted})
+              </Text>
+            </View>
+
+            {/* Supported UPI Badges */}
+            <View style={styles.upiBadgesRow}>
+              <View style={styles.upiBadgeItem}><Text style={styles.upiBadgeText}>GPay</Text></View>
+              <View style={styles.upiBadgeItem}><Text style={styles.upiBadgeText}>PhonePe</Text></View>
+              <View style={styles.upiBadgeItem}><Text style={styles.upiBadgeText}>Paytm</Text></View>
+              <View style={styles.upiBadgeItem}><Text style={styles.upiBadgeText}>BHIM</Text></View>
+              <View style={styles.upiBadgeItem}><Text style={styles.upiBadgeText}>Cred</Text></View>
+            </View>
+
+            {/* Fallback to UPI App */}
+            <TouchableOpacity
+              style={styles.switchModeBtn}
+              onPress={() => {
+                setQrData(null);
+                setPaymentMode('apps');
+                startPayment('apps');
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.switchModeText}>📱 Pay with UPI App on this phone instead</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.cancelQrBtn}
+              onPress={() => {
+                setQrData(null);
+                setProcessing(false);
+              }}
+            >
+              <Text style={styles.cancelQrText}>Cancel Payment</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   if (paymentHtml) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bgColor }}>
         <View style={{ height: insets.top, backgroundColor: colors.bgColor }} />
+        {/* Top bar with quick switch to QR option */}
+        <View style={{
+          flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+          backgroundColor: '#1E293B', paddingHorizontal: 16, paddingVertical: 10,
+          borderBottomWidth: 1, borderBottomColor: colors.borderColor,
+        }}>
+          <TouchableOpacity
+            onPress={() => {
+              setPaymentHtml(null);
+              setProcessing(false);
+            }}
+            style={{ padding: 4 }}
+          >
+            <Text style={{ color: colors.textMuted, fontSize: 13, fontWeight: '700' }}>✕ Close</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => {
+              setPaymentHtml(null);
+              setPaymentMode('qr');
+              startPayment('qr');
+            }}
+            style={{ backgroundColor: 'rgba(255,193,7,0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.primary }}
+          >
+            <Text style={{ color: colors.primary, fontSize: 12, fontWeight: '800' }}>👥 Friend Paying? Show QR</Text>
+          </TouchableOpacity>
+        </View>
         <WebView
           originWhitelist={['*']}
           source={{ html: paymentHtml, baseUrl: 'https://checkout.razorpay.com' }}
@@ -534,6 +743,50 @@ const CheckoutScreen = () => {
           )}
         </View>
 
+        {/* Payment Method Selection */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Payment Method</Text>
+
+          <TouchableOpacity
+            style={[styles.payOptionCard, paymentMode === 'apps' && styles.payOptionCardActive]}
+            onPress={() => setPaymentMode('apps')}
+            activeOpacity={0.7}
+          >
+            <View style={styles.payIconBox}>
+              <Text style={{ fontSize: 20 }}>📱</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.payOptionHead}>Pay via UPI Apps (This Phone)</Text>
+              <Text style={styles.payOptionDesc}>Google Pay, PhonePe, Paytm on this device</Text>
+            </View>
+            <View style={[styles.radioCircle, paymentMode === 'apps' && styles.radioCircleActive]}>
+              {paymentMode === 'apps' && <View style={styles.radioDot} />}
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.payOptionCard, paymentMode === 'qr' && styles.payOptionCardActive]}
+            onPress={() => setPaymentMode('qr')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.payIconBox, { backgroundColor: 'rgba(255,193,7,0.15)' }]}>
+              <Text style={{ fontSize: 20 }}>📷</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={styles.payOptionHead}>Scan UPI QR Code</Text>
+                <View style={styles.friendPill}>
+                  <Text style={styles.friendPillText}>👥 Friend Can Pay</Text>
+                </View>
+              </View>
+              <Text style={styles.payOptionDesc}>Shows QR on screen to scan from any phone</Text>
+            </View>
+            <View style={[styles.radioCircle, paymentMode === 'qr' && styles.radioCircleActive]}>
+              {paymentMode === 'qr' && <View style={styles.radioDot} />}
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* Bill */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Bill Summary</Text>
@@ -576,13 +829,15 @@ const CheckoutScreen = () => {
         </View>
         <TouchableOpacity
           style={[styles.payBtn, processing && { opacity: 0.7 }]}
-          onPress={startPayment}
+          onPress={() => startPayment()}
           disabled={processing}
         >
           {processing ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.payBtnText}>Pay Securely  →</Text>
+            <Text style={styles.payBtnText}>
+              {paymentMode === 'qr' ? 'Show QR Code  📷' : 'Pay Securely  →'}
+            </Text>
           )}
         </TouchableOpacity>
       </View>
@@ -648,6 +903,86 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24, paddingVertical: 14,
   },
   payBtnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+
+  // Payment Options
+  payOptionCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: spacing.md, borderRadius: radius.md,
+    borderWidth: 1.5, borderColor: colors.borderColor,
+    backgroundColor: colors.bgColor, marginBottom: 10,
+  },
+  payOptionCardActive: {
+    borderColor: colors.primary,
+    backgroundColor: 'rgba(255,193,7,0.08)',
+  },
+  payIconBox: {
+    width: 44, height: 44, borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  payOptionHead: { fontSize: 14, fontWeight: '700', color: colors.textMain },
+  payOptionDesc: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  friendPill: {
+    backgroundColor: 'rgba(16,185,129,0.15)',
+    paddingHorizontal: 6, paddingVertical: 2,
+    borderRadius: 6, borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)',
+  },
+  friendPillText: { fontSize: 10, color: colors.success, fontWeight: '800' },
+  radioCircle: {
+    width: 20, height: 20, borderRadius: 10,
+    borderWidth: 2, borderColor: colors.borderColor,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  radioCircleActive: { borderColor: colors.primary },
+  radioDot: {
+    width: 10, height: 10, borderRadius: 5,
+    backgroundColor: colors.primary,
+  },
+
+  // QR Screen Styles
+  qrCard: {
+    backgroundColor: colors.cardBg, borderRadius: 20,
+    padding: 24, width: '100%', maxWidth: 360,
+    alignItems: 'center', borderWidth: 1, borderColor: colors.borderColor,
+  },
+  qrBadge: {
+    backgroundColor: 'rgba(255,193,7,0.15)',
+    paddingHorizontal: 12, paddingVertical: 4,
+    borderRadius: 20, marginBottom: 10,
+    borderWidth: 1, borderColor: colors.primary,
+  },
+  qrBadgeText: { color: colors.primary, fontWeight: '800', fontSize: 11, letterSpacing: 1 },
+  qrTitle: { fontSize: 22, fontWeight: '900', color: colors.textMain, textAlign: 'center' },
+  qrSubtitle: { fontSize: 13, color: colors.textMuted, textAlign: 'center', marginTop: 6, paddingHorizontal: 10 },
+  qrImageContainer: {
+    backgroundColor: '#FFFFFF', padding: 14,
+    borderRadius: 16, marginVertical: 16,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 8,
+  },
+  qrAmountBox: {
+    alignItems: 'center', backgroundColor: colors.bgColor,
+    paddingVertical: 10, paddingHorizontal: 28,
+    borderRadius: 12, borderWidth: 1, borderColor: colors.borderColor,
+    marginBottom: 8,
+  },
+  qrStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 8 },
+  qrStatusText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+  upiBadgesRow: { flexDirection: 'row', gap: 6, marginTop: 4, marginBottom: 16, flexWrap: 'wrap', justifyContent: 'center' },
+  upiBadgeItem: {
+    backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 8,
+    paddingVertical: 4, borderRadius: 6, borderWidth: 1, borderColor: colors.borderColor,
+  },
+  upiBadgeText: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
+  switchModeBtn: {
+    backgroundColor: 'rgba(255,193,7,0.12)', paddingVertical: 12,
+    paddingHorizontal: 16, borderRadius: radius.md,
+    borderWidth: 1, borderColor: colors.primary,
+    width: '100%', alignItems: 'center', marginBottom: 10,
+  },
+  switchModeText: { color: colors.primary, fontSize: 13, fontWeight: '700' },
+  cancelQrBtn: { paddingVertical: 8 },
+  cancelQrText: { color: colors.error, fontSize: 13, fontWeight: '600' },
 });
 
 export default CheckoutScreen;
