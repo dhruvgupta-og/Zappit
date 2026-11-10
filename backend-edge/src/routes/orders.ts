@@ -21,6 +21,15 @@ const STATUS_MESSAGES: Record<string, { title: string; body: string }> = {
   cancelled:        { title: '❌ Order Cancelled',     body: 'Unfortunately your order has been cancelled. Please contact support if this was unexpected.' },
 };
 
+function orderMatchCondition(refId: string) {
+  return {
+    OR: [
+      { razorpayOrderId: refId },
+      { razorpayOrderId: { contains: refId } },
+    ],
+  };
+}
+
 // POST /api/create-order
 orders.post('/create-order', async (c) => {
   try {
@@ -116,13 +125,16 @@ orders.post('/create-order', async (c) => {
     const amountToPay = Math.max(1, Math.round(subtotal - discount + totalFees));
     const amountInPaise = amountToPay * 100;
 
-    // 4. Create Razorpay Payment (Standard Order or Dynamic UPI QR Code)
-    const isQrPayment = payment_method === 'qr';
-    let paymentRefId = '';
-    let qrImageUrl: string | null = null;
-
-    if (isQrPayment) {
-      const qrData: any = await createRazorpayQrCode(
+    // 4. Create Razorpay Payment (Order for UPI Apps & Dynamic UPI QR Code in parallel)
+    const receipt = `order_${Date.now()}`;
+    const [razorpayOrder, qrData]: [any, any] = await Promise.all([
+      createRazorpayOrder(
+        c.env.RAZORPAY_KEY_ID,
+        c.env.RAZORPAY_KEY_SECRET,
+        amountInPaise,
+        receipt
+      ),
+      createRazorpayQrCode(
         c.env.RAZORPAY_KEY_ID,
         c.env.RAZORPAY_KEY_SECRET,
         amountInPaise,
@@ -131,21 +143,16 @@ orders.post('/create-order', async (c) => {
           order_amount: amountToPay.toString(),
           college_id: college_id || 'campus',
         }
-      );
-      paymentRefId = qrData.id;
-      qrImageUrl = qrData.id
-        ? `https://api.razorpay.com/v1/l/qrcode/${qrData.id}`
-        : qrData.image_url;
-    } else {
-      const receipt = `order_${Date.now()}`;
-      const razorpayOrder: any = await createRazorpayOrder(
-        c.env.RAZORPAY_KEY_ID,
-        c.env.RAZORPAY_KEY_SECRET,
-        amountInPaise,
-        receipt
-      );
-      paymentRefId = razorpayOrder.id;
-    }
+      ).catch((qrErr) => {
+        console.warn('[QR Code Generation]:', qrErr);
+        return null;
+      }),
+    ]);
+
+    const orderRefId = razorpayOrder.id;
+    const qrRefId = qrData?.id || null;
+    const qrImageUrl = qrRefId ? `https://api.razorpay.com/v1/l/qrcode/${qrRefId}` : null;
+    const combinedPaymentId = qrRefId ? `${orderRefId}|${qrRefId}` : orderRefId;
 
     // 5. Fetch User Profile
     let orderUserName = 'Guest';
@@ -212,7 +219,7 @@ orders.post('/create-order', async (c) => {
           orderStatus: 'pending',
           additionalNote: additionalNote || '',
           deliveryOtp,
-          razorpayOrderId: paymentRefId,
+          razorpayOrderId: combinedPaymentId,
         },
       });
 
@@ -222,12 +229,11 @@ orders.post('/create-order', async (c) => {
 
     return c.json({
       success: true,
-      payment_method: isQrPayment ? 'qr' : 'intent',
-      order_id: paymentRefId,
+      order_id: razorpayOrder.id,
       amount: amountInPaise,
       currency: 'INR',
       key_id: c.env.RAZORPAY_KEY_ID,
-      qr_id: isQrPayment ? paymentRefId : null,
+      qr_id: qrRefId,
       qr_image_url: qrImageUrl,
       db_order_ids: orderIds,
       fees_breakdown: feesBreakdown,
@@ -248,7 +254,7 @@ orders.get('/check-qr-payment/:qrId', async (c) => {
 
     const prisma = getPrisma(c.env.DB);
     const matchedOrders = await prisma.order.findMany({
-      where: { razorpayOrderId: qrId },
+      where: orderMatchCondition(qrId),
     });
 
     if (matchedOrders.length === 0) {
@@ -280,7 +286,7 @@ orders.get('/check-qr-payment/:qrId', async (c) => {
     if (successfulPayment) {
       // Mark orders as paid!
       await prisma.order.updateMany({
-        where: { razorpayOrderId: qrId },
+        where: orderMatchCondition(qrId),
         data: {
           paymentStatus: 'paid',
           orderStatus: 'preparing',
@@ -352,7 +358,7 @@ orders.post('/verify-payment', async (c) => {
 
     const prisma = getPrisma(c.env.DB);
     const matchedOrders = await prisma.order.findMany({
-      where: { razorpayOrderId: razorpay_order_id },
+      where: orderMatchCondition(razorpay_order_id),
     });
 
     if (matchedOrders.length === 0) {
@@ -361,7 +367,7 @@ orders.post('/verify-payment', async (c) => {
 
     // Mark orders as paid
     await prisma.order.updateMany({
-      where: { razorpayOrderId: razorpay_order_id },
+      where: orderMatchCondition(razorpay_order_id),
       data: {
         paymentStatus: 'paid',
         orderStatus: 'preparing',
@@ -746,7 +752,7 @@ const cancelUnpaidHandler = async (c: any) => {
     if (razorpay_order_id) {
       await prisma.order.updateMany({
         where: {
-          razorpayOrderId: razorpay_order_id,
+          ...orderMatchCondition(razorpay_order_id),
           paymentStatus: 'pending',
         },
         data: { orderStatus: 'cancelled' },
@@ -795,7 +801,7 @@ orders.post('/razorpay-webhook', async (c) => {
 
       if (razorpayOrderId) {
         await prisma.order.updateMany({
-          where: { razorpayOrderId },
+          where: orderMatchCondition(razorpayOrderId),
           data: {
             paymentStatus: 'paid',
             orderStatus: 'preparing',
@@ -808,7 +814,10 @@ orders.post('/razorpay-webhook', async (c) => {
       const razorpayOrderId = payment?.order_id;
       if (razorpayOrderId) {
         await prisma.order.updateMany({
-          where: { razorpayOrderId, paymentStatus: 'pending' },
+          where: {
+            ...orderMatchCondition(razorpayOrderId),
+            paymentStatus: 'pending',
+          },
           data: { orderStatus: 'cancelled' },
         });
       }
