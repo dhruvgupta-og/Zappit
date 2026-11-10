@@ -503,14 +503,16 @@ const CheckoutScreen = () => {
               Ask your friend or open Google Pay, PhonePe, Paytm, or BHIM on any phone to scan this code.
             </Text>
 
-            {/* QR Code Container */}
+            {/* QR Code Container - Cropped to show ONLY the big, clean QR code */}
             <View style={styles.qrImageContainer}>
               {qrData.qr_image_url || qrData.qr_id ? (
-                <Image
-                  source={{ uri: qrData.qr_id ? `https://api.razorpay.com/v1/l/qrcode/${qrData.qr_id}` : qrData.qr_image_url }}
-                  style={{ width: 230, height: 230, borderRadius: 12 }}
-                  resizeMode="contain"
-                />
+                <View style={styles.qrCropWindow}>
+                  <Image
+                    source={{ uri: qrData.qr_id ? `https://api.razorpay.com/v1/l/qrcode/${qrData.qr_id}` : qrData.qr_image_url }}
+                    style={styles.qrCroppedImage}
+                    resizeMode="cover"
+                  />
+                </View>
               ) : (
                 <ActivityIndicator size="large" color={colors.primary} />
               )}
@@ -958,10 +960,26 @@ const styles = StyleSheet.create({
   qrTitle: { fontSize: 22, fontWeight: '900', color: colors.textMain, textAlign: 'center' },
   qrSubtitle: { fontSize: 13, color: colors.textMuted, textAlign: 'center', marginTop: 6, paddingHorizontal: 10 },
   qrImageContainer: {
-    backgroundColor: '#FFFFFF', padding: 14,
-    borderRadius: 16, marginVertical: 16,
+    backgroundColor: '#FFFFFF', padding: 10,
+    borderRadius: 20, marginVertical: 16,
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3, shadowRadius: 8, elevation: 8,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  qrCropWindow: {
+    width: 260,
+    height: 260,
+    borderRadius: 14,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#FFFFFF',
+  },
+  qrCroppedImage: {
+    width: 419,
+    height: 1021,
+    position: 'absolute',
+    top: -397,
+    left: -80,
   },
   qrAmountBox: {
     alignItems: 'center', backgroundColor: colors.bgColor,
