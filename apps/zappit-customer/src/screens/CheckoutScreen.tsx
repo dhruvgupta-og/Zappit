@@ -169,17 +169,28 @@ const CheckoutScreen = () => {
 
   const discount = appliedCoupon ? Math.round((cartTotal * appliedCoupon.discount_percent) / 100) : 0;
 
-  // Compute all fees against the subtotal (after discount)
-  let computedFees = allFees.map(f => ({
-    name: f.name,
-    type: f.type,
-    amount: f.type === 'percent'
-      ? Math.round((cartTotal * Number(f.value)) / 100)
-      : Number(f.value),
-  }));
+  // 1. Config fees (or fallback to legacy deliveryFee if allFees not loaded yet)
+  let computedFees: Array<{ name: string; type: string; amount: number }> = [];
 
+  if (allFees && allFees.length > 0) {
+    computedFees = allFees.map(f => ({
+      name: f.name,
+      type: f.type,
+      amount: f.type === 'percent'
+        ? Math.round((cartTotal * Number(f.value)) / 100)
+        : Number(f.value),
+    }));
+  } else if (deliveryFee > 0) {
+    computedFees = [{ name: 'Delivery Fee', type: 'flat', amount: deliveryFee }];
+  }
+
+  // 2. Add Block Fee if hostel block is selected
   if (collegeDetails?.blocks && collegeDetails.blocks.length > 0 && selectedBlock && (selectedBlock.deliveryFee || 0) > 0) {
-    computedFees.push({ name: `Block Fee (${selectedBlock.name})`, type: 'flat', amount: selectedBlock.deliveryFee || 0 });
+    computedFees.push({
+      name: `Block Fee (${selectedBlock.name.trim()})`,
+      type: 'flat',
+      amount: selectedBlock.deliveryFee || 0,
+    });
   }
 
   const totalFeesAmount = computedFees.reduce((s, f) => s + f.amount, 0);
@@ -241,8 +252,10 @@ const CheckoutScreen = () => {
         })),
         storeId: storeId!,
         storeName: storeName!,
-        address: hasBlocks ? `${selectedBlock?.name || ''}, ${roomDetails.trim()}` : address.trim(),
-        deliveryAddress: hasBlocks ? `${selectedBlock?.name || ''}, ${roomDetails.trim()}` : address.trim(),
+        block_id: selectedBlock?.id,
+        block_name: selectedBlock?.name?.trim(),
+        address: hasBlocks ? `${selectedBlock?.name?.trim() || ''}, ${roomDetails.trim()}` : address.trim(),
+        deliveryAddress: hasBlocks ? `${selectedBlock?.name?.trim() || ''}, ${roomDetails.trim()}` : address.trim(),
         deliveryFee: legacyDeliveryFee,
         coupon_code: appliedCoupon?.code,
         couponCode: appliedCoupon?.code,
@@ -254,6 +267,8 @@ const CheckoutScreen = () => {
 
       const razorpayKey = res.key_id;
       if (!razorpayKey) throw new Error('Payment gateway configuration missing. Please retry.');
+
+      const finalAmount = Math.round(Number(res.amount) / 100);
 
       // 2. Generate Razorpay Checkout HTML to load in WebView
       const html = `
@@ -327,7 +342,7 @@ const CheckoutScreen = () => {
         orderId: res.order_id,
         keyId: razorpayKey,
         amount: res.amount,
-        totalToPay,
+        totalToPay: finalAmount,
         qrId: res.qr_id,
         qrImageUrl: res.qr_image_url,
         dbOrderIds: res.db_order_ids || [],
@@ -835,13 +850,6 @@ const CheckoutScreen = () => {
               <Text style={styles.billText}>₹{fee.amount}</Text>
             </View>
           ))}
-          {/* Fallback: show delivery fee if allFees not loaded yet */}
-          {computedFees.length === 0 && deliveryFee > 0 && (
-            <View style={styles.billRow}>
-              <Text style={styles.billText}>Delivery Fee</Text>
-              <Text style={styles.billText}>₹{deliveryFee}</Text>
-            </View>
-          )}
           {appliedCoupon && (
             <View style={styles.billRow}>
               <Text style={styles.discountText}>Coupon Discount ({appliedCoupon.discount_percent}%)</Text>

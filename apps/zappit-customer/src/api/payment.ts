@@ -14,6 +14,8 @@ export const paymentApi = {
     college_id?: string;
     additionalNote?: string;
     payment_method?: 'intent' | 'qr';
+    block_id?: string;
+    block_name?: string;
   }): Promise<any> => {
     const res = await apiClient.post('/api/create-order', data);
     return res.data;

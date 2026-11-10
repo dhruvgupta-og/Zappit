@@ -35,7 +35,7 @@ orders.post('/create-order', async (c) => {
   try {
     const user = c.get('user');
     const body = await c.req.json();
-    const { items, coupon_code, address, college_id, additionalNote, payment_method } = body;
+    const { items, coupon_code, address, college_id, additionalNote, payment_method, block_id, block_name, blockId } = body;
 
     if (!items || !items.length) {
       return c.json({ success: false, error: 'Items are required' }, 400);
@@ -120,6 +120,30 @@ orders.post('/create-order', async (c) => {
         totalFees += feeAmt;
         feesBreakdown.push({ name: f.name, type: f.type || 'flat', value: f.value, amount: feeAmt });
       });
+    }
+
+    // 3b. Add Block Delivery Fee if block is selected
+    const activeBlockId = block_id || blockId;
+    if (activeBlockId) {
+      const block = await prisma.block.findUnique({ where: { id: activeBlockId } });
+      if (block && block.deliveryFee > 0) {
+        totalFees += block.deliveryFee;
+        feesBreakdown.push({ name: `Block Fee (${block.name.trim()})`, type: 'flat', value: block.deliveryFee, amount: block.deliveryFee });
+      }
+    } else if (block_name || address) {
+      const targetName = (block_name || address || '').split(',')[0].trim().toLowerCase();
+      if (targetName) {
+        const matchingBlock = await prisma.block.findFirst({
+          where: {
+            collegeId: college_id || undefined,
+            name: { contains: targetName },
+          },
+        });
+        if (matchingBlock && matchingBlock.deliveryFee > 0) {
+          totalFees += matchingBlock.deliveryFee;
+          feesBreakdown.push({ name: `Block Fee (${matchingBlock.name.trim()})`, type: 'flat', value: matchingBlock.deliveryFee, amount: matchingBlock.deliveryFee });
+        }
+      }
     }
 
     const amountToPay = Math.max(1, Math.round(subtotal - discount + totalFees));
