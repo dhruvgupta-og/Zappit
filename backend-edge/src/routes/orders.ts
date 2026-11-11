@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { getPrisma } from '../db';
-import { createRazorpayOrder, createRazorpayQrCode, fetchRazorpayQrPayments, verifyRazorpaySignature, verifyWebhookSignature } from '../razorpay';
+import { createRazorpayOrder, fetchRazorpayQrPayments, verifyRazorpaySignature, verifyWebhookSignature } from '../razorpay';
 import { sendExpoPushNotification } from '../push';
 import { AuthUser } from '../auth';
 
@@ -155,34 +155,16 @@ orders.post('/create-order', async (c) => {
     const amountToPay = Math.max(1, Math.round(subtotal - discount + totalFees));
     const amountInPaise = amountToPay * 100;
 
-    // 4. Create Razorpay Payment (Order for UPI Apps & Dynamic UPI QR Code in parallel)
+    // 4. Create Razorpay Order
     const receipt = `order_${Date.now()}`;
-    const [razorpayOrder, qrData]: [any, any] = await Promise.all([
-      createRazorpayOrder(
-        c.env.RAZORPAY_KEY_ID,
-        c.env.RAZORPAY_KEY_SECRET,
-        amountInPaise,
-        receipt
-      ),
-      createRazorpayQrCode(
-        c.env.RAZORPAY_KEY_ID,
-        c.env.RAZORPAY_KEY_SECRET,
-        amountInPaise,
-        `Zappit Order ₹${amountToPay}`,
-        {
-          order_amount: amountToPay.toString(),
-          college_id: college_id || 'campus',
-        }
-      ).catch((qrErr) => {
-        console.warn('[QR Code Generation]:', qrErr);
-        return null;
-      }),
-    ]);
+    const razorpayOrder: any = await createRazorpayOrder(
+      c.env.RAZORPAY_KEY_ID,
+      c.env.RAZORPAY_KEY_SECRET,
+      amountInPaise,
+      receipt
+    );
 
     const orderRefId = razorpayOrder.id;
-    const qrRefId = qrData?.id || null;
-    const qrImageUrl = qrRefId ? `https://api.razorpay.com/v1/l/qrcode/${qrRefId}` : null;
-    const combinedPaymentId = qrRefId ? `${orderRefId}|${qrRefId}` : orderRefId;
 
     // 5. Fetch User Profile
     let orderUserName = 'Guest';
@@ -249,7 +231,7 @@ orders.post('/create-order', async (c) => {
           orderStatus: 'pending',
           additionalNote: additionalNote || '',
           deliveryOtp,
-          razorpayOrderId: combinedPaymentId,
+          razorpayOrderId: orderRefId,
         },
       });
 
@@ -263,8 +245,6 @@ orders.post('/create-order', async (c) => {
       amount: amountInPaise,
       currency: 'INR',
       key_id: c.env.RAZORPAY_KEY_ID,
-      qr_id: qrRefId,
-      qr_image_url: qrImageUrl,
       db_order_ids: orderIds,
       fees_breakdown: feesBreakdown,
     });
