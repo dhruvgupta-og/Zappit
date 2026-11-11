@@ -4,17 +4,20 @@ import {
   ActivityIndicator, TextInput, Alert, Modal, RefreshControl, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { ordersApi } from '../api/orders';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order } from '../types';
 import { playOrderAlert } from '../utils/notifications';
+import { showToast } from '../store/toastStore';
 
 const TABS = [
-  { key: 'new', label: '🛵 Ready Pickup' },
-  { key: 'active', label: '🚴 En Route' },
-  { key: 'completed', label: '✅ Delivered' },
+  { key: 'new', label: 'Ready Pickup', icon: 'cube-outline' as const },
+  { key: 'active', label: 'En Route', icon: 'bicycle-outline' as const },
+  { key: 'completed', label: 'Delivered', icon: 'checkmark-done-circle-outline' as const },
 ];
 
 const PAYOUT_PER_DELIVERY = 10; // ₹10 fixed rider payout per campus trip
@@ -54,7 +57,7 @@ const DeliveryDashboardScreen = () => {
         );
         if (pickupOrders.length > prevPickupCount.current && prevPickupCount.current !== -1) {
           playOrderAlert('🛵 NEW CAMPUS DELIVERY READY! 🛵', 'An order is ready for pickup at store. Check "Ready Pickup" tab.');
-          Alert.alert('🛵 New Pickup Ready!', 'A student order is ready for pickup at the store.');
+          showToast('New Pickup Ready! Order waiting at store.', 'info');
         }
         prevPickupCount.current = pickupOrders.length;
       }
@@ -188,10 +191,10 @@ const DeliveryDashboardScreen = () => {
                   await ordersApi.sendStatusNotification(oId, 'picked_up');
                 })
               );
-              Alert.alert('⚡ Batch Picked Up!', `${ordersToPickUp.length} orders are now marked En Route for ${blockName}.`);
+              showToast(`⚡ Batch Picked Up! ${ordersToPickUp.length} orders en route for ${blockName}.`, 'success');
               fetchOrders();
             } catch {
-              Alert.alert('Batch Error', 'Some orders failed to update. Refreshing list.');
+              showToast('Batch Error: Some orders failed to update.', 'error');
               fetchOrders();
             } finally {
               setBatchingPickup(false);
@@ -233,7 +236,7 @@ const DeliveryDashboardScreen = () => {
       if (res.success) {
         setOtpPromptId(null);
         setOtpInput('');
-        Alert.alert('✅ Order Delivered!', `Delivery confirmed and ₹${PAYOUT_PER_DELIVERY} payout recorded.`);
+        showToast(`Delivery confirmed! ₹${PAYOUT_PER_DELIVERY} payout recorded.`, 'success');
         fetchOrders();
       } else {
         Alert.alert('PIN Mismatch', res.error || 'Invalid 4-digit PIN. Please verify with the customer.');
@@ -423,19 +426,27 @@ const DeliveryDashboardScreen = () => {
           <View style={styles.actions}>
             {(order.order_status === 'ready' || order.order_status === 'out_for_delivery') && (
               <TouchableOpacity
-                style={[styles.btn, { backgroundColor: colors.deliveryAccent }]}
-                onPress={() => updateOrderStatus(orderId, 'picked_up')}
+                style={[styles.btn, { backgroundColor: colors.deliveryAccent, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
+                onPress={() => {
+                  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                  updateOrderStatus(orderId, 'picked_up');
+                }}
               >
-                <Text style={styles.btnText}>🚴 Pick Up Package</Text>
+                <Ionicons name="bicycle" size={16} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.btnText}>Pick Up Package</Text>
               </TouchableOpacity>
             )}
 
             {order.order_status === 'picked_up' && (
               <TouchableOpacity
-                style={[styles.btn, { backgroundColor: colors.success }]}
-                onPress={() => handleMarkDelivered(order)}
+                style={[styles.btn, { backgroundColor: colors.success, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
+                onPress={() => {
+                  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                  handleMarkDelivered(order);
+                }}
               >
-                <Text style={styles.btnText}>✅ Confirm Delivery (PIN)</Text>
+                <Ionicons name="key" size={15} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.btnText}>Enter Student PIN</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -443,7 +454,10 @@ const DeliveryDashboardScreen = () => {
 
         {order.order_status === 'delivered' && (
           <View style={styles.deliveredRow}>
-            <Text style={styles.deliveredText}>✓ Delivered Successfully</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name="checkmark-circle" size={15} color={colors.success} />
+              <Text style={styles.deliveredText}>Delivered Successfully</Text>
+            </View>
             <Text style={styles.deliveredEarnText}>+₹{PAYOUT_PER_DELIVERY} Earned</Text>
           </View>
         )}
@@ -456,7 +470,10 @@ const DeliveryDashboardScreen = () => {
       {/* ── TOP BAR ── */}
       <View style={styles.topBar}>
         <View style={{ flex: 1, paddingRight: 8 }}>
-          <Text style={styles.topBarSubtitle}>🛵 Campus Delivery Partner</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Ionicons name="bicycle" size={13} color={colors.deliveryAccent} />
+            <Text style={styles.topBarSubtitle}>Campus Delivery Partner</Text>
+          </View>
           <Text style={styles.topBarTitle} numberOfLines={1}>
             {(profile as any)?.name ? `Rider ${(profile as any).name}` : 'Rider Dashboard'}
           </Text>
@@ -529,9 +546,18 @@ const DeliveryDashboardScreen = () => {
         {TABS.map(t => (
           <TouchableOpacity
             key={t.key}
-            onPress={() => setActiveTab(t.key)}
-            style={[styles.tab, activeTab === t.key && styles.tabActive]}
+            onPress={() => {
+              try { Haptics.selectionAsync(); } catch {}
+              setActiveTab(t.key);
+            }}
+            style={[styles.tab, activeTab === t.key && styles.tabActive, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
           >
+            <Ionicons
+              name={t.icon}
+              size={14}
+              color={activeTab === t.key ? colors.primary : colors.textMuted}
+              style={{ marginRight: 5 }}
+            />
             <Text style={[styles.tabText, activeTab === t.key && styles.tabTextActive]}>
               {t.label} ({tabCounts[t.key]})
             </Text>

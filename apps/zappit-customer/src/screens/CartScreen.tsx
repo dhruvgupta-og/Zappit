@@ -3,6 +3,8 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useCartStore } from '../store/cartStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
@@ -45,10 +47,16 @@ const CartScreen = () => {
           <Text style={styles.title}>Cart</Text>
         </View>
         <View style={styles.emptyState}>
-          <Text style={{ fontSize: 48, marginBottom: 16 }}>🛒</Text>
+          <Ionicons name="cart-outline" size={64} color={colors.textMuted} style={{ marginBottom: 16 }} />
           <Text style={styles.emptyTitle}>Your cart is empty</Text>
           <Text style={styles.emptyText}>Looks like you haven't added anything yet.</Text>
-          <TouchableOpacity style={styles.browseBtn} onPress={() => navigation.navigate('Home')}>
+          <TouchableOpacity
+            style={styles.browseBtn}
+            onPress={() => {
+              try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+              navigation.navigate('Home');
+            }}
+          >
             <Text style={styles.browseBtnText}>Browse Restaurants</Text>
           </TouchableOpacity>
         </View>
@@ -59,11 +67,22 @@ const CartScreen = () => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={{ fontSize: 20, color: colors.textMain }}>←</Text>
+        <TouchableOpacity
+          onPress={() => {
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+            navigation.goBack();
+          }}
+          style={styles.backBtn}
+        >
+          <Ionicons name="arrow-back" size={20} color={colors.textMain} />
         </TouchableOpacity>
         <Text style={styles.title}>Cart</Text>
-        <TouchableOpacity onPress={() => clearCart()}>
+        <TouchableOpacity
+          onPress={() => {
+            try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch {}
+            clearCart();
+          }}
+        >
           <Text style={styles.clearText}>Clear</Text>
         </TouchableOpacity>
       </View>
@@ -85,12 +104,24 @@ const CartScreen = () => {
                 <Text style={styles.itemPrice}>₹{item.menuItem.price}</Text>
               </View>
               <View style={styles.qtyControl}>
-                <TouchableOpacity onPress={() => removeFromCart(item.menuItem, storeId!)} style={styles.qtyBtn}>
-                  <Text style={styles.qtyBtnText}>-</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                    removeFromCart(item.menuItem, storeId!);
+                  }}
+                  style={styles.qtyBtn}
+                >
+                  <Ionicons name="remove" size={14} color="#FFF" />
                 </TouchableOpacity>
                 <Text style={styles.qtyText}>{item.qty}</Text>
-                <TouchableOpacity onPress={() => addToCart(item.menuItem, storeId!, storeName!)} style={styles.qtyBtn}>
-                  <Text style={styles.qtyBtnText}>+</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                    addToCart(item.menuItem, storeId!, storeName!);
+                  }}
+                  style={styles.qtyBtn}
+                >
+                  <Ionicons name="add" size={14} color="#FFF" />
                 </TouchableOpacity>
               </View>
               <Text style={styles.itemTotal}>₹{item.menuItem.price * item.qty}</Text>

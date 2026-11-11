@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Image, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
+import { Toast } from './src/components/Toast';
 import { setupAutoUpdates } from './src/utils/updateManager';
 import { colors } from './src/theme/colors';
 
@@ -33,6 +34,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AppNavigator />
+      <Toast />
     </SafeAreaProvider>
   );
 }

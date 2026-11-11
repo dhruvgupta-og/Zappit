@@ -4,6 +4,8 @@ import {
   ActivityIndicator, TextInput, Alert, Switch, Modal, RefreshControl, Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { ordersApi } from '../api/orders';
 import { storesApi } from '../api/stores';
 import { menuApi } from '../api/menu';
@@ -12,27 +14,28 @@ import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order, MenuItem } from '../types';
 import { playOrderAlert, startKitchenAlarm, stopKitchenAlarm } from '../utils/notifications';
+import { showToast } from '../store/toastStore';
 
 // ── Constants ──
 const ORDER_SUB_TABS = [
-  { key: 'new', label: '🆕 New' },
-  { key: 'preparing', label: '👨‍🍳 In Prep' },
-  { key: 'ready', label: '🛵 Ready' },
-  { key: 'done', label: '✅ Done' },
+  { key: 'new', label: 'New', icon: 'flash-outline' as const },
+  { key: 'preparing', label: 'In Prep', icon: 'flame-outline' as const },
+  { key: 'ready', label: 'Ready', icon: 'bicycle-outline' as const },
+  { key: 'done', label: 'Done', icon: 'checkmark-done-outline' as const },
 ];
 
 const MAIN_TABS = [
-  { key: 'orders', label: '📦 Orders' },
-  { key: 'menu', label: '🍽️ Menu' },
-  { key: 'analytics', label: '📊 Earnings & Stats' },
+  { key: 'orders', label: 'Orders', icon: 'bag-handle-outline' as const },
+  { key: 'menu', label: 'Menu', icon: 'restaurant-outline' as const },
+  { key: 'analytics', label: 'Earnings & Stats', icon: 'stats-chart-outline' as const },
 ];
 
 const CATEGORIES = ['Snacks', 'Beverages', 'Main Course', 'Desserts', 'Combos', 'Other'];
 
 const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  confirmed: { bg: 'rgba(245,158,11,0.15)', text: '#F59E0B', label: '🆕 New Order' },
-  preparing: { bg: 'rgba(59,130,246,0.15)', text: '#60A5FA', label: '👨‍🍳 Preparing' },
-  ready: { bg: 'rgba(16,185,129,0.15)', text: '#34D399', label: '🛵 Ready for Rider' },
+  confirmed: { bg: 'rgba(245,158,11,0.15)', text: '#F59E0B', label: 'New Order' },
+  preparing: { bg: 'rgba(59,130,246,0.15)', text: '#60A5FA', label: 'Preparing' },
+  ready: { bg: 'rgba(16,185,129,0.15)', text: '#34D399', label: 'Ready for Rider' },
   out_for_delivery: { bg: 'rgba(139,92,246,0.15)', text: '#A78BFA', label: '🚴 Out for Delivery' },
   picked_up: { bg: 'rgba(139,92,246,0.15)', text: '#A78BFA', label: '🚴 En Route' },
   delivered: { bg: 'rgba(16,185,129,0.2)', text: '#10B981', label: '✅ Delivered' },
@@ -98,7 +101,7 @@ const StoreDashboardScreen = () => {
         }
 
         if (waitingCount > prevOrderCount.current && prevOrderCount.current !== -1) {
-          Alert.alert('🔔 New Student Order!', `${waitingCount} order(s) waiting in your kitchen queue.`);
+          showToast(`🔔 New Order! ${waitingCount} order(s) waiting in kitchen queue.`, 'info');
         }
         prevOrderCount.current = waitingCount;
       }
@@ -486,10 +489,14 @@ const StoreDashboardScreen = () => {
 
           {order.order_status === 'confirmed' && (
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: colors.storeAccent }]}
-              onPress={() => setPrepModalOrder(order)}
+              style={[styles.actionBtn, { backgroundColor: colors.storeAccent, flexDirection: 'row', alignItems: 'center' }]}
+              onPress={() => {
+                try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                setPrepModalOrder(order);
+              }}
             >
-              <Text style={styles.actionBtnText}>👨‍🍳 Accept & Set Prep</Text>
+              <Ionicons name="restaurant-outline" size={15} color="#FFF" style={{ marginRight: 6 }} />
+              <Text style={styles.actionBtnText}>Accept & Set Prep</Text>
             </TouchableOpacity>
           )}
 
@@ -497,30 +504,40 @@ const StoreDashboardScreen = () => {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               {order.prep_time_mins ? (
                 <View style={styles.prepBadge}>
-                  <Text style={styles.prepBadgeText}>⏱️ {order.prep_time_mins}m Prep</Text>
+                  <Ionicons name="time-outline" size={12} color="#FFF" style={{ marginRight: 3 }} />
+                  <Text style={styles.prepBadgeText}>{order.prep_time_mins}m Prep</Text>
                 </View>
               ) : null}
               <TouchableOpacity
-                style={[styles.actionBtn, { backgroundColor: '#3B82F6' }]}
-                onPress={() => updateOrderStatus(orderId, 'ready')}
+                style={[styles.actionBtn, { backgroundColor: '#3B82F6', flexDirection: 'row', alignItems: 'center' }]}
+                onPress={() => {
+                  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                  updateOrderStatus(orderId, 'ready');
+                }}
               >
-                <Text style={styles.actionBtnText}>🛵 Mark Ready</Text>
+                <Ionicons name="checkmark-done-outline" size={15} color="#FFF" style={{ marginRight: 5 }} />
+                <Text style={styles.actionBtnText}>Mark Ready</Text>
               </TouchableOpacity>
             </View>
           )}
 
           {order.order_status === 'ready' && (
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: '#8B5CF6' }]}
-              onPress={() => updateOrderStatus(orderId, 'out_for_delivery')}
+              style={[styles.actionBtn, { backgroundColor: '#8B5CF6', flexDirection: 'row', alignItems: 'center' }]}
+              onPress={() => {
+                try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                updateOrderStatus(orderId, 'out_for_delivery');
+              }}
             >
-              <Text style={styles.actionBtnText}>📦 Hand to Rider</Text>
+              <Ionicons name="bicycle-outline" size={15} color="#FFF" style={{ marginRight: 5 }} />
+              <Text style={styles.actionBtnText}>Hand to Rider</Text>
             </TouchableOpacity>
           )}
 
           {order.order_status === 'delivered' && (
             <View style={styles.deliveredBadge}>
-              <Text style={styles.deliveredBadgeText}>Delivered ✓</Text>
+              <Ionicons name="checkmark-circle-outline" size={14} color="#10B981" style={{ marginRight: 4 }} />
+              <Text style={styles.deliveredBadgeText}>Delivered</Text>
             </View>
           )}
         </View>
@@ -628,8 +645,14 @@ const StoreDashboardScreen = () => {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={logout} style={styles.logoutBtn}>
-            <Text style={{ fontSize: 16 }}>⚙️</Text>
+          <TouchableOpacity
+            onPress={() => {
+              try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+              logout();
+            }}
+            style={styles.logoutBtn}
+          >
+            <Ionicons name="settings-outline" size={17} color="#FFF" />
           </TouchableOpacity>
         </View>
       </View>
@@ -644,13 +667,21 @@ const StoreDashboardScreen = () => {
                 {newOrders.length} NEW ORDER{newOrders.length > 1 ? 'S' : ''} WAITING!
               </Text>
             </View>
-            <Text style={styles.emergencyAlarmSub}>
-              {isAlarmSilenced || !soundAlerts ? '🔕 Buzzer silenced' : '🔊 Loud buzzer sounding until accepted'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <Ionicons
+                name={isAlarmSilenced || !soundAlerts ? "volume-mute" : "volume-high"}
+                size={12}
+                color="rgba(255,255,255,0.8)"
+              />
+              <Text style={styles.emergencyAlarmSub}>
+                {isAlarmSilenced || !soundAlerts ? 'Buzzer silenced' : 'Loud buzzer sounding until accepted'}
+              </Text>
+            </View>
           </View>
           <TouchableOpacity
             style={[styles.silenceAlarmBtn, isAlarmSilenced && { backgroundColor: 'rgba(255,255,255,0.1)' }]}
             onPress={() => {
+              try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
               if (isAlarmSilenced) {
                 setIsAlarmSilenced(false);
                 if (soundAlerts) startKitchenAlarm(newOrders.length);
@@ -661,9 +692,12 @@ const StoreDashboardScreen = () => {
             }}
             activeOpacity={0.8}
           >
-            <Text style={styles.silenceAlarmBtnText}>
-              {isAlarmSilenced ? '🔔 Unmute' : '🔕 Silence'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name={isAlarmSilenced ? "volume-high" : "volume-mute"} size={13} color="#FFF" />
+              <Text style={styles.silenceAlarmBtnText}>
+                {isAlarmSilenced ? 'Unmute' : 'Silence'}
+              </Text>
+            </View>
           </TouchableOpacity>
         </View>
       )}
@@ -702,9 +736,18 @@ const StoreDashboardScreen = () => {
         {MAIN_TABS.map(t => (
           <TouchableOpacity
             key={t.key}
-            onPress={() => setActiveTab(t.key)}
-            style={[styles.mainTab, activeTab === t.key && styles.mainTabActive]}
+            onPress={() => {
+              try { Haptics.selectionAsync(); } catch {}
+              setActiveTab(t.key);
+            }}
+            style={[styles.mainTab, activeTab === t.key && styles.mainTabActive, { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }]}
           >
+            <Ionicons
+              name={t.icon}
+              size={15}
+              color={activeTab === t.key ? colors.primary : colors.textMuted}
+              style={{ marginRight: 6 }}
+            />
             <Text style={[styles.mainTabText, activeTab === t.key && styles.mainTabTextActive]}>
               {t.label}
             </Text>
@@ -720,9 +763,18 @@ const StoreDashboardScreen = () => {
             {ORDER_SUB_TABS.map(t => (
               <TouchableOpacity
                 key={t.key}
-                onPress={() => setOrderSubTab(t.key)}
-                style={[styles.subTab, orderSubTab === t.key && styles.subTabActive]}
+                onPress={() => {
+                  try { Haptics.selectionAsync(); } catch {}
+                  setOrderSubTab(t.key);
+                }}
+                style={[styles.subTab, orderSubTab === t.key && styles.subTabActive, { flexDirection: 'row', alignItems: 'center' }]}
               >
+                <Ionicons
+                  name={t.icon}
+                  size={13}
+                  color={orderSubTab === t.key ? colors.storeAccent : colors.textMuted}
+                  style={{ marginRight: 5 }}
+                />
                 <Text style={[styles.subTabText, orderSubTab === t.key && styles.subTabTextActive]}>
                   {t.label} ({tabCounts[t.key]})
                 </Text>

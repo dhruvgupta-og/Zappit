@@ -5,11 +5,14 @@ import {
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { storesApi } from '../api/stores';
 import { useCartStore } from '../store/cartStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Store, MenuItem } from '../types';
+import { Skeleton } from '../components/Skeleton';
 
 const StoreDetailScreen = () => {
   const route = useRoute<any>();
@@ -30,6 +33,7 @@ const StoreDetailScreen = () => {
   const getCartTotal = useCartStore((state) => state.getCartTotal);
 
   const handleAddToCart = (item: MenuItem, currentStoreId: string, currentStoreName: string) => {
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
     const existingStoreId = getCartStoreId();
     if (existingStoreId && existingStoreId !== currentStoreId) {
       Alert.alert(
@@ -50,6 +54,11 @@ const StoreDetailScreen = () => {
     } else {
       addToCart(item, currentStoreId, currentStoreName);
     }
+  };
+
+  const handleRemoveFromCart = (item: MenuItem, currentStoreId: string) => {
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+    removeFromCart(item, currentStoreId);
   };
 
   useEffect(() => {
@@ -78,8 +87,12 @@ const StoreDetailScreen = () => {
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.container, { paddingTop: insets.top + 16, paddingHorizontal: 16 }]}>
+        <Skeleton width="100%" height={220} borderRadius={18} style={{ marginBottom: 20 }} />
+        <Skeleton width="70%" height={26} borderRadius={8} style={{ marginBottom: 12 }} />
+        <Skeleton width="40%" height={16} borderRadius={6} style={{ marginBottom: 28 }} />
+        <Skeleton width="100%" height={100} borderRadius={14} style={{ marginBottom: 16 }} />
+        <Skeleton width="100%" height={100} borderRadius={14} style={{ marginBottom: 16 }} />
       </View>
     );
   }
@@ -87,7 +100,8 @@ const StoreDetailScreen = () => {
   if (!store) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={{ color: colors.textMain }}>Store not found.</Text>
+        <Ionicons name="storefront-outline" size={48} color={colors.textMuted} style={{ marginBottom: 12 }} />
+        <Text style={{ color: colors.textMain, fontSize: 16, fontWeight: '600' }}>Store not found.</Text>
       </View>
     );
   }
@@ -108,11 +122,17 @@ const StoreDetailScreen = () => {
             resizeMode="cover"
           />
           <View style={[styles.headerOverlay, { paddingTop: Math.max(insets.top, 16) }]}>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
-              <Text style={{ fontSize: 18, color: '#fff' }}>←</Text>
+            <TouchableOpacity
+              onPress={() => {
+                try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                navigation.goBack();
+              }}
+              style={styles.iconBtn}
+            >
+              <Ionicons name="arrow-back" size={20} color="#fff" />
             </TouchableOpacity>
             <TouchableOpacity style={styles.iconBtn}>
-              <Text style={{ fontSize: 18, color: '#fff' }}>ℹ️</Text>
+              <Ionicons name="information-circle-outline" size={22} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
@@ -125,20 +145,32 @@ const StoreDetailScreen = () => {
                 <Text style={styles.storeName}>{store.name}</Text>
                 <View style={styles.statsRow}>
                   {store.rating && (
-                    <Text style={styles.statText}>
-                      <Text style={{ color: colors.success }}>⭐ {store.rating}</Text>
-                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="star" size={12} color={colors.success} style={{ marginRight: 3 }} />
+                      <Text style={[styles.statText, { color: colors.success, fontWeight: '700' }]}>{store.rating}</Text>
+                    </View>
                   )}
                   {store.rating && <Text style={styles.statDot}> • </Text>}
                   {store.delivery_time_mins && (
-                    <Text style={styles.statText}>🕐 {store.delivery_time_mins} mins</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="time-outline" size={12} color={colors.textMuted} style={{ marginRight: 3 }} />
+                      <Text style={styles.statText}>{store.delivery_time_mins} mins</Text>
+                    </View>
                   )}
                   {store.is_open && store.active_orders_count !== undefined && (
                     <>
                       <Text style={styles.statDot}> • </Text>
-                      <Text style={[styles.statText, { color: store.active_orders_count > 3 ? '#F59E0B' : colors.success, fontWeight: '700' }]}>
-                        {store.active_orders_count === 0 ? '⚡ 0 in queue' : `🔥 ${store.active_orders_count} in kitchen`}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons
+                          name={store.active_orders_count === 0 ? "flash" : "flame"}
+                          size={12}
+                          color={store.active_orders_count > 3 ? '#F59E0B' : colors.success}
+                          style={{ marginRight: 3 }}
+                        />
+                        <Text style={[styles.statText, { color: store.active_orders_count > 3 ? '#F59E0B' : colors.success, fontWeight: '700' }]}>
+                          {store.active_orders_count === 0 ? '0 in queue' : `${store.active_orders_count} in kitchen`}
+                        </Text>
+                      </View>
                     </>
                   )}
                 </View>
@@ -197,12 +229,12 @@ const StoreDetailScreen = () => {
                         {store.is_open ? (
                           inCart ? (
                             <View style={styles.qtyControl}>
-                              <TouchableOpacity onPress={() => removeFromCart(item, sId!)} style={styles.qtyBtn}>
-                                <Text style={styles.qtyBtnText}>-</Text>
+                              <TouchableOpacity onPress={() => handleRemoveFromCart(item, sId!)} style={styles.qtyBtn}>
+                                <Ionicons name="remove" size={14} color="#FFF" />
                               </TouchableOpacity>
                               <Text style={styles.qtyText}>{inCart.qty}</Text>
                               <TouchableOpacity onPress={() => handleAddToCart(item, sId!, store.name)} style={styles.qtyBtn}>
-                                <Text style={styles.qtyBtnText}>+</Text>
+                                <Ionicons name="add" size={14} color="#FFF" />
                               </TouchableOpacity>
                             </View>
                           ) : (

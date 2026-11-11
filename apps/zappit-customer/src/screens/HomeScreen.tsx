@@ -4,11 +4,14 @@ import {
   ActivityIndicator, RefreshControl, ScrollView, Dimensions, Animated,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { storesApi } from '../api/stores';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Store, Banner } from '../types';
+import { StoreCardSkeleton } from '../components/Skeleton';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -126,7 +129,10 @@ const HomeScreen = ({ navigation }: any) => {
   const renderStoreCard = ({ item: store }: { item: Store }) => (
     <TouchableOpacity
       style={[styles.storeCard, !store.is_open && { opacity: 0.6 }]}
-      onPress={() => navigation.navigate('StoreDetail', { storeId: store.id || store._id })}
+      onPress={() => {
+        try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+        navigation.navigate('StoreDetail', { storeId: store.id || store._id });
+      }}
       activeOpacity={0.85}
     >
       <View style={styles.storeImageContainer}>
@@ -142,7 +148,8 @@ const HomeScreen = ({ navigation }: any) => {
         )}
         {store.rating && (
           <View style={styles.ratingBadge}>
-            <Text style={styles.ratingText}>⭐ {store.rating}</Text>
+            <Ionicons name="star" size={11} color="#F59E0B" style={{ marginRight: 3 }} />
+            <Text style={styles.ratingText}>{store.rating}</Text>
           </View>
         )}
       </View>
@@ -152,19 +159,31 @@ const HomeScreen = ({ navigation }: any) => {
             <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
             {store.is_open && store.active_orders_count !== undefined && (
               <View style={styles.queueRow}>
+                <Ionicons
+                  name={store.active_orders_count === 0 ? "flash" : "flame"}
+                  size={12}
+                  color={store.active_orders_count > 3 ? '#EF4444' : '#10B981'}
+                  style={{ marginRight: 4 }}
+                />
                 <Text style={[styles.queueText, store.active_orders_count > 3 && styles.queueTextBusy]}>
                   {store.active_orders_count === 0
-                    ? '⚡ 0 orders in queue'
-                    : `🔥 ${store.active_orders_count} orders in kitchen`}
+                    ? '0 orders in queue'
+                    : `${store.active_orders_count} orders in kitchen`}
                 </Text>
               </View>
             )}
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             {store.delivery_time_mins && (
-              <Text style={styles.deliveryTime}>🕐 {store.delivery_time_mins} mins</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="time-outline" size={12} color={colors.textMuted} style={{ marginRight: 3 }} />
+                <Text style={styles.deliveryTime}>{store.delivery_time_mins} mins</Text>
+              </View>
             )}
-            <Text style={styles.collegeBadge}>📍 {store.college_name || 'All Campuses'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+              <Ionicons name="location-outline" size={11} color={colors.textMuted} style={{ marginRight: 2 }} />
+              <Text style={styles.collegeBadge}>{store.college_name || 'All Campuses'}</Text>
+            </View>
           </View>
         </View>
         {store.tags && store.tags.length > 0 && (
@@ -185,7 +204,10 @@ const HomeScreen = ({ navigation }: any) => {
       {/* Header */}
       <View style={styles.header}>
         <View style={{ flex: 1, marginRight: 12 }}>
-          <Text style={styles.headerLabel}>📍 DELIVERING TO</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+            <Ionicons name="location-sharp" size={12} color={colors.primary} style={{ marginRight: 4 }} />
+            <Text style={styles.headerLabel}>DELIVERING TO</Text>
+          </View>
           {isEditingAddress ? (
             <TextInput
               style={[styles.headerAddress, { borderBottomWidth: 1, borderBottomColor: colors.primary, padding: 0 }]}
@@ -202,17 +224,21 @@ const HomeScreen = ({ navigation }: any) => {
               }}
             />
           ) : (
-            <TouchableOpacity onPress={() => setIsEditingAddress(true)}>
-              <Text style={styles.headerAddress} numberOfLines={1}>{address} ✎</Text>
+            <TouchableOpacity onPress={() => setIsEditingAddress(true)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.headerAddress} numberOfLines={1}>{address}</Text>
+              <Ionicons name="pencil" size={13} color={colors.textMuted} style={{ marginLeft: 6 }} />
             </TouchableOpacity>
           )}
           <Text style={styles.headerCollege} numberOfLines={1}>{activeCollegeName}</Text>
         </View>
         <TouchableOpacity
           style={styles.profileBtn}
-          onPress={() => navigation.navigate('Profile')}
+          onPress={() => {
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+            navigation.navigate('Profile');
+          }}
         >
-          <Text style={{ fontSize: 18 }}>⚡</Text>
+          <Ionicons name="person" size={18} color="#FFF" />
         </TouchableOpacity>
       </View>
 
@@ -223,7 +249,14 @@ const HomeScreen = ({ navigation }: any) => {
         contentContainerStyle={{ padding: spacing.xl, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+              onRefresh();
+            }}
+            tintColor={colors.primary}
+          />
         }
         ListHeaderComponent={
           <>
@@ -231,7 +264,7 @@ const HomeScreen = ({ navigation }: any) => {
 
             {/* Search */}
             <View style={styles.searchBar}>
-              <Text style={{ fontSize: 16 }}>🔍</Text>
+              <Ionicons name="search" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.searchInput}
                 value={searchQuery}
@@ -248,7 +281,10 @@ const HomeScreen = ({ navigation }: any) => {
                 <TouchableOpacity
                   key={cat}
                   style={[styles.categoryChip, activeCategory === cat && styles.categoryChipActive]}
-                  onPress={() => setActiveCategory(cat)}
+                  onPress={() => {
+                    try { Haptics.selectionAsync(); } catch {}
+                    setActiveCategory(cat);
+                  }}
                 >
                   <Text style={[styles.categoryText, activeCategory === cat && styles.categoryTextActive]}>
                     {cat}
@@ -262,13 +298,14 @@ const HomeScreen = ({ navigation }: any) => {
         }
         ListEmptyComponent={
           loading ? (
-            <View style={styles.emptyState}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.emptyText}>Loading stores...</Text>
+            <View style={{ paddingTop: 8 }}>
+              <StoreCardSkeleton />
+              <StoreCardSkeleton />
+              <StoreCardSkeleton />
             </View>
           ) : (
             <View style={styles.emptyState}>
-              <Text style={{ fontSize: 48, marginBottom: 16 }}>🔍</Text>
+              <Ionicons name="restaurant-outline" size={48} color={colors.textMuted} style={{ marginBottom: 12 }} />
               <Text style={styles.emptyTitle}>No matches found</Text>
               <Text style={styles.emptyText}>Try searching for a different keyword or category.</Text>
             </View>

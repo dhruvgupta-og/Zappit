@@ -2,53 +2,56 @@ import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Linking, TextInput, Alert, ActivityIndicator, Share } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { ordersApi } from '../api/orders';
 import { useCartStore } from '../store/cartStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order } from '../types';
+import { showToast } from '../store/toastStore';
 
 // ── Status steps matching the backend exactly ──────────────────────────────
 const STATUS_STEPS = [
   {
     key: 'confirmed',
     label: 'Order Confirmed',
-    emoji: '✅',
+    icon: 'checkmark-circle' as keyof typeof Ionicons.glyphMap,
     desc: 'Your payment was received. Store has been notified.',
     color: '#10B981',
   },
   {
     key: 'preparing',
     label: 'Preparing Your Food',
-    emoji: '👨‍🍳',
+    icon: 'restaurant' as keyof typeof Ionicons.glyphMap,
     desc: 'The store is cooking your order right now.',
     color: '#F59E0B',
   },
   {
     key: 'ready',
     label: 'Ready for Pickup',
-    emoji: '📦',
+    icon: 'cube' as keyof typeof Ionicons.glyphMap,
     desc: 'Your order is packed and ready. Waiting for delivery partner.',
     color: '#3B82F6',
   },
   {
     key: 'out_for_delivery',
     label: 'On the Way',
-    emoji: '🛵',
+    icon: 'bicycle' as keyof typeof Ionicons.glyphMap,
     desc: 'Delivery partner is heading to you! Keep your OTP ready.',
     color: '#8B5CF6',
   },
   {
     key: 'picked_up',
     label: 'Picked Up',
-    emoji: '🚴',
+    icon: 'bicycle' as keyof typeof Ionicons.glyphMap,
     desc: 'Delivery partner has picked up your order.',
     color: '#8B5CF6',
   },
   {
     key: 'delivered',
     label: 'Delivered!',
-    emoji: '🎉',
+    icon: 'checkmark-done-circle' as keyof typeof Ionicons.glyphMap,
     desc: 'Enjoy your meal! Thanks for ordering with Zappit.',
     color: '#10B981',
   },
@@ -231,10 +234,10 @@ const OrderTrackerScreen = () => {
 
       await ordersApi.submitRating(primaryOrderId, selectedRating, combinedFeedback);
       setHasRatedLocally(true);
-      Alert.alert('Thank You!', `Your ${selectedRating}-star rating has been submitted.`);
+      showToast(`Thank you! Your ${selectedRating}-star rating is submitted.`, 'success');
       fetchOrder();
     } catch (err: any) {
-      Alert.alert('Rating Error', err?.response?.data?.error || err.message || 'Could not submit rating.');
+      showToast(err?.response?.data?.error || err.message || 'Could not submit rating.', 'error');
     } finally {
       setIsSubmittingRating(false);
     }
@@ -319,8 +322,14 @@ const OrderTrackerScreen = () => {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* ── HEADER ── */}
       <View style={[styles.header, { backgroundColor: isDelivered ? '#10B981' : colors.primaryDark }]}>
-        <TouchableOpacity onPress={() => navigation.navigate('Main', { screen: 'Home' })} style={styles.backBtn}>
-          <Text style={{ fontSize: 18, color: 'white' }}>✕</Text>
+        <TouchableOpacity
+          onPress={() => {
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+            navigation.navigate('Main', { screen: 'Home' });
+          }}
+          style={styles.backBtn}
+        >
+          <Ionicons name="close" size={20} color="white" />
         </TouchableOpacity>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 1 }}>
@@ -341,7 +350,7 @@ const OrderTrackerScreen = () => {
             />
           )}
           <Text style={{ color: 'white', fontWeight: '700', fontSize: 12 }}>
-            {isCancelled ? '❌ Cancelled' : currentStep?.label || 'Processing'}
+            {isCancelled ? 'Cancelled' : currentStep?.label || 'Processing'}
           </Text>
         </View>
       </View>
@@ -357,7 +366,8 @@ const OrderTrackerScreen = () => {
                 <Text style={styles.etaTime}>{getEtaInfo().time}</Text>
               </View>
               <View style={styles.etaBadge}>
-                <Text style={styles.etaBadgeText}>⚡ EXPRESS CAMPUS</Text>
+                <Ionicons name="flash" size={11} color={colors.primary} style={{ marginRight: 3 }} />
+                <Text style={styles.etaBadgeText}>EXPRESS CAMPUS</Text>
               </View>
             </View>
 
@@ -375,7 +385,10 @@ const OrderTrackerScreen = () => {
         {/* ── OTP CARD — most important, shown prominently when delivery is active ── */}
         {showOtp && (
           <View style={styles.otpCard}>
-            <Text style={styles.otpCardTitle}>🔐 Your Delivery OTP</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 }}>
+              <Ionicons name="key" size={16} color={colors.primary} />
+              <Text style={styles.otpCardTitle}>Your Delivery OTP</Text>
+            </View>
             <Text style={styles.otpCardSubtitle}>Share this PIN with your delivery partner to complete delivery</Text>
             <Text style={styles.otpValue}>{otp}</Text>
             <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '600', textAlign: 'center', marginTop: 8 }}>
@@ -388,8 +401,8 @@ const OrderTrackerScreen = () => {
         {!isCancelled && !isDelivered && (currentStep?.key === 'picked_up' || currentStep?.key === 'out_for_delivery' || (order as any).order_status === 'picked_up' || (order as any).order_status === 'out_for_delivery') && (
           <View style={styles.riderCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <View style={styles.riderAvatar}>
-                <Text style={{ fontSize: 24 }}>🛵</Text>
+              <View style={[styles.riderAvatar, { backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }]}>
+                <Ionicons name="bicycle" size={24} color="#FFF" />
               </View>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -403,21 +416,27 @@ const OrderTrackerScreen = () => {
             <View style={styles.riderActionRow}>
               <TouchableOpacity
                 style={styles.riderCallBtn}
-                onPress={() => Linking.openURL(`tel:${(order as any).delivery_phone || '918463037671'}`)}
+                onPress={() => {
+                  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                  Linking.openURL(`tel:${(order as any).delivery_phone || '918463037671'}`);
+                }}
               >
-                <Text style={styles.riderCallBtnText}>📞 Call Partner</Text>
+                <Ionicons name="call" size={14} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.riderCallBtnText}>Call Partner</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={styles.riderWaBtn}
                 onPress={() => {
+                  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
                   const num = ((order as any).delivery_phone || '918463037671').replace(/\D/g, '');
                   const orderNum = primaryOrderId ? `#${String(primaryOrderId).slice(-6).toUpperCase()}` : '';
                   const msg = encodeURIComponent(`Hi, I am waiting for my Zappit order ${orderNum} at ${(order as any).delivery_address || (order as any).address || 'my room'}.`);
                   Linking.openURL(`https://wa.me/${num}?text=${msg}`);
                 }}
               >
-                <Text style={styles.riderWaBtnText}>💬 WhatsApp</Text>
+                <Ionicons name="logo-whatsapp" size={14} color="#25D366" style={{ marginRight: 6 }} />
+                <Text style={styles.riderWaBtnText}>WhatsApp</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -443,14 +462,14 @@ const OrderTrackerScreen = () => {
                   <View style={{ alignItems: 'center', width: 36, flexShrink: 0 }}>
                     <Animated.View style={[
                       styles.stepDot,
-                      isDone && { backgroundColor: step.color },
+                      isDone && { backgroundColor: step.color, alignItems: 'center', justifyContent: 'center' },
                       isCurrent && {
                         width: 36, height: 36, borderRadius: 18,
                         borderWidth: 3, borderColor: step.color + '40',
                       },
                     ]}>
                       {isDone
-                        ? <Text style={{ fontSize: isCurrent ? 16 : 14 }}>{step.emoji}</Text>
+                        ? <Ionicons name={step.icon} size={isCurrent ? 18 : 15} color="#FFF" />
                         : <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.borderColor }} />
                       }
                     </Animated.View>
@@ -489,7 +508,7 @@ const OrderTrackerScreen = () => {
 
         {isCancelled && (
           <View style={[styles.card, { borderColor: '#EF4444', borderWidth: 1 }]}>
-            <Text style={{ fontSize: 32, textAlign: 'center', marginBottom: 8 }}>❌</Text>
+            <Ionicons name="close-circle-outline" size={48} color="#EF4444" style={{ alignSelf: 'center', marginBottom: 8 }} />
             <Text style={{ fontSize: 18, fontWeight: '800', color: '#EF4444', textAlign: 'center' }}>Order Cancelled</Text>
             <Text style={{ fontSize: 13, color: colors.textMuted, textAlign: 'center', marginTop: 6 }}>
               Your order has been cancelled. If payment was made, you'll receive a refund within 5-7 business days.
@@ -500,9 +519,12 @@ const OrderTrackerScreen = () => {
         {/* ── DELIVERY DETAILS ── */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Delivery Details</Text>
-          <Text style={{ fontSize: 14, color: colors.textMuted }}>
-            📍 {(order as any).delivery_address || (order as any).address || 'N/A'}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Ionicons name="location-outline" size={16} color={colors.primary} />
+            <Text style={{ fontSize: 14, color: colors.textMuted, flex: 1 }}>
+              {(order as any).delivery_address || (order as any).address || 'N/A'}
+            </Text>
+          </View>
         </View>
 
         {/* ── ORDER SUMMARY ── */}
@@ -529,36 +551,48 @@ const OrderTrackerScreen = () => {
         {/* ── WHATSAPP SUPPORT BUTTON (1-TAP) ── */}
         <TouchableOpacity
           style={styles.whatsAppCard}
-          onPress={handleWhatsAppSupport}
+          onPress={() => {
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+            handleWhatsAppSupport();
+          }}
           activeOpacity={0.8}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View style={styles.whatsAppIconBg}>
-              <Text style={{ fontSize: 20 }}>💬</Text>
+            <View style={[styles.whatsAppIconBg, { alignItems: 'center', justifyContent: 'center' }]}>
+              <Ionicons name="logo-whatsapp" size={20} color="#25D366" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 15, fontWeight: '700', color: colors.textMain }}>Need Help with this Order?</Text>
               <Text style={{ fontSize: 12, color: colors.textMuted }}>Chat directly with Zappit Support on WhatsApp</Text>
             </View>
-            <Text style={{ color: '#25D366', fontWeight: '800', fontSize: 14 }}>Chat →</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              <Text style={{ color: '#25D366', fontWeight: '800', fontSize: 14 }}>Chat</Text>
+              <Ionicons name="arrow-forward" size={13} color="#25D366" />
+            </View>
           </View>
         </TouchableOpacity>
 
         {/* ── SHARE ORDER TRACKING BUTTON ── */}
         <TouchableOpacity
           style={styles.shareOrderBtn}
-          onPress={handleShareOrder}
+          onPress={() => {
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+            handleShareOrder();
+          }}
           activeOpacity={0.8}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View style={styles.shareIconBg}>
-              <Text style={{ fontSize: 18 }}>🔗</Text>
+            <View style={[styles.shareIconBg, { alignItems: 'center', justifyContent: 'center' }]}>
+              <Ionicons name="share-social-outline" size={18} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 15, fontWeight: '700', color: colors.textMain }}>Share Tracking with Roommate</Text>
               <Text style={{ fontSize: 12, color: colors.textMuted }}>Send live order status link on WhatsApp</Text>
             </View>
-            <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 14 }}>Share →</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 14 }}>Share</Text>
+              <Ionicons name="arrow-forward" size={13} color={colors.primary} />
+            </View>
           </View>
         </TouchableOpacity>
 
@@ -566,11 +600,18 @@ const OrderTrackerScreen = () => {
         {isDelivered && (
           ((order as any).rating || hasRatedLocally) ? (
             <View style={[styles.card, { borderColor: '#10B981', borderWidth: 1.5, alignItems: 'center', paddingVertical: spacing.xl }]}>
-              <Text style={{ fontSize: 32, marginBottom: 6 }}>🎉</Text>
+              <Ionicons name="checkmark-circle" size={44} color="#10B981" style={{ marginBottom: 6 }} />
               <Text style={{ fontSize: 17, fontWeight: '800', color: colors.textMain }}>Thank you for your rating!</Text>
-              <Text style={{ fontSize: 20, color: '#F59E0B', marginTop: 6, letterSpacing: 4 }}>
-                {'⭐'.repeat(Number((order as any).rating || selectedRating))}
-              </Text>
+              <View style={{ flexDirection: 'row', gap: 4, marginTop: 8 }}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Ionicons
+                    key={s}
+                    name={s <= Number((order as any).rating || selectedRating) ? "star" : "star-outline"}
+                    size={20}
+                    color="#F59E0B"
+                  />
+                ))}
+              </View>
               {(order as any).rating_feedback ? (
                 <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 8, fontStyle: 'italic' }}>
                   "{(order as any).rating_feedback}"
@@ -580,7 +621,7 @@ const OrderTrackerScreen = () => {
           ) : (
             <View style={[styles.card, { borderColor: colors.primary, borderWidth: 1.5 }]}>
               <Text style={{ fontSize: 18, fontWeight: '800', color: colors.textMain, textAlign: 'center', marginBottom: 4 }}>
-                Rate Your Meal ⭐
+                Rate Your Meal
               </Text>
               <Text style={{ fontSize: 13, color: colors.textMuted, textAlign: 'center', marginBottom: 16 }}>
                 How was your food from {(order as any).store_name || 'the kitchen'}?
@@ -589,8 +630,19 @@ const OrderTrackerScreen = () => {
               {/* Star selector */}
               <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 16 }}>
                 {[1, 2, 3, 4, 5].map((star) => (
-                  <TouchableOpacity key={star} onPress={() => setSelectedRating(star)} activeOpacity={0.7}>
-                    <Text style={{ fontSize: 36, opacity: star <= selectedRating ? 1 : 0.25 }}>⭐</Text>
+                  <TouchableOpacity
+                    key={star}
+                    onPress={() => {
+                      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                      setSelectedRating(star);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name={star <= selectedRating ? "star" : "star-outline"}
+                      size={34}
+                      color="#F59E0B"
+                    />
                   </TouchableOpacity>
                 ))}
               </View>

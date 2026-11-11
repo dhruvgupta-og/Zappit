@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, TextInput, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useAuthStore } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import { usersApi } from '../api/users';
@@ -8,7 +10,7 @@ import { storesApi } from '../api/stores';
 import { College } from '../types';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
-
+import { showToast } from '../store/toastStore';
 import { checkAndApplyUpdate, getUpdateInfo } from '../utils/updateManager';
 
 const ProfileScreen = () => {
@@ -75,9 +77,9 @@ const ProfileScreen = () => {
         clearCart();
       }
       setIsEditing(false);
-      Alert.alert('Success', collegeChanged ? 'Profile updated! Cart cleared since you changed college.' : 'Profile updated successfully!');
+      showToast(collegeChanged ? 'Profile updated! Cart reset for new college.' : 'Profile updated successfully!', 'success');
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Could not update profile');
+      showToast(err.message || 'Could not update profile', 'error');
     } finally {
       setLoading(false);
     }
@@ -159,17 +161,32 @@ const ProfileScreen = () => {
               <Text style={styles.btnValue}>Enabled</Text>
             </TouchableOpacity>
             <View style={styles.divider} />
-            <TouchableOpacity style={styles.rowBtn} onPress={() => Alert.alert('Coming Soon', 'This feature is under development.')}>
+            <TouchableOpacity
+              style={styles.rowBtn}
+              onPress={() => {
+                try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                showToast('Saved addresses will be available in the next release.', 'info');
+              }}
+            >
               <Text style={styles.btnLabel}>Saved Addresses</Text>
-              <Text style={{ color: colors.textMuted }}>→</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </TouchableOpacity>
             <View style={styles.divider} />
-            <TouchableOpacity style={styles.rowBtn} onPress={handleWhatsAppSupport}>
+            <TouchableOpacity
+              style={styles.rowBtn}
+              onPress={() => {
+                try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                handleWhatsAppSupport();
+              }}
+            >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Text style={{ fontSize: 18 }}>💬</Text>
+                <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
                 <Text style={styles.btnLabel}>Help & WhatsApp Support</Text>
               </View>
-              <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Chat Now →</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 13 }}>Chat Now</Text>
+                <Ionicons name="arrow-forward" size={13} color={colors.primary} />
+              </View>
             </TouchableOpacity>
             <View style={styles.divider} />
             <TouchableOpacity style={styles.rowBtn} onPress={handleCheckUpdates} disabled={checkingUpdate}>
@@ -193,17 +210,17 @@ const ProfileScreen = () => {
           <View style={styles.card}>
             <TouchableOpacity style={styles.rowBtn} onPress={() => Linking.openURL('https://zappit.shop/terms')}>
               <Text style={styles.btnLabel}>Terms & Conditions</Text>
-              <Text style={{ color: colors.textMuted }}>→</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </TouchableOpacity>
             <View style={styles.divider} />
             <TouchableOpacity style={styles.rowBtn} onPress={() => Linking.openURL('https://zappit.shop/privacy')}>
               <Text style={styles.btnLabel}>Privacy Policy</Text>
-              <Text style={{ color: colors.textMuted }}>→</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </TouchableOpacity>
             <View style={styles.divider} />
             <TouchableOpacity style={styles.rowBtn} onPress={() => Linking.openURL('https://zappit.shop/refunds')}>
               <Text style={styles.btnLabel}>Refund & Cancellation Policy</Text>
-              <Text style={{ color: colors.textMuted }}>→</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </TouchableOpacity>
             <View style={styles.divider} />
             <TouchableOpacity style={styles.rowBtn} onPress={() => Linking.openURL('mailto:support@zappit.shop?subject=Zappit%20Student%20Support')}>

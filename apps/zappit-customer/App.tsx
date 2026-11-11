@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Image, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
+import { Toast } from './src/components/Toast';
 import * as Sentry from '@sentry/react-native';
 import { setupAutoUpdates } from './src/utils/updateManager';
 import { colors } from './src/theme/colors';
@@ -53,6 +54,7 @@ export default Sentry.wrap(function App() {
   return (
     <SafeAreaProvider initialMetrics={initialWindowMetrics}>
       <AppNavigator />
+      <Toast />
     </SafeAreaProvider>
   );
 });
