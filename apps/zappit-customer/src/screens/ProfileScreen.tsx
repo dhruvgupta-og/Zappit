@@ -189,7 +189,7 @@ const ProfileScreen = () => {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Legal</Text>
+          <Text style={styles.sectionTitle}>Legal & Policies</Text>
           <View style={styles.card}>
             <TouchableOpacity style={styles.rowBtn} onPress={() => Linking.openURL('https://zappit.shop/terms')}>
               <Text style={styles.btnLabel}>Terms & Conditions</Text>
@@ -199,6 +199,16 @@ const ProfileScreen = () => {
             <TouchableOpacity style={styles.rowBtn} onPress={() => Linking.openURL('https://zappit.shop/privacy')}>
               <Text style={styles.btnLabel}>Privacy Policy</Text>
               <Text style={{ color: colors.textMuted }}>→</Text>
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.rowBtn} onPress={() => Linking.openURL('https://zappit.shop/refunds')}>
+              <Text style={styles.btnLabel}>Refund & Cancellation Policy</Text>
+              <Text style={{ color: colors.textMuted }}>→</Text>
+            </TouchableOpacity>
+            <View style={styles.divider} />
+            <TouchableOpacity style={styles.rowBtn} onPress={() => Linking.openURL('mailto:support@zappit.shop?subject=Zappit%20Student%20Support')}>
+              <Text style={styles.btnLabel}>Contact Grievance Officer</Text>
+              <Text style={{ color: colors.textMuted }}>support@zappit.shop →</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -68,6 +68,12 @@ orders.post('/create-order', async (c) => {
       if (!dbItem) {
         return c.json({ success: false, error: `Item not found: ${item.name}` }, 400);
       }
+      if (dbItem.store && dbItem.store.isOpen === false) {
+        return c.json({
+          success: false,
+          error: `"${dbItem.store.name || 'Store'}" is currently closed and not accepting orders.`,
+        }, 400);
+      }
       const qty = Number(item.qty);
       if (!Number.isInteger(qty) || qty < 1 || qty > 100) {
         return c.json({ success: false, error: 'Invalid quantity: must be between 1 and 100' }, 400);

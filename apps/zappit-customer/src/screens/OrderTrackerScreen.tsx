@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Linking, TextInput, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Linking, TextInput, Alert, ActivityIndicator, Share } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ordersApi } from '../api/orders';
@@ -100,6 +100,45 @@ const OrderTrackerScreen = () => {
     }).catch(() => {
       Linking.openURL(`https://wa.me/918463037671?text=${text}`);
     });
+  };
+
+  const handleShareOrder = async () => {
+    try {
+      const store = (order as any)?.store_name || order?.storeName || 'Campus Store';
+      const orderNum = primaryOrderId ? `#${String(primaryOrderId).slice(-6).toUpperCase()}` : '';
+      await Share.share({
+        message: `🍔 Tracking my Zappit order ${orderNum} from ${store}! Track live on campus delivery: https://zappit.shop/track/${primaryOrderId}`,
+        title: `Zappit Order ${orderNum}`,
+      });
+    } catch {}
+  };
+
+  const getEtaInfo = () => {
+    const isOrderCancelled = (order as any)?.order_status === 'cancelled' || order?.status === 'cancelled';
+    const isOrderDelivered = (order as any)?.order_status === 'delivered' || order?.status === 'delivered';
+    if (isOrderCancelled) return { time: 'Cancelled', desc: 'Order was cancelled', progress: 0 };
+    if (isOrderDelivered) return { time: 'Delivered', desc: 'Arrived at your room! Enjoy 🎉', progress: 1 };
+
+    const createdAtMs = new Date((order as any)?.created_at || (order as any)?.createdAt || Date.now()).getTime();
+    const elapsedMins = Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000));
+    const baseDuration = (order as any)?.delivery_time_mins || 20;
+
+    const status = (order as any)?.order_status || order?.status || 'confirmed';
+    if (status === 'confirmed') {
+      const remaining = Math.max(15, baseDuration - elapsedMins);
+      return { time: `${Math.max(10, remaining - 5)}-${remaining} mins`, desc: 'Order confirmed! Kitchen notified ⚡', progress: 0.25 };
+    }
+    if (status === 'preparing') {
+      const remaining = Math.max(8, baseDuration - elapsedMins - 5);
+      return { time: `~${remaining} mins`, desc: 'Chef is preparing your food fresh 👨‍🍳', progress: 0.55 };
+    }
+    if (status === 'ready') {
+      return { time: '~8-10 mins', desc: 'Packed & waiting for rider pickup 📦', progress: 0.75 };
+    }
+    if (status === 'picked_up' || status === 'out_for_delivery') {
+      return { time: '~3-5 mins', desc: 'Rider is on the way to your hostel block! 🛵', progress: 0.90 };
+    }
+    return { time: '~15-20 mins', desc: 'Heading your way', progress: 0.4 };
   };
 
   const handleReorder = () => {
@@ -255,6 +294,30 @@ const OrderTrackerScreen = () => {
 
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40 }}>
 
+        {/* ── LIVE ETA COUNTDOWN & PROGRESS BAR ── */}
+        {!isCancelled && !isDelivered && (
+          <View style={styles.etaCard}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <View>
+                <Text style={styles.etaLabel}>ESTIMATED ARRIVAL</Text>
+                <Text style={styles.etaTime}>{getEtaInfo().time}</Text>
+              </View>
+              <View style={styles.etaBadge}>
+                <Text style={styles.etaBadgeText}>⚡ EXPRESS CAMPUS</Text>
+              </View>
+            </View>
+
+            {/* Visual Animated Progress Track */}
+            <View style={styles.etaProgressBg}>
+              <View style={[styles.etaProgressBar, { width: `${Math.round(getEtaInfo().progress * 100)}%` }]} />
+            </View>
+
+            <Text style={styles.etaDesc}>
+              {getEtaInfo().desc}
+            </Text>
+          </View>
+        )}
+
         {/* ── OTP CARD — most important, shown prominently when delivery is active ── */}
         {showOtp && (
           <View style={styles.otpCard}>
@@ -264,6 +327,45 @@ const OrderTrackerScreen = () => {
             <Text style={{ fontSize: 11, color: colors.primary, fontWeight: '600', textAlign: 'center', marginTop: 8 }}>
               Keep this safe — only share when your order arrives
             </Text>
+          </View>
+        )}
+
+        {/* ── DELIVERY PARTNER DIRECT CONTACT CARD ── */}
+        {!isCancelled && !isDelivered && (currentStep?.key === 'picked_up' || currentStep?.key === 'out_for_delivery' || (order as any).order_status === 'picked_up' || (order as any).order_status === 'out_for_delivery') && (
+          <View style={styles.riderCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={styles.riderAvatar}>
+                <Text style={{ fontSize: 24 }}>🛵</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.riderName}>Delivery Partner Assigned</Text>
+                  <View style={styles.riderOnlineDot} />
+                </View>
+                <Text style={styles.riderSub}>En route to your hostel block with package</Text>
+              </View>
+            </View>
+
+            <View style={styles.riderActionRow}>
+              <TouchableOpacity
+                style={styles.riderCallBtn}
+                onPress={() => Linking.openURL(`tel:${(order as any).delivery_phone || '918463037671'}`)}
+              >
+                <Text style={styles.riderCallBtnText}>📞 Call Partner</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.riderWaBtn}
+                onPress={() => {
+                  const num = ((order as any).delivery_phone || '918463037671').replace(/\D/g, '');
+                  const orderNum = primaryOrderId ? `#${String(primaryOrderId).slice(-6).toUpperCase()}` : '';
+                  const msg = encodeURIComponent(`Hi, I am waiting for my Zappit order ${orderNum} at ${(order as any).delivery_address || (order as any).address || 'my room'}.`);
+                  Linking.openURL(`https://wa.me/${num}?text=${msg}`);
+                }}
+              >
+                <Text style={styles.riderWaBtnText}>💬 WhatsApp</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -380,6 +482,24 @@ const OrderTrackerScreen = () => {
               <Text style={{ fontSize: 12, color: colors.textMuted }}>Chat directly with Zappit Support on WhatsApp</Text>
             </View>
             <Text style={{ color: '#25D366', fontWeight: '800', fontSize: 14 }}>Chat →</Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* ── SHARE ORDER TRACKING BUTTON ── */}
+        <TouchableOpacity
+          style={styles.shareOrderBtn}
+          onPress={handleShareOrder}
+          activeOpacity={0.8}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={styles.shareIconBg}>
+              <Text style={{ fontSize: 18 }}>🔗</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: colors.textMain }}>Share Tracking with Roommate</Text>
+              <Text style={{ fontSize: 12, color: colors.textMuted }}>Send live order status link on WhatsApp</Text>
+            </View>
+            <Text style={{ color: colors.primary, fontWeight: '800', fontSize: 14 }}>Share →</Text>
           </View>
         </TouchableOpacity>
 
@@ -605,6 +725,153 @@ const styles = StyleSheet.create({
     color: '#0B132B',
     fontWeight: '800',
     fontSize: 14,
+  },
+
+  // Live ETA Card
+  etaCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,193,7,0.3)',
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  etaLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.primary,
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  etaTime: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: colors.textMain,
+  },
+  etaBadge: {
+    backgroundColor: 'rgba(255,193,7,0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(255,193,7,0.3)',
+  },
+  etaBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.primary,
+  },
+  etaProgressBg: {
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 3,
+    marginVertical: 12,
+    overflow: 'hidden',
+  },
+  etaProgressBar: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 3,
+  },
+  etaDesc: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '500',
+  },
+
+  // Rider Card
+  riderCard: {
+    backgroundColor: colors.cardBg,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.borderColor,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  riderAvatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(139, 92, 246, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  riderName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.textMain,
+  },
+  riderOnlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  riderSub: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  riderActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  riderCallBtn: {
+    flex: 1,
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  riderCallBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0B132B',
+  },
+  riderWaBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(37, 211, 102, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(37, 211, 102, 0.4)',
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  riderWaBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#25D366',
+  },
+
+  // Share order button
+  shareOrderBtn: {
+    backgroundColor: 'rgba(255, 193, 7, 0.08)',
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 193, 7, 0.25)',
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  shareIconBg: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 193, 7, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareOrderTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textMain,
+  },
+  shareOrderSub: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
   },
 });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, FlatList,
   ActivityIndicator, TextInput, Alert, Modal, RefreshControl, Linking,
@@ -32,6 +32,8 @@ const DeliveryDashboardScreen = () => {
   const [isOnDuty, setIsOnDuty] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [completedFilter, setCompletedFilter] = useState<'today' | 'all'>('today');
+  const [selectedBlockFilter, setSelectedBlockFilter] = useState<string>('All');
+  const [batchingPickup, setBatchingPickup] = useState(false);
 
   // OTP Verification state
   const [otpPromptId, setOtpPromptId] = useState<string | null>(null);
@@ -130,8 +132,29 @@ const DeliveryDashboardScreen = () => {
     completed: completedFilter === 'today' ? todayCompletedOrders.length : allCompletedOrders.length,
   };
 
-  // Filter by search query
+  // Extract hostel block name from delivery address
+  const extractBlockName = (order: any): string => {
+    const raw = String(order.address || order.delivery_address || '').trim();
+    if (!raw) return 'Campus';
+    const firstPart = raw.split(',')[0].trim();
+    return firstPart || 'Campus';
+  };
+
+  // Group available blocks for current tab
+  const availableBlocks = useMemo(() => {
+    const counts: Record<string, number> = {};
+    tabOrders.forEach(o => {
+      const b = extractBlockName(o);
+      counts[b] = (counts[b] || 0) + 1;
+    });
+    return Object.entries(counts).map(([name, count]) => ({ name, count }));
+  }, [tabOrders]);
+
+  // Filter by block and search query
   const filteredOrders = tabOrders.filter(o => {
+    if (selectedBlockFilter !== 'All' && extractBlockName(o) !== selectedBlockFilter) {
+      return false;
+    }
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase().trim();
     const id = String(o.id || o._id || '').toLowerCase();
@@ -141,6 +164,43 @@ const DeliveryDashboardScreen = () => {
     const addr = String(o.address || o.delivery_address || '').toLowerCase();
     return id.includes(q) || store.includes(q) || student.includes(q) || phone.includes(q) || addr.includes(q);
   });
+
+  // Batch pick up all orders for a hostel block in 1 tap
+  const handleBatchPickUpBlock = async (blockName: string) => {
+    const ordersToPickUp = newOrders.filter(o => extractBlockName(o) === blockName);
+    if (ordersToPickUp.length === 0) return;
+
+    Alert.alert(
+      'Batch Pick Up Packages',
+      `Pick up all ${ordersToPickUp.length} orders heading to ${blockName}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Pick Up (${ordersToPickUp.length})`,
+          style: 'default',
+          onPress: async () => {
+            setBatchingPickup(true);
+            try {
+              await Promise.all(
+                ordersToPickUp.map(async (ord) => {
+                  const oId = ord.id || ord._id;
+                  await ordersApi.updateOrderStatus(oId, 'picked_up');
+                  await ordersApi.sendStatusNotification(oId, 'picked_up');
+                })
+              );
+              Alert.alert('⚡ Batch Picked Up!', `${ordersToPickUp.length} orders are now marked En Route for ${blockName}.`);
+              fetchOrders();
+            } catch {
+              Alert.alert('Batch Error', 'Some orders failed to update. Refreshing list.');
+              fetchOrders();
+            } finally {
+              setBatchingPickup(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // ── Actions ──
   const updateOrderStatus = async (orderId: string, status: string) => {
@@ -286,7 +346,12 @@ const DeliveryDashboardScreen = () => {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={styles.storeName}>🏪 {order.store_name || 'Campus Store'}</Text>
             </View>
-            <Text style={styles.orderIdText}>#{String(orderId).slice(-6).toUpperCase()}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              <Text style={styles.orderIdText}>#{String(orderId).slice(-6).toUpperCase()}</Text>
+              <View style={styles.blockBadge}>
+                <Text style={styles.blockBadgeText}>🏢 {extractBlockName(order)}</Text>
+              </View>
+            </View>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <View style={styles.payoutBadge}>
@@ -511,6 +576,52 @@ const DeliveryDashboardScreen = () => {
           <TouchableOpacity onPress={exportToExcel} style={styles.exportChip}>
             <Text style={styles.exportChipText}>📊 Export CSV</Text>
           </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ── HOSTEL BLOCK BATCHING SELECTOR ── */}
+      {availableBlocks.length > 1 && (activeTab === 'new' || activeTab === 'active') && (
+        <View style={styles.blockFilterSection}>
+          <Text style={styles.blockFilterTitle}>🏢 BATCH BY HOSTEL BLOCK:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexDirection: 'row', marginTop: 4 }}>
+            <TouchableOpacity
+              style={[styles.blockChip, selectedBlockFilter === 'All' && styles.blockChipActive]}
+              onPress={() => setSelectedBlockFilter('All')}
+            >
+              <Text style={[styles.blockChipText, selectedBlockFilter === 'All' && styles.blockChipTextActive]}>
+                All Blocks ({tabOrders.length})
+              </Text>
+            </TouchableOpacity>
+
+            {availableBlocks.map(({ name, count }) => (
+              <TouchableOpacity
+                key={name}
+                style={[styles.blockChip, selectedBlockFilter === name && styles.blockChipActive]}
+                onPress={() => setSelectedBlockFilter(name)}
+              >
+                <Text style={[styles.blockChipText, selectedBlockFilter === name && styles.blockChipTextActive]}>
+                  🏢 {name} ({count})
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Quick Batch Pick Up Button when single block selected with pending pickups */}
+          {activeTab === 'new' && selectedBlockFilter !== 'All' && filteredOrders.length > 1 && (
+            <TouchableOpacity
+              style={styles.batchPickupBannerBtn}
+              onPress={() => handleBatchPickUpBlock(selectedBlockFilter)}
+              disabled={batchingPickup}
+            >
+              {batchingPickup ? (
+                <ActivityIndicator color="#0B132B" size="small" />
+              ) : (
+                <Text style={styles.batchPickupBannerText}>
+                  ⚡ Pick Up All {filteredOrders.length} Packages for {selectedBlockFilter}
+                </Text>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
@@ -811,6 +922,72 @@ const styles = StyleSheet.create({
   modalBtn: { paddingVertical: 14, borderRadius: radius.md, alignItems: 'center' },
   bypassBtn: { marginTop: spacing.md, paddingVertical: 8, alignItems: 'center' },
   bypassBtnText: { color: colors.textMuted, fontSize: 12, textDecorationLine: 'underline' },
+
+  // Block Badge in card header
+  blockBadge: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+  },
+  blockBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#60A5FA',
+  },
+
+  // Block Filter Section
+  blockFilterSection: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.05)',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderColor,
+  },
+  blockFilterTitle: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#93C5FD',
+    letterSpacing: 0.8,
+  },
+  blockChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: colors.cardBg,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+    marginRight: 6,
+  },
+  blockChipActive: {
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    borderColor: '#3B82F6',
+  },
+  blockChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  blockChipTextActive: {
+    color: '#60A5FA',
+    fontWeight: '800',
+  },
+  batchPickupBannerBtn: {
+    marginTop: 8,
+    backgroundColor: colors.deliveryAccent,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  batchPickupBannerText: {
+    color: '#0B132B',
+    fontWeight: '800',
+    fontSize: 12,
+  },
 });
 
 export default DeliveryDashboardScreen;
