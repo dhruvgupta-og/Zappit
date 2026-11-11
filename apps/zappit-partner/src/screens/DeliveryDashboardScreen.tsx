@@ -17,7 +17,7 @@ const TABS = [
   { key: 'completed', label: '✅ Delivered' },
 ];
 
-const PAYOUT_PER_DELIVERY = 20; // ₹20 fixed rider payout per campus trip
+const PAYOUT_PER_DELIVERY = 10; // ₹10 fixed rider payout per campus trip
 
 const DeliveryDashboardScreen = () => {
   const profile = useAuthStore(s => s.profile);
@@ -233,7 +233,7 @@ const DeliveryDashboardScreen = () => {
       if (res.success) {
         setOtpPromptId(null);
         setOtpInput('');
-        Alert.alert('✅ Order Delivered!', 'Delivery confirmed and ₹20 payout recorded.');
+        Alert.alert('✅ Order Delivered!', `Delivery confirmed and ₹${PAYOUT_PER_DELIVERY} payout recorded.`);
         fetchOrders();
       } else {
         Alert.alert('PIN Mismatch', res.error || 'Invalid 4-digit PIN. Please verify with the customer.');
@@ -289,10 +289,10 @@ const DeliveryDashboardScreen = () => {
         const cName = (order.user_name || 'Student').replace(/"/g, '""');
         const cPhone = order.user_phone || '';
         const addr = (order.address || order.delivery_address || 'Campus').replace(/"/g, '""');
-        return `"${orderId}","${dateStr}","${storeName}","${cName}","${cPhone}","${addr}",20`;
+        return `"${orderId}","${dateStr}","${storeName}","${cName}","${cPhone}","${addr}",${PAYOUT_PER_DELIVERY}`;
       }).join('\n');
 
-      const totalPayout = allCompletedOrders.length * 20;
+      const totalPayout = allCompletedOrders.length * PAYOUT_PER_DELIVERY;
       const csvString = `${headerString}${rowString}\nTOTAL EARNINGS,,,,,,₹${totalPayout}`;
 
       try {

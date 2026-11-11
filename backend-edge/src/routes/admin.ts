@@ -310,7 +310,7 @@ admin.get('/analytics', async (c) => {
 
     // Delivery Metrics
     const totalRiders = allStaff.filter((s) => s.role === 'delivery').length;
-    const riderEstimatedPayout = completedOrders * 20;
+    const riderEstimatedPayout = completedOrders * 10;
 
     // Store Performance
     const storeStats: Record<string, any> = {};
@@ -371,7 +371,7 @@ admin.get('/analytics', async (c) => {
         avgDeliveryTime: '15 mins',
         avgPrepTime: '10 mins',
         riderEstimatedPayout,
-        avgPayoutPerDelivery: 20,
+        avgPayoutPerDelivery: 10,
       },
       storePerformance: {
         totalActiveStores: allStores.filter((s) => s.isOpen).length,

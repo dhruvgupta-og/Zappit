@@ -739,7 +739,7 @@ const AdminDashboardScreen = () => {
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8 }}>
                   <Text style={{ color: colors.textMuted }}>Average Payout per Delivery</Text>
-                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>₹{analyticsData?.delivery?.avgPayoutPerDelivery ?? 20}</Text>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>₹{analyticsData?.delivery?.avgPayoutPerDelivery ?? 10}</Text>
                 </View>
               </View>
             </View>
