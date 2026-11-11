@@ -63,6 +63,9 @@ const StoreDashboardScreen = () => {
   const [menuForm, setMenuForm] = useState({ name: '', price: '', desc: '', category: 'Snacks', isVeg: true });
   const [editingMenuId, setEditingMenuId] = useState<string | null>(null);
   const [menuSaving, setMenuSaving] = useState(false);
+
+  // Kitchen Prep Time Modal
+  const [prepModalOrder, setPrepModalOrder] = useState<any | null>(null);
   const [menuCategoryFilter, setMenuCategoryFilter] = useState('All');
   const [timeFilter, setTimeFilter] = useState<'today' | 'week' | 'month' | 'all'>('today');
 
@@ -266,7 +269,7 @@ const StoreDashboardScreen = () => {
     }
   };
 
-  const updateOrderStatus = async (orderId: string, status: string) => {
+  const updateOrderStatus = async (orderId: string, status: string, prepTimeMins?: number) => {
     // If accepting order, stop kitchen alarm
     if (status === 'preparing') {
       const remainingWaiting = orders.filter(o => o.order_status === 'confirmed' && o.id !== orderId && o._id !== orderId).length;
@@ -276,9 +279,21 @@ const StoreDashboardScreen = () => {
       }
     }
     // Optimistic update
-    setOrders(prev => prev.map(o => (o.id === orderId || o._id === orderId) ? { ...o, order_status: status } : o));
+    setOrders(prev => prev.map(o => {
+      if (o.id === orderId || o._id === orderId) {
+        return {
+          ...o,
+          order_status: status,
+          prep_time_mins: prepTimeMins || o.prep_time_mins,
+          expected_ready_at: prepTimeMins ? new Date(Date.now() + prepTimeMins * 60000).toISOString() : o.expected_ready_at,
+          accepted_at: status === 'preparing' ? new Date().toISOString() : o.accepted_at,
+          ready_at: status === 'ready' ? new Date().toISOString() : o.ready_at,
+        };
+      }
+      return o;
+    }));
     try {
-      await ordersApi.updateOrderStatus(orderId, status);
+      await ordersApi.updateOrderStatus(orderId, status, prepTimeMins ? { prep_time_mins: prepTimeMins } : undefined);
       await ordersApi.sendStatusNotification(orderId, status);
     } catch {
       Alert.alert('Error', 'Failed to update order status.');
@@ -472,19 +487,26 @@ const StoreDashboardScreen = () => {
           {order.order_status === 'confirmed' && (
             <TouchableOpacity
               style={[styles.actionBtn, { backgroundColor: colors.storeAccent }]}
-              onPress={() => updateOrderStatus(orderId, 'preparing')}
+              onPress={() => setPrepModalOrder(order)}
             >
-              <Text style={styles.actionBtnText}>👨‍🍳 Accept & Cook</Text>
+              <Text style={styles.actionBtnText}>👨‍🍳 Accept & Set Prep</Text>
             </TouchableOpacity>
           )}
 
           {order.order_status === 'preparing' && (
-            <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: '#3B82F6' }]}
-              onPress={() => updateOrderStatus(orderId, 'ready')}
-            >
-              <Text style={styles.actionBtnText}>🛵 Ready for Rider</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {order.prep_time_mins ? (
+                <View style={styles.prepBadge}>
+                  <Text style={styles.prepBadgeText}>⏱️ {order.prep_time_mins}m Prep</Text>
+                </View>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.actionBtn, { backgroundColor: '#3B82F6' }]}
+                onPress={() => updateOrderStatus(orderId, 'ready')}
+              >
+                <Text style={styles.actionBtnText}>🛵 Mark Ready</Text>
+              </TouchableOpacity>
+            </View>
           )}
 
           {order.order_status === 'ready' && (
@@ -950,6 +972,55 @@ const StoreDashboardScreen = () => {
           </View>
         </View>
       </Modal>
+
+      {/* ── KITCHEN PREP TIME MODAL ── */}
+      <Modal visible={!!prepModalOrder} animationType="fade" transparent onRequestClose={() => setPrepModalOrder(null)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.prepModalCard}>
+            <View style={styles.prepModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.prepModalTitle}>👨‍🍳 Set Kitchen Prep Time</Text>
+                <Text style={styles.prepModalSubtitle}>
+                  Order #{prepModalOrder ? String(prepModalOrder.id || prepModalOrder._id).slice(-6).toUpperCase() : ''} • {prepModalOrder ? getItems(prepModalOrder.items).length : 0} items
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setPrepModalOrder(null)} style={styles.prepModalCloseBtn}>
+                <Text style={{ color: colors.textMuted, fontSize: 18, fontWeight: '700' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.prepModalHint}>
+              Select estimated time to cook & pack. Customer and rider will see this real-time countdown.
+            </Text>
+
+            <View style={styles.prepChipsGrid}>
+              {[
+                { mins: 10, label: '⚡ 10 mins', sub: 'Quick Snack / Drink' },
+                { mins: 15, label: '🍲 15 mins', sub: 'Standard Meal' },
+                { mins: 20, label: '🍔 20 mins', sub: 'Fresh Cook' },
+                { mins: 25, label: '⏰ 25 mins', sub: 'Kitchen Rush' },
+                { mins: 35, label: '⏳ 35 mins', sub: 'Large Batch' },
+              ].map((item) => (
+                <TouchableOpacity
+                  key={item.mins}
+                  style={styles.prepChip}
+                  onPress={() => {
+                    if (prepModalOrder) {
+                      const oId = prepModalOrder.id || prepModalOrder._id;
+                      updateOrderStatus(oId, 'preparing', item.mins);
+                      setPrepModalOrder(null);
+                    }
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.prepChipLabel}>{item.label}</Text>
+                  <Text style={styles.prepChipSub}>{item.sub}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -1244,6 +1315,84 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '800',
     fontSize: 12,
+  },
+
+  // Kitchen Prep Time Modal & Badges
+  prepBadge: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: radius.sm,
+  },
+  prepBadgeText: {
+    color: '#60A5FA',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  prepModalCard: {
+    backgroundColor: colors.cardBg,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: spacing.xl,
+    paddingBottom: 40,
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+  },
+  prepModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.xs,
+  },
+  prepModalTitle: {
+    ...typography.h3,
+    color: colors.textMain,
+    fontWeight: '900',
+  },
+  prepModalSubtitle: {
+    fontSize: 13,
+    color: colors.storeAccent,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  prepModalCloseBtn: {
+    padding: 6,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  prepModalHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginVertical: spacing.md,
+    lineHeight: 18,
+  },
+  prepChipsGrid: {
+    flexDirection: 'column',
+    gap: 10,
+    marginTop: spacing.xs,
+  },
+  prepChip: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1,
+    borderColor: colors.borderColor,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 14,
+  },
+  prepChipLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.textMain,
+  },
+  prepChipSub: {
+    fontSize: 12,
+    color: colors.textMuted,
+    fontWeight: '600',
   },
 });
 

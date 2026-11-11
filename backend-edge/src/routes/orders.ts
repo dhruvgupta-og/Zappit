@@ -30,6 +30,54 @@ function orderMatchCondition(refId: string) {
   };
 }
 
+interface OrderNoteMeta {
+  note: string;
+  prep_time_mins: number | null;
+  expected_ready_at: string | null;
+  accepted_at: string | null;
+  ready_at: string | null;
+  picked_up_at: string | null;
+  delivered_at: string | null;
+}
+
+function parseNoteMetadata(rawNote: string | null | undefined): OrderNoteMeta {
+  if (!rawNote) {
+    return {
+      note: '',
+      prep_time_mins: null,
+      expected_ready_at: null,
+      accepted_at: null,
+      ready_at: null,
+      picked_up_at: null,
+      delivered_at: null,
+    };
+  }
+  try {
+    const trimmed = rawNote.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      const p = JSON.parse(trimmed);
+      return {
+        note: p.note || '',
+        prep_time_mins: p.prep_time_mins ? Number(p.prep_time_mins) : null,
+        expected_ready_at: p.expected_ready_at || null,
+        accepted_at: p.accepted_at || null,
+        ready_at: p.ready_at || null,
+        picked_up_at: p.picked_up_at || null,
+        delivered_at: p.delivered_at || null,
+      };
+    }
+  } catch {}
+  return {
+    note: rawNote,
+    prep_time_mins: null,
+    expected_ready_at: null,
+    accepted_at: null,
+    ready_at: null,
+    picked_up_at: null,
+    delivered_at: null,
+  };
+}
+
 // POST /api/create-order
 orders.post('/create-order', async (c) => {
   try {
@@ -564,33 +612,58 @@ orders.get('/orders', async (c) => {
       take: 100,
     });
 
-    const formatted = orderList.map((o) => ({
-      id: o.id,
-      _id: o.id,
-      user_id: o.userId,
-      user_name: o.userName,
-      user_phone: o.userPhone,
-      college_id: o.collegeId,
-      college_name: o.collegeName,
-      store_id: o.storeId,
-      store_name: o.storeName,
-      items: JSON.parse(o.items || '[]'),
-      total_amount: o.totalAmount,
-      discount_amount: o.discountAmount,
-      coupon_applied: o.couponApplied,
-      address: o.address,
-      delivery_address: o.address,
-      delivery_fee: o.deliveryFee,
-      payment_status: o.paymentStatus,
-      order_status: o.orderStatus,
-      additional_note: o.additionalNote,
-      delivery_otp: o.deliveryOtp,
-      requires_otp: !!o.deliveryOtp,
-      razorpay_order_id: o.razorpayOrderId,
-      rating: (o as any).rating || null,
-      rating_feedback: (o as any).ratingFeedback || null,
-      created_at: o.createdAt.toISOString(),
-    }));
+    const storeIds = [...new Set(orderList.map((o) => o.storeId))];
+    const activeStoreOrders = await prisma.order.findMany({
+      where: {
+        storeId: { in: storeIds },
+        orderStatus: { in: ['confirmed', 'preparing', 'ready'] },
+        paymentStatus: { in: ['paid', 'completed'] },
+      },
+      select: { storeId: true },
+    });
+
+    const storeActiveCounts: Record<string, number> = {};
+    for (const a of activeStoreOrders) {
+      storeActiveCounts[a.storeId] = (storeActiveCounts[a.storeId] || 0) + 1;
+    }
+
+    const formatted = orderList.map((o) => {
+      const meta = parseNoteMetadata(o.additionalNote);
+      return {
+        id: o.id,
+        _id: o.id,
+        user_id: o.userId,
+        user_name: o.userName,
+        user_phone: o.userPhone,
+        college_id: o.collegeId,
+        college_name: o.collegeName,
+        store_id: o.storeId,
+        store_name: o.storeName,
+        items: JSON.parse(o.items || '[]'),
+        total_amount: o.totalAmount,
+        discount_amount: o.discountAmount,
+        coupon_applied: o.couponApplied,
+        address: o.address,
+        delivery_address: o.address,
+        delivery_fee: o.deliveryFee,
+        payment_status: o.paymentStatus,
+        order_status: o.orderStatus,
+        additional_note: meta.note,
+        prep_time_mins: meta.prep_time_mins,
+        expected_ready_at: meta.expected_ready_at,
+        accepted_at: meta.accepted_at,
+        ready_at: meta.ready_at,
+        picked_up_at: meta.picked_up_at,
+        delivered_at: meta.delivered_at,
+        store_active_orders: storeActiveCounts[o.storeId] || 0,
+        delivery_otp: o.deliveryOtp,
+        requires_otp: !!o.deliveryOtp,
+        razorpay_order_id: o.razorpayOrderId,
+        rating: (o as any).rating || null,
+        rating_feedback: (o as any).ratingFeedback || null,
+        created_at: o.createdAt.toISOString(),
+      };
+    });
 
     return c.json({ success: true, orders: formatted });
   } catch (err: any) {
@@ -699,7 +772,9 @@ orders.patch('/orders/:id/status', async (c) => {
   try {
     const user = c.get('user');
     const id = c.req.param('id');
-    const { order_status } = await c.req.json();
+    const body = await c.req.json();
+    const order_status = body.order_status;
+    const prep_time_mins = body.prep_time_mins;
 
     const isStaff = ['admin', 'store_owner', 'delivery'].includes(user.role);
     if (!isStaff) return c.json({ success: false, error: 'Forbidden: Staff only' }, 403);
@@ -708,19 +783,60 @@ orders.patch('/orders/:id/status', async (c) => {
     const existing = await prisma.order.findUnique({ where: { id } });
     if (!existing) return c.json({ success: false, error: 'Order not found' }, 404);
 
+    const meta = parseNoteMetadata(existing.additionalNote);
+    const nowIso = new Date().toISOString();
+
+    if (order_status === 'preparing') {
+      meta.accepted_at = nowIso;
+      if (prep_time_mins) {
+        meta.prep_time_mins = Number(prep_time_mins);
+        meta.expected_ready_at = new Date(Date.now() + Number(prep_time_mins) * 60000).toISOString();
+      }
+    } else if (order_status === 'ready') {
+      meta.ready_at = nowIso;
+    } else if (order_status === 'picked_up' || order_status === 'out_for_delivery') {
+      meta.picked_up_at = nowIso;
+    } else if (order_status === 'delivered') {
+      meta.delivered_at = nowIso;
+    }
+
+    const updatedNote = JSON.stringify(meta);
+
     const updated = await prisma.order.update({
       where: { id },
-      data: { orderStatus: order_status },
+      data: {
+        orderStatus: order_status,
+        additionalNote: updatedNote,
+      },
     });
 
     // Notify customer
     const customer = await prisma.user.findUnique({ where: { id: existing.userId } });
     const msg = STATUS_MESSAGES[order_status];
-    if (customer?.expoPushToken && msg) {
-      sendExpoPushNotification(customer.expoPushToken, msg.title, msg.body, { orderId: id });
+    if (customer?.expoPushToken) {
+      let notifTitle = msg?.title || 'Order Update';
+      let notifBody = msg?.body || `Your order is now ${order_status}`;
+
+      if (order_status === 'preparing' && prep_time_mins) {
+        notifTitle = '👨‍🍳 Kitchen Started Cooking!';
+        notifBody = `Chef set ${prep_time_mins} mins prep time. Your food is being freshly made!`;
+      }
+      sendExpoPushNotification(customer.expoPushToken, notifTitle, notifBody, { orderId: id });
     }
 
-    return c.json({ success: true, order: updated });
+    return c.json({
+      success: true,
+      order: {
+        ...updated,
+        prep_time_mins: meta.prep_time_mins,
+        expected_ready_at: meta.expected_ready_at,
+        accepted_at: meta.accepted_at,
+        ready_at: meta.ready_at,
+        picked_up_at: meta.picked_up_at,
+        delivered_at: meta.delivered_at,
+        additional_note: meta.note,
+      },
+    });
   } catch (err: any) {
     return c.json({ success: false, error: err.message }, 500);
   }
@@ -736,15 +852,50 @@ orders.get('/track/:orderIds', async (c) => {
       where: { id: { in: orderIds } },
     });
 
-    const mapped = list.map((o) => ({
-      id: o.id,
-      storeName: o.storeName,
-      status: o.orderStatus,
-      paymentStatus: o.paymentStatus,
-      totalAmount: o.totalAmount,
-      items: JSON.parse(o.items || '[]'),
-      createdAt: o.createdAt.toISOString(),
-    }));
+    const storeIds = [...new Set(list.map((o) => o.storeId))];
+    const activeStoreOrders = await prisma.order.findMany({
+      where: {
+        storeId: { in: storeIds },
+        orderStatus: { in: ['confirmed', 'preparing', 'ready'] },
+        paymentStatus: { in: ['paid', 'completed'] },
+      },
+      select: { storeId: true },
+    });
+
+    const storeActiveCounts: Record<string, number> = {};
+    for (const a of activeStoreOrders) {
+      storeActiveCounts[a.storeId] = (storeActiveCounts[a.storeId] || 0) + 1;
+    }
+
+    const mapped = list.map((o) => {
+      const meta = parseNoteMetadata(o.additionalNote);
+      return {
+        id: o.id,
+        _id: o.id,
+        storeId: o.storeId,
+        storeName: o.storeName,
+        status: o.orderStatus,
+        order_status: o.orderStatus,
+        paymentStatus: o.paymentStatus,
+        payment_status: o.paymentStatus,
+        totalAmount: o.totalAmount,
+        total_amount: o.totalAmount,
+        items: JSON.parse(o.items || '[]'),
+        address: o.address,
+        delivery_address: o.address,
+        delivery_otp: o.deliveryOtp,
+        additional_note: meta.note,
+        prep_time_mins: meta.prep_time_mins,
+        expected_ready_at: meta.expected_ready_at,
+        accepted_at: meta.accepted_at,
+        ready_at: meta.ready_at,
+        picked_up_at: meta.picked_up_at,
+        delivered_at: meta.delivered_at,
+        store_active_orders: storeActiveCounts[o.storeId] || 0,
+        createdAt: o.createdAt.toISOString(),
+        created_at: o.createdAt.toISOString(),
+      };
+    });
 
     return c.json({ success: true, orders: mapped });
   } catch (err: any) {

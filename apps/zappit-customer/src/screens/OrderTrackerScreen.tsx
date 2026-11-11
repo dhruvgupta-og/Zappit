@@ -119,26 +119,80 @@ const OrderTrackerScreen = () => {
     if (isOrderCancelled) return { time: 'Cancelled', desc: 'Order was cancelled', progress: 0 };
     if (isOrderDelivered) return { time: 'Delivered', desc: 'Arrived at your room! Enjoy 🎉', progress: 1 };
 
-    const createdAtMs = new Date((order as any)?.created_at || (order as any)?.createdAt || Date.now()).getTime();
-    const elapsedMins = Math.max(0, Math.floor((Date.now() - createdAtMs) / 60000));
-    const baseDuration = (order as any)?.delivery_time_mins || 20;
-
     const status = (order as any)?.order_status || order?.status || 'confirmed';
+    const prepMins = (order as any)?.prep_time_mins;
+    const expectedReadyAt = (order as any)?.expected_ready_at;
+    const storeQueue = Number((order as any)?.store_active_orders || 0);
+
+    const queueDesc = storeQueue > 1 ? ` • ${storeQueue} orders in kitchen` : '';
+
     if (status === 'confirmed') {
-      const remaining = Math.max(15, baseDuration - elapsedMins);
-      return { time: `${Math.max(10, remaining - 5)}-${remaining} mins`, desc: 'Order confirmed! Kitchen notified ⚡', progress: 0.25 };
+      return {
+        time: '~15-20 mins',
+        desc: `Order received! Kitchen notified${queueDesc} ⚡`,
+        progress: 0.2,
+      };
     }
+
     if (status === 'preparing') {
-      const remaining = Math.max(8, baseDuration - elapsedMins - 5);
-      return { time: `~${remaining} mins`, desc: 'Chef is preparing your food fresh 👨‍🍳', progress: 0.55 };
+      if (expectedReadyAt && prepMins) {
+        const readyTimeMs = new Date(expectedReadyAt).getTime();
+        const minsRemaining = Math.max(1, Math.round((readyTimeMs - Date.now()) / 60000));
+        const readyTimeStr = new Date(expectedReadyAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const acceptedAtMs = (order as any)?.accepted_at ? new Date((order as any).accepted_at).getTime() : Date.now() - 60000;
+        const totalPrepMs = prepMins * 60000;
+        const elapsed = Math.max(0, Date.now() - acceptedAtMs);
+        const prepProgress = Math.min(0.70, Math.max(0.25, 0.25 + (elapsed / totalPrepMs) * 0.45));
+
+        return {
+          time: `~${minsRemaining} mins`,
+          desc: `Chef set ${prepMins}m prep time • Ready by ${readyTimeStr}${queueDesc} 👨‍🍳`,
+          progress: prepProgress,
+        };
+      }
+      return {
+        time: '~12-15 mins',
+        desc: `Chef is preparing your food fresh${queueDesc} 👨‍🍳`,
+        progress: 0.5,
+      };
     }
+
     if (status === 'ready') {
-      return { time: '~8-10 mins', desc: 'Packed & waiting for rider pickup 📦', progress: 0.75 };
+      return {
+        time: '~5-8 mins',
+        desc: 'Packed & ready! Waiting for rider pickup 📦',
+        progress: 0.75,
+      };
     }
+
     if (status === 'picked_up' || status === 'out_for_delivery') {
-      return { time: '~3-5 mins', desc: 'Rider is on the way to your hostel block! 🛵', progress: 0.90 };
+      return {
+        time: '~3-5 mins',
+        desc: 'Rider picked up package & is heading to your block! 🛵',
+        progress: 0.90,
+      };
     }
+
     return { time: '~15-20 mins', desc: 'Heading your way', progress: 0.4 };
+  };
+
+  const getStepTimestamp = (key: string): string | null => {
+    if (!order) return null;
+    const format = (iso?: string | null) => {
+      if (!iso) return null;
+      try {
+        return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      } catch {
+        return null;
+      }
+    };
+    if (key === 'confirmed') return format((order as any).created_at || (order as any).createdAt);
+    if (key === 'preparing') return format((order as any).accepted_at);
+    if (key === 'ready') return format((order as any).ready_at);
+    if (key === 'out_for_delivery' || key === 'picked_up') return format((order as any).picked_up_at);
+    if (key === 'delivered') return format((order as any).delivered_at);
+    return null;
   };
 
   const handleReorder = () => {
@@ -409,13 +463,18 @@ const OrderTrackerScreen = () => {
                   </View>
                   {/* Labels */}
                   <View style={{ flex: 1, paddingTop: 6, paddingBottom: isLast ? 0 : 24, paddingLeft: 12 }}>
-                    <Text style={{
-                      fontSize: 15,
-                      fontWeight: isCurrent ? '800' : isDone ? '600' : '400',
-                      color: isDone ? colors.textMain : colors.textMuted,
-                    }}>
-                      {step.label}
-                    </Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{
+                        fontSize: 15,
+                        fontWeight: isCurrent ? '800' : isDone ? '600' : '400',
+                        color: isDone ? colors.textMain : colors.textMuted,
+                      }}>
+                        {step.label}
+                      </Text>
+                      {getStepTimestamp(step.key) ? (
+                        <Text style={styles.stepTimestamp}>{getStepTimestamp(step.key)}</Text>
+                      ) : null}
+                    </View>
                     {isCurrent && (
                       <Text style={{ fontSize: 12, color: colors.textMuted, marginTop: 3 }}>
                         {step.desc}
@@ -655,6 +714,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   connector: { width: 2, height: 24, marginVertical: 3 },
+  stepTimestamp: { fontSize: 11, fontWeight: '700', color: colors.primary, marginLeft: 8 },
 
   // Item row
   itemRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },

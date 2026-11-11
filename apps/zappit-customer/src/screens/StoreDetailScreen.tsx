@@ -133,6 +133,14 @@ const StoreDetailScreen = () => {
                   {store.delivery_time_mins && (
                     <Text style={styles.statText}>🕐 {store.delivery_time_mins} mins</Text>
                   )}
+                  {store.is_open && store.active_orders_count !== undefined && (
+                    <>
+                      <Text style={styles.statDot}> • </Text>
+                      <Text style={[styles.statText, { color: store.active_orders_count > 3 ? '#F59E0B' : colors.success, fontWeight: '700' }]}>
+                        {store.active_orders_count === 0 ? '⚡ 0 in queue' : `🔥 ${store.active_orders_count} in kitchen`}
+                      </Text>
+                    </>
+                  )}
                 </View>
               </View>
               {!store.is_open && (

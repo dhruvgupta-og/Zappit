@@ -148,7 +148,18 @@ const HomeScreen = ({ navigation }: any) => {
       </View>
       <View style={styles.storeInfo}>
         <View style={styles.storeRow}>
-          <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
+          <View style={{ flex: 1, paddingRight: spacing.sm }}>
+            <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
+            {store.is_open && store.active_orders_count !== undefined && (
+              <View style={styles.queueRow}>
+                <Text style={[styles.queueText, store.active_orders_count > 3 && styles.queueTextBusy]}>
+                  {store.active_orders_count === 0
+                    ? '⚡ 0 orders in queue'
+                    : `🔥 ${store.active_orders_count} orders in kitchen`}
+                </Text>
+              </View>
+            )}
+          </View>
           <View style={{ alignItems: 'flex-end' }}>
             {store.delivery_time_mins && (
               <Text style={styles.deliveryTime}>🕐 {store.delivery_time_mins} mins</Text>
@@ -338,7 +349,10 @@ const styles = StyleSheet.create({
 
   storeInfo: { padding: spacing.lg },
   storeRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: spacing.sm },
-  storeName: { ...typography.h4, color: colors.textMain, flex: 1, marginRight: spacing.sm },
+  storeName: { ...typography.h4, color: colors.textMain, marginRight: spacing.sm },
+  queueRow: { marginTop: 3 },
+  queueText: { fontSize: 11, fontWeight: '700', color: colors.success },
+  queueTextBusy: { color: '#F59E0B' },
   deliveryTime: { fontSize: 13, color: colors.textMuted, fontWeight: '500' },
   collegeBadge: { fontSize: 11, color: colors.primary, fontWeight: '700', marginTop: 2 },
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },

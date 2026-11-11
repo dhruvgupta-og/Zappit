@@ -7,8 +7,11 @@ export const ordersApi = {
     return res.data;
   },
 
-  updateOrderStatus: async (orderId: string, status: string) => {
-    const res = await apiClient.patch(`/api/orders/${orderId}/status`, { order_status: status });
+  updateOrderStatus: async (orderId: string, status: string, extraData?: { prep_time_mins?: number }) => {
+    const res = await apiClient.patch(`/api/orders/${orderId}/status`, {
+      order_status: status,
+      ...(extraData || {}),
+    });
     return res.data;
   },
 

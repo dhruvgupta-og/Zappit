@@ -23,6 +23,20 @@ stores.get('/', async (c) => {
       },
     });
 
+    // Fetch live active orders count for each store (confirmed, preparing, ready)
+    const activeKitchenOrders = await prisma.order.findMany({
+      where: {
+        orderStatus: { in: ['confirmed', 'preparing', 'ready'] },
+        paymentStatus: { in: ['paid', 'completed'] },
+      },
+      select: { storeId: true },
+    });
+
+    const activeCountsByStore: Record<string, number> = {};
+    for (const ord of activeKitchenOrders) {
+      activeCountsByStore[ord.storeId] = (activeCountsByStore[ord.storeId] || 0) + 1;
+    }
+
     const storesWithSearchInfo = allStores.map((s) => ({
       id: s.id,
       _id: s.id,
@@ -34,6 +48,7 @@ stores.get('/', async (c) => {
       is_open: s.isOpen,
       tags: JSON.parse(s.tags || '[]'),
       college_id: s.collegeId,
+      active_orders_count: activeCountsByStore[s.id] || 0,
       menuItemsForSearch: s.menuItems.map((m) => m.name.toLowerCase()),
     }));
 
@@ -116,6 +131,14 @@ stores.get('/:id', async (c) => {
       return c.json({ success: false, message: 'Store not found' }, 404);
     }
 
+    const activeOrdersCount = await prisma.order.count({
+      where: {
+        storeId: store.id,
+        orderStatus: { in: ['confirmed', 'preparing', 'ready'] },
+        paymentStatus: { in: ['paid', 'completed'] },
+      },
+    });
+
     const responseData = {
       store: {
         id: store.id,
@@ -126,6 +149,7 @@ stores.get('/:id', async (c) => {
         rating: store.rating,
         delivery_time_mins: store.deliveryTimeMins,
         is_open: store.isOpen,
+        active_orders_count: activeOrdersCount,
         tags: JSON.parse(store.tags || '[]'),
         college_id: store.collegeId,
       },

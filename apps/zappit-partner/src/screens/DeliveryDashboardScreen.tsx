@@ -351,6 +351,11 @@ const DeliveryDashboardScreen = () => {
               <View style={styles.blockBadge}>
                 <Text style={styles.blockBadgeText}>🏢 {extractBlockName(order)}</Text>
               </View>
+              {order.prep_time_mins ? (
+                <View style={styles.riderPrepBadge}>
+                  <Text style={styles.riderPrepBadgeText}>⏱️ {order.prep_time_mins}m Prep</Text>
+                </View>
+              ) : null}
             </View>
           </View>
           <View style={{ alignItems: 'flex-end' }}>
@@ -809,6 +814,8 @@ const styles = StyleSheet.create({
   orderIdText: { fontSize: 12, color: colors.textMuted, fontFamily: 'monospace', marginTop: 2 },
   payoutBadge: { backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   payoutBadgeText: { color: colors.deliveryAccent, fontSize: 11, fontWeight: '800' },
+  riderPrepBadge: { backgroundColor: 'rgba(59,130,246,0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
+  riderPrepBadgeText: { color: '#60A5FA', fontSize: 10, fontWeight: '700' },
   timeText: { fontSize: 11, color: colors.textMuted, marginTop: 3 },
 
   // Address Box

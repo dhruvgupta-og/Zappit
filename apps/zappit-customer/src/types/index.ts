@@ -30,6 +30,7 @@ export interface Store {
   owner_id?: string;
   created_at?: string;
   menuItemsForSearch?: string[];
+  active_orders_count?: number;
 }
 
 export interface MenuItem {
