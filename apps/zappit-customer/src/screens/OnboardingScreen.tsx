@@ -3,6 +3,8 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import {
   EmailAuthProvider, linkWithCredential, updatePassword,
 } from 'firebase/auth';
@@ -211,15 +213,24 @@ const OnboardingScreen = ({ navigation }: any) => {
                     style={[
                       styles.collegeChip,
                       (collegeId === c.id || collegeId === c._id) && styles.collegeChipActive,
+                      { flexDirection: 'row', alignItems: 'center', gap: 6 },
                     ]}
-                    onPress={() => setCollegeId(c.id || c._id!)}
+                    onPress={() => {
+                      try { Haptics.selectionAsync(); } catch {}
+                      setCollegeId(c.id || c._id!);
+                    }}
                     activeOpacity={0.7}
                   >
+                    <Ionicons
+                      name="school-outline"
+                      size={14}
+                      color={(collegeId === c.id || collegeId === c._id) ? colors.primary : colors.textMuted}
+                    />
                     <Text style={[
                       styles.collegeChipText,
                       (collegeId === c.id || collegeId === c._id) && styles.collegeChipTextActive,
                     ]}>
-                      🎓 {c.name}
+                      {c.name}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -227,12 +238,19 @@ const OnboardingScreen = ({ navigation }: any) => {
 
               <TouchableOpacity
                 style={[styles.primaryBtn, loading && { opacity: 0.7 }]}
-                onPress={handleProfileSubmit} disabled={loading}
+                onPress={() => {
+                  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                  handleProfileSubmit();
+                }}
+                disabled={loading}
               >
                 {loading ? <ActivityIndicator color="#fff" /> : (
-                  <Text style={styles.primaryBtnText}>
-                    {isGoogleUser ? 'Next: Set Password  →' : 'Start Ordering  →'}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <Text style={styles.primaryBtnText}>
+                      {isGoogleUser ? 'Next: Set Password' : 'Start Ordering'}
+                    </Text>
+                    <Ionicons name="arrow-forward" size={16} color="#FFF" />
+                  </View>
                 )}
               </TouchableOpacity>
             </>
@@ -240,49 +258,63 @@ const OnboardingScreen = ({ navigation }: any) => {
 
           {step === 1 && isGoogleUser && (
             <>
-              <View style={styles.infoBox}>
-                <Text style={styles.infoText}>
-                  🔐 <Text style={{ color: colors.textMain, fontWeight: '700' }}>Set a password</Text> so you can sign in with email + password anytime, not just Google.
+              <View style={[styles.infoBox, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.primary} />
+                <Text style={[styles.infoText, { flex: 1 }]}>
+                  <Text style={{ color: colors.textMain, fontWeight: '700' }}>Set a password</Text> so you can sign in with email + password anytime, not just Google.
                 </Text>
               </View>
 
               <Text style={styles.label}>New Password</Text>
               <View style={styles.inputWrapper}>
-                <Text style={styles.inputIcon}>🔒</Text>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.input} value={newPassword} onChangeText={setNewPassword}
                   placeholder="Min. 6 characters" placeholderTextColor={colors.textMuted}
                   secureTextEntry={!showPass}
                 />
-                <TouchableOpacity onPress={() => setShowPass(!showPass)}>
-                  <Text style={{ fontSize: 16 }}>{showPass ? '🙈' : '👁️'}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    try { Haptics.selectionAsync(); } catch {}
+                    setShowPass(!showPass);
+                  }}
+                >
+                  <Ionicons name={showPass ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
 
               <Text style={[styles.label, { marginTop: spacing.lg }]}>Confirm Password</Text>
               <View style={styles.inputWrapper}>
-                <Text style={styles.inputIcon}>🔒</Text>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.input} value={confirmPassword} onChangeText={setConfirmPassword}
                   placeholder="Re-enter your password" placeholderTextColor={colors.textMuted}
                   secureTextEntry
                 />
                 {confirmPassword && newPassword === confirmPassword && (
-                  <Text style={{ color: colors.success, fontSize: 16 }}>✓</Text>
+                  <Ionicons name="checkmark-circle" size={18} color={colors.success} />
                 )}
               </View>
 
               <TouchableOpacity
                 style={[styles.primaryBtn, loading && { opacity: 0.7 }]}
-                onPress={handlePasswordSubmit} disabled={loading}
+                onPress={() => {
+                  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                  handlePasswordSubmit();
+                }}
+                disabled={loading}
               >
                 {loading ? <ActivityIndicator color="#fff" /> : (
-                  <Text style={styles.primaryBtnText}>Set Password & Start Ordering  →</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <Text style={styles.primaryBtnText}>Set Password & Start Ordering</Text>
+                    <Ionicons name="arrow-forward" size={16} color="#FFF" />
+                  </View>
                 )}
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => setStep(0)} style={{ marginTop: spacing.md, alignItems: 'center' }}>
-                <Text style={{ color: colors.textMuted, fontSize: 14, textDecorationLine: 'underline' }}>← Back to profile</Text>
+              <TouchableOpacity onPress={() => setStep(0)} style={{ marginTop: spacing.md, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 4 }}>
+                <Ionicons name="arrow-back" size={14} color={colors.textMuted} />
+                <Text style={{ color: colors.textMuted, fontSize: 14, textDecorationLine: 'underline' }}>Back to profile</Text>
               </TouchableOpacity>
             </>
           )}

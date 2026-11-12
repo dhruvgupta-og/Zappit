@@ -1,22 +1,26 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { ordersApi } from '../api/orders';
 import { useCartStore } from '../store/cartStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { Order } from '../types';
+import { Skeleton } from '../components/Skeleton';
+import { showToast } from '../store/toastStore';
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; emoji: string }> = {
-  confirmed:        { label: 'Confirmed',       color: colors.primary,   emoji: '✅' },
-  preparing:        { label: 'Preparing',        color: '#F59E0B',        emoji: '👨‍🍳' },
-  ready:            { label: 'Ready',            color: '#3B82F6',        emoji: '📦' },
-  out_for_delivery: { label: 'Out for Delivery', color: '#8B5CF6',        emoji: '🛵' },
-  picked_up:        { label: 'On the Way',       color: '#8B5CF6',        emoji: '🛵' },
-  delivered:        { label: 'Delivered',        color: colors.success,   emoji: '🎉' },
-  pending:          { label: 'Payment Pending',  color: '#F59E0B',        emoji: '⏳' },
-  cancelled:        { label: 'Cancelled',        color: colors.error,     emoji: '❌' },
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }> = {
+  confirmed:        { label: 'Confirmed',        color: colors.primary, icon: 'checkmark-circle-outline' },
+  preparing:        { label: 'Preparing',        color: '#F59E0B',      icon: 'restaurant-outline' },
+  ready:            { label: 'Ready',            color: '#3B82F6',      icon: 'cube-outline' },
+  out_for_delivery: { label: 'Out for Delivery', color: '#8B5CF6',      icon: 'bicycle-outline' },
+  picked_up:        { label: 'On the Way',       color: '#8B5CF6',      icon: 'bicycle-outline' },
+  delivered:        { label: 'Delivered',        color: colors.success, icon: 'checkmark-done-circle-outline' },
+  pending:          { label: 'Payment Pending',  color: '#F59E0B',      icon: 'time-outline' },
+  cancelled:        { label: 'Cancelled',        color: colors.error,   icon: 'close-circle-outline' },
 };
 
 const OrdersScreen = () => {
@@ -29,12 +33,13 @@ const OrdersScreen = () => {
   const getCartStoreId = useCartStore((s) => s.getCartStoreId);
 
   const handleReorder = (order: Order) => {
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
     const currentStoreId = getCartStoreId();
     const orderStoreId = (order as any).store_id || order.storeId || '';
     const orderStoreName = (order as any).store_name || order.storeName || 'Campus Store';
 
     if (!order.items || order.items.length === 0) {
-      Alert.alert('Cannot Re-order', 'No items found in this order.');
+      showToast('No items found in this order.', 'error');
       return;
     }
 
@@ -101,7 +106,10 @@ const OrdersScreen = () => {
     return (
       <TouchableOpacity
         style={[styles.card, isActive && { borderColor: cfg.color, borderWidth: 1.5 }]}
-        onPress={() => navigation.navigate('OrderTracker', { orderIds: item.id || item._id })}
+        onPress={() => {
+          try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+          navigation.navigate('OrderTracker', { orderIds: item.id || item._id });
+        }}
         activeOpacity={0.8}
       >
         <View style={styles.cardHeader}>
@@ -112,8 +120,8 @@ const OrdersScreen = () => {
               {new Date((item as any).created_at || item.createdAt!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </Text>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: `${cfg.color}22`, borderColor: cfg.color }]}>
-            <Text style={{ fontSize: 10, marginRight: 3 }}>{cfg.emoji}</Text>
+          <View style={[styles.statusBadge, { backgroundColor: `${cfg.color}22`, borderColor: cfg.color, flexDirection: 'row', alignItems: 'center' }]}>
+            <Ionicons name={cfg.icon} size={13} color={cfg.color} style={{ marginRight: 4 }} />
             <Text style={[styles.statusText, { color: cfg.color }]}>{cfg.label}</Text>
           </View>
         </View>
@@ -133,23 +141,28 @@ const OrdersScreen = () => {
 
         <View style={styles.actionsRow}>
           <TouchableOpacity
-            style={styles.reorderBtn}
+            style={[styles.reorderBtn, { flexDirection: 'row', alignItems: 'center' }]}
             onPress={() => handleReorder(item)}
             activeOpacity={0.7}
           >
-            <Text style={styles.reorderBtnText}>🔁 Re-Order</Text>
+            <Ionicons name="repeat" size={13} color={colors.primary} style={{ marginRight: 5 }} />
+            <Text style={styles.reorderBtnText}>Re-Order</Text>
           </TouchableOpacity>
 
           {isActive ? (
-            <View style={styles.trackPill}>
+            <View style={[styles.trackPill, { flexDirection: 'row', alignItems: 'center', gap: 2 }]}>
               <Text style={{ fontSize: 12, color: cfg.color, fontWeight: '700' }}>
-                Track Live →
+                Track Live
               </Text>
+              <Ionicons name="chevron-forward" size={12} color={cfg.color} />
             </View>
           ) : (
-            <Text style={{ fontSize: 12, color: colors.textMuted }}>
-              Details →
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+              <Text style={{ fontSize: 12, color: colors.textMuted }}>
+                Details
+              </Text>
+              <Ionicons name="chevron-forward" size={12} color={colors.textMuted} />
+            </View>
           )}
         </View>
       </TouchableOpacity>
@@ -163,12 +176,21 @@ const OrdersScreen = () => {
       </View>
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} />
+        <View style={{ padding: spacing.xl }}>
+          <View style={[styles.card, { padding: spacing.lg, marginBottom: spacing.md }]}>
+            <Skeleton width="50%" height={20} borderRadius={6} style={{ marginBottom: 10 }} />
+            <Skeleton width="80%" height={14} borderRadius={4} style={{ marginBottom: 16 }} />
+            <Skeleton width="30%" height={16} borderRadius={4} />
+          </View>
+          <View style={[styles.card, { padding: spacing.lg, marginBottom: spacing.md }]}>
+            <Skeleton width="50%" height={20} borderRadius={6} style={{ marginBottom: 10 }} />
+            <Skeleton width="80%" height={14} borderRadius={4} style={{ marginBottom: 16 }} />
+            <Skeleton width="30%" height={16} borderRadius={4} />
+          </View>
         </View>
       ) : orders.length === 0 ? (
         <View style={styles.center}>
-          <Text style={{ fontSize: 40, marginBottom: 16 }}>📦</Text>
+          <Ionicons name="receipt-outline" size={56} color={colors.textMuted} style={{ marginBottom: 16 }} />
           <Text style={styles.emptyTitle}>No orders yet</Text>
           <Text style={styles.emptyText}>When you place orders, they will appear here.</Text>
         </View>
@@ -182,7 +204,10 @@ const OrdersScreen = () => {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={onRefresh}
+              onRefresh={() => {
+                try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                onRefresh();
+              }}
               tintColor={colors.primary}
               colors={[colors.primary]}
             />

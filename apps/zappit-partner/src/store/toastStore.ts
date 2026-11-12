@@ -45,3 +45,4 @@ export const useToastStore = create<ToastState>((set) => ({
 export const showToast = (message: string, type: ToastType = 'info') => {
   useToastStore.getState().showToast(message, type);
 };
+

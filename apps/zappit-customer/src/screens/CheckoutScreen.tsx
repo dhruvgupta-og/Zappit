@@ -6,6 +6,8 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { apiClient } from '../api/client';
 import { paymentApi } from '../api/payment';
@@ -15,6 +17,7 @@ import { useCartStore } from '../store/cartStore';
 import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
+import { showToast } from '../store/toastStore';
 
 interface PaymentSession {
   orderId: string;
@@ -155,12 +158,14 @@ const CheckoutScreen = () => {
     const hasBlocks = collegeDetails?.blocks && collegeDetails.blocks.length > 0;
     if (hasBlocks) {
       if (!roomDetails.trim()) {
-        Alert.alert('Address Required', 'Please enter your Room / Floor details.');
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch {}
+        showToast('Please enter your Room / Floor details.', 'error');
         return;
       }
     } else {
       if (!address.trim()) {
-        Alert.alert('Address Required', 'Please enter your delivery address.');
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning); } catch {}
+        showToast('Please enter your delivery address.', 'error');
         return;
       }
     }
@@ -281,7 +286,7 @@ const CheckoutScreen = () => {
       if (err.message === 'Network Error' || err.code === 'ECONNABORTED') {
         errMsg = 'Connection timed out or network unavailable. Please verify your internet connection and try again.';
       }
-      Alert.alert('Payment Error', errMsg);
+      showToast(errMsg, 'error');
     } finally {
       setProcessing(false);
     }
@@ -310,7 +315,7 @@ const CheckoutScreen = () => {
         if (data.razorpay_order_id) {
           apiClient.post('/api/orders/cancel-unpaid', { razorpay_order_id: data.razorpay_order_id }).catch(() => {});
         }
-        Alert.alert('Cancelled', 'Payment was cancelled.');
+        showToast('Payment was cancelled.', 'info');
       } else if (data.status === 'failed') {
         setPaymentSession(null);
         setPaymentHtml(null);
@@ -318,7 +323,7 @@ const CheckoutScreen = () => {
         if (data.razorpay_order_id) {
           apiClient.post('/api/orders/cancel-unpaid', { razorpay_order_id: data.razorpay_order_id }).catch(() => {});
         }
-        Alert.alert('Payment Failed', data.error || 'Payment failed.');
+        showToast(data.error || 'Payment failed.', 'error');
       } else if (data.status === 'success') {
         setPaymentSession(null);
         setPaymentHtml(null);
@@ -502,8 +507,14 @@ const CheckoutScreen = () => {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { marginTop: insets.top }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={{ fontSize: 20, color: colors.textMain }}>←</Text>
+        <TouchableOpacity
+          onPress={() => {
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+            navigation.goBack();
+          }}
+          style={styles.backBtn}
+        >
+          <Ionicons name="arrow-back" size={20} color={colors.textMain} />
         </TouchableOpacity>
         <Text style={styles.title}>Checkout</Text>
         <View style={{ width: 32 }} />
@@ -521,7 +532,10 @@ const CheckoutScreen = () => {
                 {collegeDetails.blocks.map((b: any, i: number) => (
                   <TouchableOpacity
                     key={i}
-                    onPress={() => setSelectedBlock(b)}
+                    onPress={() => {
+                      try { Haptics.selectionAsync(); } catch {}
+                      setSelectedBlock(b);
+                    }}
                     style={{
                       paddingHorizontal: 16, paddingVertical: 10,
                       borderRadius: radius.md, borderWidth: 1,
@@ -539,7 +553,7 @@ const CheckoutScreen = () => {
               
               <Text style={{ color: colors.textMuted, fontSize: 13, marginBottom: 8 }}>Floor & Room No.</Text>
               <View style={styles.inputWrapper}>
-                <Text style={{ fontSize: 18, marginRight: 8 }}>🚪</Text>
+                <Ionicons name="business-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.input}
                   value={roomDetails}
@@ -551,7 +565,7 @@ const CheckoutScreen = () => {
             </>
           ) : (
             <View style={styles.inputWrapper}>
-              <Text style={{ fontSize: 18, marginRight: 8 }}>📍</Text>
+              <Ionicons name="location-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
               <TextInput
                 style={styles.input}
                 value={address}
@@ -570,7 +584,7 @@ const CheckoutScreen = () => {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Additional Note</Text>
           <View style={styles.inputWrapper}>
-            <Text style={{ fontSize: 18, marginRight: 8 }}>📝</Text>
+            <Ionicons name="document-text-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
             <TextInput
               style={styles.input}
               value={additionalNote}
@@ -589,7 +603,7 @@ const CheckoutScreen = () => {
             <>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <View style={[styles.inputWrapper, { flex: 1, marginBottom: 0 }]}>
-                  <Text style={{ fontSize: 16, marginRight: 8 }}>🏷️</Text>
+                  <Ionicons name="pricetag-outline" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
                   <TextInput
                     style={styles.input}
                     value={couponCode}
@@ -601,7 +615,10 @@ const CheckoutScreen = () => {
                 </View>
                 <TouchableOpacity
                   style={styles.applyBtn}
-                  onPress={handleApplyCoupon}
+                  onPress={() => {
+                    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+                    handleApplyCoupon();
+                  }}
                   disabled={applying}
                 >
                   {applying ? <ActivityIndicator color="#fff" /> : <Text style={styles.applyBtnText}>Apply</Text>}
@@ -657,13 +674,19 @@ const CheckoutScreen = () => {
         </View>
         <TouchableOpacity
           style={[styles.payBtn, processing && { opacity: 0.7 }]}
-          onPress={() => startPayment()}
+          onPress={() => {
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
+            startPayment();
+          }}
           disabled={processing}
         >
           {processing ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.payBtnText}>Pay Securely  →</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.payBtnText}>Pay Securely</Text>
+              <Ionicons name="shield-checkmark-outline" size={16} color="#FFF" />
+            </View>
           )}
         </TouchableOpacity>
       </View>

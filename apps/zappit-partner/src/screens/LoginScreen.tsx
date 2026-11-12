@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { useAuthStore } from '../store/authStore';
@@ -42,23 +44,38 @@ const LoginScreen = () => {
 
         <View style={styles.card}>
           {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>⚠️ {error}</Text>
+            <View style={[styles.errorBox, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+              <Ionicons name="alert-circle" size={16} color="#FCA5A5" />
+              <Text style={[styles.errorText, { flex: 1 }]}>{error}</Text>
             </View>
           ) : null}
 
           <Text style={styles.label}>Partner Email</Text>
           <View style={styles.inputWrapper}>
+            <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
             <TextInput style={styles.input} value={email} onChangeText={setEmail} placeholder="email@zappit.com" placeholderTextColor={colors.textMuted} autoCapitalize="none" />
           </View>
 
           <Text style={[styles.label, { marginTop: spacing.md }]}>Password</Text>
           <View style={styles.inputWrapper}>
+            <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
             <TextInput style={styles.input} value={password} onChangeText={setPassword} placeholder="••••••••" placeholderTextColor={colors.textMuted} secureTextEntry={!showPass} />
-            <TouchableOpacity onPress={() => setShowPass(!showPass)}><Text style={{ fontSize: 16 }}>{showPass ? '🙈' : '👁️'}</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => {
+              try { Haptics.selectionAsync(); } catch {}
+              setShowPass(!showPass);
+            }}>
+              <Ionicons name={showPass ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} />
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleLogin} disabled={loading}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => {
+              try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+              handleLogin();
+            }}
+            disabled={loading}
+          >
             {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryBtnText}>Sign In</Text>}
           </TouchableOpacity>
         </View>

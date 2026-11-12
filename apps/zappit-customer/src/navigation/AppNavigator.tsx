@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Feather } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useAuthStore, initAuthListener } from '../store/authStore';
@@ -62,6 +63,11 @@ const MainTabs = () => {
 
   return (
     <Tab.Navigator
+      screenListeners={{
+        tabPress: () => {
+          try { Haptics.selectionAsync(); } catch {}
+        },
+      }}
       screenOptions={{
         headerShown: false,
         tabBarStyle: {

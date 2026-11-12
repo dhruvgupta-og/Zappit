@@ -3,6 +3,8 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
   KeyboardAvoidingView, Platform, ScrollView, Image, Linking,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -171,15 +173,16 @@ const LoginScreen = ({ navigation }: any) => {
 
           {/* Error */}
           {error ? (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorText}>⚠️ {error}</Text>
+            <View style={[styles.errorBox, { flexDirection: 'row', alignItems: 'center' }]}>
+              <Ionicons name="alert-circle" size={16} color="#FCA5A5" style={{ marginRight: 6 }} />
+              <Text style={[styles.errorText, { flex: 1 }]}>{error}</Text>
             </View>
           ) : null}
 
           {/* Email */}
           <Text style={styles.label}>Email Address</Text>
           <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>✉️</Text>
+            <Ionicons name="mail-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
             <TextInput
               style={styles.input}
               value={email}
@@ -195,7 +198,7 @@ const LoginScreen = ({ navigation }: any) => {
           {/* Password */}
           <Text style={[styles.label, { marginTop: spacing.md }]}>Password</Text>
           <View style={styles.inputWrapper}>
-            <Text style={styles.inputIcon}>🔒</Text>
+            <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
             <TextInput
               style={styles.input}
               value={password}
@@ -204,8 +207,14 @@ const LoginScreen = ({ navigation }: any) => {
               placeholderTextColor={colors.textMuted}
               secureTextEntry={!showPass}
             />
-            <TouchableOpacity onPress={() => setShowPass(!showPass)} style={styles.eyeBtn}>
-              <Text style={{ fontSize: 16 }}>{showPass ? '🙈' : '👁️'}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                try { Haptics.selectionAsync(); } catch {}
+                setShowPass(!showPass);
+              }}
+              style={styles.eyeBtn}
+            >
+              <Ionicons name={showPass ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
 
@@ -214,7 +223,7 @@ const LoginScreen = ({ navigation }: any) => {
             <>
               <Text style={[styles.label, { marginTop: spacing.md }]}>Confirm Password</Text>
               <View style={styles.inputWrapper}>
-                <Text style={styles.inputIcon}>🔒</Text>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.textMuted} style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.input}
                   value={confirmPassword}
@@ -223,8 +232,14 @@ const LoginScreen = ({ navigation }: any) => {
                   placeholderTextColor={colors.textMuted}
                   secureTextEntry={!showConfirmPass}
                 />
-                <TouchableOpacity onPress={() => setShowConfirmPass(!showConfirmPass)} style={styles.eyeBtn}>
-                  <Text style={{ fontSize: 16 }}>{showConfirmPass ? '🙈' : '👁️'}</Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    try { Haptics.selectionAsync(); } catch {}
+                    setShowConfirmPass(!showConfirmPass);
+                  }}
+                  style={styles.eyeBtn}
+                >
+                  <Ionicons name={showConfirmPass ? "eye-off-outline" : "eye-outline"} size={20} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
             </>
@@ -233,16 +248,22 @@ const LoginScreen = ({ navigation }: any) => {
           {/* Submit */}
           <TouchableOpacity
             style={[styles.primaryBtn, loading && { opacity: 0.7 }]}
-            onPress={tab === 'login' ? handleEmailLogin : handleEmailRegister}
+            onPress={() => {
+              try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+              tab === 'login' ? handleEmailLogin() : handleEmailRegister();
+            }}
             disabled={loading}
             activeOpacity={0.8}
           >
             {loading ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.primaryBtnText}>
-                {tab === 'login' ? 'Sign In  →' : 'Create Account  →'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <Text style={styles.primaryBtnText}>
+                  {tab === 'login' ? 'Sign In' : 'Create Account'}
+                </Text>
+                <Ionicons name="arrow-forward" size={16} color="#FFF" />
+              </View>
             )}
           </TouchableOpacity>
 
@@ -256,7 +277,10 @@ const LoginScreen = ({ navigation }: any) => {
           {/* Google */}
           <TouchableOpacity
             style={styles.googleBtn}
-            onPress={handleGoogleLogin}
+            onPress={() => {
+              try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+              handleGoogleLogin();
+            }}
             disabled={loading}
             activeOpacity={0.8}
           >
@@ -295,7 +319,10 @@ const LoginScreen = ({ navigation }: any) => {
               activeOpacity={0.7}
               style={styles.legalLinkItem}
             >
-              <Text style={styles.legalLinkText}>🌐 zappit.shop</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="globe-outline" size={13} color={colors.primary} />
+                <Text style={styles.legalLinkText}>zappit.shop</Text>
+              </View>
             </TouchableOpacity>
 
             <Text style={styles.legalDot}>•</Text>
@@ -305,7 +332,10 @@ const LoginScreen = ({ navigation }: any) => {
               activeOpacity={0.7}
               style={styles.legalLinkItem}
             >
-              <Text style={styles.legalLinkText}>💬 Support</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Ionicons name="chatbubble-outline" size={13} color={colors.primary} />
+                <Text style={styles.legalLinkText}>Support</Text>
+              </View>
             </TouchableOpacity>
           </View>
         </View>
