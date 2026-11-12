@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore, initAuthListener } from '../store/authStore';
 import { useCartStore } from '../store/cartStore';
 import { colors } from '../theme/colors';
+import { FloatingActiveOrderBar } from '../components/FloatingActiveOrderBar';
 
 // Screens
 import LoginScreen from '../screens/LoginScreen';
@@ -60,70 +61,74 @@ const CartTabIcon = ({ color, size }: { color: string; size: number }) => {
 const MainTabs = () => {
   const insets = useSafeAreaInsets();
   const bottomInset = insets.bottom;
+  const tabHeight = bottomInset > 0 ? 62 + bottomInset : 60;
 
   return (
-    <Tab.Navigator
-      screenListeners={{
-        tabPress: () => {
-          try { Haptics.selectionAsync(); } catch {}
-        },
-      }}
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: {
-          backgroundColor: colors.cardBg,
-          borderTopColor: colors.borderColor,
-          borderTopWidth: 1,
-          paddingTop: 8,
-          paddingBottom: bottomInset > 0 ? bottomInset + 4 : 8,
-          height: bottomInset > 0 ? 62 + bottomInset : 60,
-        },
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
-          marginTop: 2,
-        },
-      }}
-    >
-    <Tab.Screen
-      name="Home"
-      component={HomeScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => (
-          <Feather name="home" size={size} color={color} />
-        ),
-      }}
-    />
-    <Tab.Screen
-      name="Cart"
-      component={CartScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => (
-          <CartTabIcon color={color} size={size} />
-        ),
-      }}
-    />
-    <Tab.Screen
-      name="Orders"
-      component={OrdersScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => (
-          <Feather name="shopping-bag" size={size} color={color} />
-        ),
-      }}
-    />
-    <Tab.Screen
-      name="Profile"
-      component={ProfileScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => (
-          <Feather name="user" size={size} color={color} />
-        ),
-      }}
-    />
-  </Tab.Navigator>
+    <View style={{ flex: 1 }}>
+      <Tab.Navigator
+        screenListeners={{
+          tabPress: () => {
+            try { Haptics.selectionAsync(); } catch {}
+          },
+        }}
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: {
+            backgroundColor: colors.cardBg,
+            borderTopColor: colors.borderColor,
+            borderTopWidth: 1,
+            paddingTop: 8,
+            paddingBottom: bottomInset > 0 ? bottomInset + 4 : 8,
+            height: tabHeight,
+          },
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textMuted,
+          tabBarLabelStyle: {
+            fontSize: 11,
+            fontWeight: '600',
+            marginTop: 2,
+          },
+        }}
+      >
+        <Tab.Screen
+          name="Home"
+          component={HomeScreen}
+          options={{
+            tabBarIcon: ({ color, size }) => (
+              <Feather name="home" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Cart"
+          component={CartScreen}
+          options={{
+            tabBarIcon: ({ color, size }) => (
+              <CartTabIcon color={color} size={size} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Orders"
+          component={OrdersScreen}
+          options={{
+            tabBarIcon: ({ color, size }) => (
+              <Feather name="shopping-bag" size={size} color={color} />
+            ),
+          }}
+        />
+        <Tab.Screen
+          name="Profile"
+          component={ProfileScreen}
+          options={{
+            tabBarIcon: ({ color, size }) => (
+              <Feather name="user" size={size} color={color} />
+            ),
+          }}
+        />
+      </Tab.Navigator>
+      <FloatingActiveOrderBar bottomOffset={tabHeight + 8} />
+    </View>
   );
 };
 

@@ -18,6 +18,7 @@ import { useAuthStore } from '../store/authStore';
 import { colors } from '../theme/colors';
 import { typography, spacing, radius } from '../theme/typography';
 import { showToast } from '../store/toastStore';
+import { useActiveOrderStore } from '../store/activeOrderStore';
 
 interface PaymentSession {
   orderId: string;
@@ -340,6 +341,7 @@ const CheckoutScreen = () => {
 
           if (verifyRes.success) {
             clearCart();
+            useActiveOrderStore.getState().fetchActiveOrder(true);
             const orderIds = verifyRes.orderIds;
 
             // Send order confirmation email
@@ -386,6 +388,7 @@ const CheckoutScreen = () => {
                       });
                       if (retryRes.success) {
                         clearCart();
+                        useActiveOrderStore.getState().fetchActiveOrder(true);
                         navigation.replace('OrderTracker', { orderIds: retryRes.orderIds });
                       } else {
                         Alert.alert('Contact Support', `Payment ID: ${data.razorpay_payment_id}\n\nPlease share this with support.`);

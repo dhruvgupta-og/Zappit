@@ -11,6 +11,7 @@ import { typography, spacing, radius } from '../theme/typography';
 import { Order } from '../types';
 import { Skeleton } from '../components/Skeleton';
 import { showToast } from '../store/toastStore';
+import { useActiveOrderStore } from '../store/activeOrderStore';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }> = {
   confirmed:        { label: 'Confirmed',        color: colors.primary, icon: 'checkmark-circle-outline' },
@@ -72,6 +73,7 @@ const OrdersScreen = () => {
         return d2 - d1;
       });
       setOrders(sorted);
+      useActiveOrderStore.getState().fetchActiveOrder(true);
     } catch (e) {
       console.error(e);
     } finally {

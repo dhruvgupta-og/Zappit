@@ -17,6 +17,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BANNER_HEIGHT = (SCREEN_WIDTH - 40) / 3;
 const CATEGORIES = ['All', 'Snacks', 'Meals', 'Drinks', 'Healthy'];
+const POPULAR_CRAVINGS = ['Maggi', 'Cold Coffee', 'Sandwich', 'Burger', 'Biryani', 'Chai', 'Rolls', 'Pizza'];
+
+const toTitleCase = (str: string) => {
+  return str
+    .split(' ')
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
 
 const HomeScreen = ({ navigation }: any) => {
   const [stores, setStores] = useState<Store[]>([]);
@@ -71,17 +79,30 @@ const HomeScreen = ({ navigation }: any) => {
     return () => { if (bannerTimer.current) clearInterval(bannerTimer.current); };
   }, [banners.length]);
 
+  const normalizedQuery = searchQuery.trim().toLowerCase();
+
   const filteredStores = useMemo(() => {
     return stores.filter((store) => {
       const matchesSearch =
-        store.name.toLowerCase().includes(searchQuery.toLowerCase());
+        !normalizedQuery ||
+        store.name.toLowerCase().includes(normalizedQuery) ||
+        (store.menuItemsForSearch &&
+          store.menuItemsForSearch.some((item) =>
+            item.toLowerCase().includes(normalizedQuery)
+          )) ||
+        (store.tags &&
+          store.tags.some((tag) =>
+            tag.toLowerCase().includes(normalizedQuery)
+          ));
+
       const matchesCategory =
         activeCategory === 'All' || (store.tags && store.tags.includes(activeCategory));
       const matchesCollege = 
         !activeCollegeId || !store.college_id || store.college_id === activeCollegeId;
+
       return matchesSearch && matchesCategory && matchesCollege;
     });
-  }, [stores, searchQuery, activeCategory, activeCollegeId]);
+  }, [stores, normalizedQuery, activeCategory, activeCollegeId]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -126,78 +147,106 @@ const HomeScreen = ({ navigation }: any) => {
     );
   };
 
-  const renderStoreCard = ({ item: store }: { item: Store }) => (
-    <TouchableOpacity
-      style={[styles.storeCard, !store.is_open && { opacity: 0.6 }]}
-      onPress={() => {
-        try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
-        navigation.navigate('StoreDetail', { storeId: store.id || store._id });
-      }}
-      activeOpacity={0.85}
-    >
-      <View style={styles.storeImageContainer}>
-        <Image
-          source={{ uri: store.image || 'https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=400&auto=format&fit=crop' }}
-          style={styles.storeImage}
-          resizeMode="cover"
-        />
-        {!store.is_open && (
-          <View style={styles.closedOverlay}>
-            <Text style={styles.closedText}>CLOSED</Text>
-          </View>
-        )}
-        {store.rating && (
-          <View style={styles.ratingBadge}>
-            <Ionicons name="star" size={11} color="#F59E0B" style={{ marginRight: 3 }} />
-            <Text style={styles.ratingText}>{store.rating}</Text>
-          </View>
-        )}
-      </View>
-      <View style={styles.storeInfo}>
-        <View style={styles.storeRow}>
-          <View style={{ flex: 1, paddingRight: spacing.sm }}>
-            <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
-            {store.is_open && store.active_orders_count !== undefined && (
-              <View style={styles.queueRow}>
-                <Ionicons
-                  name={store.active_orders_count === 0 ? "flash" : "flame"}
-                  size={12}
-                  color={store.active_orders_count > 3 ? '#EF4444' : '#10B981'}
-                  style={{ marginRight: 4 }}
-                />
-                <Text style={[styles.queueText, store.active_orders_count > 3 && styles.queueTextBusy]}>
-                  {store.active_orders_count === 0
-                    ? '0 orders in queue'
-                    : `${store.active_orders_count} orders in kitchen`}
-                </Text>
+  const renderStoreCard = ({ item: store }: { item: Store }) => {
+    const matchingDishes =
+      normalizedQuery && store.menuItemsForSearch
+        ? store.menuItemsForSearch
+            .filter((dish) => dish.toLowerCase().includes(normalizedQuery))
+            .slice(0, 3)
+            .map(toTitleCase)
+        : [];
+    const totalMatchingCount =
+      normalizedQuery && store.menuItemsForSearch
+        ? store.menuItemsForSearch.filter((dish) =>
+            dish.toLowerCase().includes(normalizedQuery)
+          ).length
+        : 0;
+
+    return (
+      <TouchableOpacity
+        style={[styles.storeCard, !store.is_open && { opacity: 0.6 }]}
+        onPress={() => {
+          try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch {}
+          navigation.navigate('StoreDetail', { storeId: store.id || store._id });
+        }}
+        activeOpacity={0.85}
+      >
+        <View style={styles.storeImageContainer}>
+          <Image
+            source={{ uri: store.image || 'https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=400&auto=format&fit=crop' }}
+            style={styles.storeImage}
+            resizeMode="cover"
+          />
+          {!store.is_open && (
+            <View style={styles.closedOverlay}>
+              <Text style={styles.closedText}>CLOSED</Text>
+            </View>
+          )}
+          {store.rating && (
+            <View style={styles.ratingBadge}>
+              <Ionicons name="star" size={11} color="#F59E0B" style={{ marginRight: 3 }} />
+              <Text style={styles.ratingText}>{store.rating}</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.storeInfo}>
+          <View style={styles.storeRow}>
+            <View style={{ flex: 1, paddingRight: spacing.sm }}>
+              <Text style={styles.storeName} numberOfLines={1}>{store.name}</Text>
+              {store.is_open && store.active_orders_count !== undefined && (
+                <View style={styles.queueRow}>
+                  <Ionicons
+                    name={store.active_orders_count === 0 ? "flash" : "flame"}
+                    size={12}
+                    color={store.active_orders_count > 3 ? '#EF4444' : '#10B981'}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={[styles.queueText, store.active_orders_count > 3 && styles.queueTextBusy]}>
+                    {store.active_orders_count === 0
+                      ? '0 orders in queue'
+                      : `${store.active_orders_count} orders in kitchen`}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              {store.delivery_time_mins && (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="time-outline" size={12} color={colors.textMuted} style={{ marginRight: 3 }} />
+                  <Text style={styles.deliveryTime}>{store.delivery_time_mins} mins</Text>
+                </View>
+              )}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
+                <Ionicons name="location-outline" size={11} color={colors.textMuted} style={{ marginRight: 2 }} />
+                <Text style={styles.collegeBadge}>{store.college_name || 'All Campuses'}</Text>
               </View>
-            )}
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            {store.delivery_time_mins && (
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Ionicons name="time-outline" size={12} color={colors.textMuted} style={{ marginRight: 3 }} />
-                <Text style={styles.deliveryTime}>{store.delivery_time_mins} mins</Text>
-              </View>
-            )}
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2 }}>
-              <Ionicons name="location-outline" size={11} color={colors.textMuted} style={{ marginRight: 2 }} />
-              <Text style={styles.collegeBadge}>{store.college_name || 'All Campuses'}</Text>
             </View>
           </View>
+
+          {/* Deep Dish Search Match Badge */}
+          {matchingDishes.length > 0 && (
+            <View style={styles.dishMatchBadge}>
+              <Ionicons name="restaurant" size={12} color={colors.primary} style={{ marginRight: 5 }} />
+              <Text style={styles.dishMatchText} numberOfLines={1}>
+                Serves: <Text style={styles.dishMatchNames}>{matchingDishes.join(', ')}</Text>
+                {totalMatchingCount > 3 ? ` +${totalMatchingCount - 3} more` : ''}
+              </Text>
+            </View>
+          )}
+
+          {store.tags && store.tags.length > 0 && (
+            <View style={styles.tagsRow}>
+              {store.tags.map((tag) => (
+                <View key={tag} style={styles.tag}>
+                  <Text style={styles.tagText}>{tag}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
-        {store.tags && store.tags.length > 0 && (
-          <View style={styles.tagsRow}>
-            {store.tags.map((tag) => (
-              <View key={tag} style={styles.tag}>
-                <Text style={styles.tagText}>{tag}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={styles.container}>
@@ -269,9 +318,52 @@ const HomeScreen = ({ navigation }: any) => {
                 style={styles.searchInput}
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                placeholder="Search for restaurants or dishes..."
+                placeholder="Search dishes (Maggi, Coffee...) or stores"
                 placeholderTextColor={colors.textMuted}
+                returnKeyType="search"
               />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    try { Haptics.selectionAsync(); } catch {}
+                    setSearchQuery('');
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={{ padding: 2 }}
+                >
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Popular Campus Craving Chips */}
+            <View style={styles.cravingsRow}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 6 }}>
+                {POPULAR_CRAVINGS.map((craving) => {
+                  const isSelected = searchQuery.trim().toLowerCase() === craving.toLowerCase();
+                  return (
+                    <TouchableOpacity
+                      key={craving}
+                      style={[styles.cravingChip, isSelected && styles.cravingChipActive]}
+                      onPress={() => {
+                        try { Haptics.selectionAsync(); } catch {}
+                        setSearchQuery(isSelected ? '' : craving);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name={isSelected ? "checkmark-circle" : "restaurant-outline"}
+                        size={12}
+                        color={isSelected ? '#131E3A' : colors.primary}
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text style={[styles.cravingText, isSelected && styles.cravingTextActive]}>
+                        {craving}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
 
             {/* Categories */}
@@ -293,7 +385,11 @@ const HomeScreen = ({ navigation }: any) => {
               ))}
             </ScrollView>
 
-            <Text style={styles.sectionTitle}>Restaurants near you</Text>
+            <Text style={styles.sectionTitle}>
+              {searchQuery.trim()
+                ? `Results for "${searchQuery.trim()}"`
+                : 'Restaurants near you'}
+            </Text>
           </>
         }
         ListEmptyComponent={
@@ -305,9 +401,32 @@ const HomeScreen = ({ navigation }: any) => {
             </View>
           ) : (
             <View style={styles.emptyState}>
-              <Ionicons name="restaurant-outline" size={48} color={colors.textMuted} style={{ marginBottom: 12 }} />
-              <Text style={styles.emptyTitle}>No matches found</Text>
-              <Text style={styles.emptyText}>Try searching for a different keyword or category.</Text>
+              <Ionicons
+                name={searchQuery.trim() ? "search-outline" : "restaurant-outline"}
+                size={48}
+                color={colors.textMuted}
+                style={{ marginBottom: 12 }}
+              />
+              <Text style={styles.emptyTitle}>
+                {searchQuery.trim() ? `No results for "${searchQuery.trim()}"` : 'No matches found'}
+              </Text>
+              <Text style={styles.emptyText}>
+                {searchQuery.trim()
+                  ? 'No campus stores are serving this dish right now. Try searching for "Maggi" or "Coffee".'
+                  : 'Try searching for a different keyword or category.'}
+              </Text>
+              {Boolean(searchQuery.trim() || activeCategory !== 'All') && (
+                <TouchableOpacity
+                  style={styles.clearSearchBtn}
+                  onPress={() => {
+                    try { Haptics.selectionAsync(); } catch {}
+                    setSearchQuery('');
+                    setActiveCategory('All');
+                  }}
+                >
+                  <Text style={styles.clearSearchText}>Clear Search & Filters</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )
         }
@@ -351,9 +470,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 12,
     backgroundColor: colors.cardBg, padding: spacing.md, paddingHorizontal: spacing.lg,
     borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderColor,
-    marginBottom: spacing.xxl,
+    marginBottom: spacing.md,
   },
   searchInput: { flex: 1, fontSize: 15, color: colors.textMain },
+
+  cravingsRow: {
+    marginBottom: spacing.xl,
+  },
+  cravingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.cardBg,
+    borderColor: colors.borderColor,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radius.full,
+  },
+  cravingChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  cravingText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  cravingTextActive: {
+    color: '#131E3A',
+    fontWeight: '800',
+  },
 
   sectionTitle: { ...typography.h3, color: colors.textMain, marginBottom: spacing.lg },
 
@@ -399,9 +545,46 @@ const styles = StyleSheet.create({
   },
   tagText: { fontSize: 12, fontWeight: '600', color: colors.textMuted },
 
-  emptyState: { alignItems: 'center', paddingVertical: 40 },
-  emptyTitle: { ...typography.h3, color: colors.textMain, marginBottom: spacing.sm },
-  emptyText: { fontSize: 14, color: colors.textMuted },
+  dishMatchBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+    borderColor: 'rgba(255, 193, 7, 0.3)',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    marginBottom: spacing.sm,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+  },
+  dishMatchText: {
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  dishMatchNames: {
+    color: colors.textMain,
+    fontWeight: '700',
+  },
+
+  emptyState: { alignItems: 'center', paddingVertical: 40, paddingHorizontal: spacing.lg },
+  emptyTitle: { ...typography.h3, color: colors.textMain, marginBottom: spacing.sm, textAlign: 'center' },
+  emptyText: { fontSize: 14, color: colors.textMuted, textAlign: 'center' },
+  clearSearchBtn: {
+    marginTop: 16,
+    backgroundColor: 'rgba(255, 193, 7, 0.15)',
+    borderColor: colors.primary,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: radius.md,
+  },
+  clearSearchText: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
 });
 
 export default HomeScreen;
