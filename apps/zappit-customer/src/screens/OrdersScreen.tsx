@@ -89,11 +89,17 @@ const OrdersScreen = () => {
     return unsubscribe;
   }, [navigation, fetchOrders]);
 
+  const hasActiveOrder = orders.some((o) => {
+    const status = ((o as any).order_status || o.status || '').toLowerCase();
+    return !['delivered', 'cancelled'].includes(status);
+  });
+
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(() => fetchOrders(true), 10000);
+    if (!hasActiveOrder) return;
+    const interval = setInterval(() => fetchOrders(true), 12000);
     return () => clearInterval(interval);
-  }, [fetchOrders]);
+  }, [fetchOrders, hasActiveOrder]);
 
   const onRefresh = () => {
     setRefreshing(true);

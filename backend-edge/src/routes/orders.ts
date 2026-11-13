@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { getPrisma } from '../db';
+import { getCached, setCached } from '../cache';
 import { createRazorpayOrder, fetchRazorpayQrPayments, verifyRazorpaySignature, verifyWebhookSignature } from '../razorpay';
 import { sendExpoPushNotification } from '../push';
 import { AuthUser } from '../auth';
@@ -612,19 +613,27 @@ orders.get('/orders', async (c) => {
       take: 100,
     });
 
-    const storeIds = [...new Set(orderList.map((o) => o.storeId))];
-    const activeStoreOrders = await prisma.order.findMany({
-      where: {
-        storeId: { in: storeIds },
-        orderStatus: { in: ['confirmed', 'preparing', 'ready'] },
-        paymentStatus: { in: ['paid', 'completed'] },
-      },
-      select: { storeId: true },
-    });
+    let storeActiveCounts: Record<string, number> = {};
+    const cachedCounts = getCached<Record<string, number>>('active_kitchen_counts');
+    if (cachedCounts) {
+      storeActiveCounts = cachedCounts;
+    } else {
+      const storeIds = [...new Set(orderList.map((o) => o.storeId))];
+      if (storeIds.length > 0) {
+        const activeStoreOrders = await prisma.order.findMany({
+          where: {
+            storeId: { in: storeIds },
+            orderStatus: { in: ['confirmed', 'preparing', 'ready'] },
+            paymentStatus: { in: ['paid', 'completed'] },
+          },
+          select: { storeId: true },
+        });
 
-    const storeActiveCounts: Record<string, number> = {};
-    for (const a of activeStoreOrders) {
-      storeActiveCounts[a.storeId] = (storeActiveCounts[a.storeId] || 0) + 1;
+        for (const a of activeStoreOrders) {
+          storeActiveCounts[a.storeId] = (storeActiveCounts[a.storeId] || 0) + 1;
+        }
+        setCached('active_kitchen_counts', storeActiveCounts, 12000);
+      }
     }
 
     const formatted = orderList.map((o) => {

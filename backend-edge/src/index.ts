@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { authMiddleware, AuthUser } from './auth';
 import { getPrisma } from './db';
+import { getCached, setCached } from './cache';
 import stores from './routes/stores';
 import orders from './routes/orders';
 import admin from './routes/admin';
@@ -58,6 +59,14 @@ app.get('/api/health', (c) => {
 // ── App Status & App Version (Maintenance & Update checks for mobile apps) ──
 app.get('/api/app-status', async (c) => {
   try {
+    const cacheKey = 'app_status_global';
+    const cached = getCached<any>(cacheKey);
+    if (cached) {
+      c.header('Cache-Control', 'public, max-age=15, s-maxage=30, stale-while-revalidate=60');
+      c.header('X-Cache', 'HIT-MEMORY');
+      return c.json(cached);
+    }
+
     const prisma = getPrisma(c.env.DB);
     const [maintenanceConfig, versionConfig] = await Promise.all([
       prisma.config.findUnique({ where: { key: 'maintenance' } }),
@@ -93,11 +102,17 @@ app.get('/api/app-status', async (c) => {
       } catch {}
     }
 
-    return c.json({
+    const payload = {
       success: true,
       isMaintenanceMode,
       appVersion,
-    });
+    };
+
+    setCached(cacheKey, payload, 30000);
+
+    c.header('Cache-Control', 'public, max-age=15, s-maxage=30, stale-while-revalidate=60');
+    c.header('X-Cache', 'MISS');
+    return c.json(payload);
   } catch {
     return c.json({
       success: true,

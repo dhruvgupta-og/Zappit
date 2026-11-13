@@ -75,14 +75,15 @@ export const FloatingActiveOrderBar: React.FC<FloatingActiveOrderBarProps> = ({
   const slideAnim = useRef(new Animated.Value(60)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
 
-  // Poll for active orders
+  // Poll for active orders (smart frequency: 12s when order active, 60s when idle)
   useEffect(() => {
     fetchActiveOrder(true);
+    const pollInterval = activeOrder ? 12000 : 60000;
     const interval = setInterval(() => {
       fetchActiveOrder(true);
-    }, 12000);
+    }, pollInterval);
     return () => clearInterval(interval);
-  }, [fetchActiveOrder]);
+  }, [fetchActiveOrder, !!activeOrder]);
 
   // Pulse animation for the live dot
   useEffect(() => {
@@ -360,3 +361,4 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
 });
+
