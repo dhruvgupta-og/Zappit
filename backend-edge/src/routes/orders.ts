@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { getPrisma } from '../db';
-import { getCached, setCached } from '../cache';
+import { getCached, setCached, isRateLimited } from '../cache';
 import { createRazorpayOrder, fetchRazorpayQrPayments, verifyRazorpaySignature, verifyWebhookSignature } from '../razorpay';
 import { sendExpoPushNotification } from '../push';
 import { AuthUser } from '../auth';
@@ -83,6 +83,13 @@ function parseNoteMetadata(rawNote: string | null | undefined): OrderNoteMeta {
 orders.post('/create-order', async (c) => {
   try {
     const user = c.get('user');
+
+    // Rate limit: max 12 order creations per minute per user/IP
+    const clientKey = `order_create_${user?.uid || c.req.header('cf-connecting-ip') || 'anon'}`;
+    if (isRateLimited(clientKey, 12, 60000)) {
+      return c.json({ success: false, error: 'Too many requests. Please wait a minute before creating a new order.' }, 429);
+    }
+
     const body = await c.req.json();
     const { items, coupon_code, address, college_id, additionalNote, payment_method, block_id, block_name, blockId } = body;
 
@@ -397,6 +404,11 @@ orders.get('/check-qr-payment/:qrId', async (c) => {
 // POST /api/verify-payment
 orders.post('/verify-payment', async (c) => {
   try {
+    const clientIp = c.req.header('cf-connecting-ip') || 'anon';
+    if (isRateLimited(`verify_pay_${clientIp}`, 20, 60000)) {
+      return c.json({ success: false, error: 'Rate limit exceeded. Please wait a minute.' }, 429);
+    }
+
     const body = await c.req.json();
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = body;
 
@@ -433,6 +445,27 @@ orders.post('/verify-payment', async (c) => {
         razorpayPaymentId: razorpay_payment_id,
       },
     });
+
+    // Record single-use coupon to prevent duplicate coupon reuse
+    for (const ord of matchedOrders) {
+      if (ord.couponApplied && ord.userId) {
+        try {
+          const dbUser = await prisma.user.findUnique({ where: { id: ord.userId } });
+          if (dbUser) {
+            const usedList: string[] = JSON.parse(dbUser.usedCoupons || '[]');
+            if (!usedList.includes(ord.couponApplied)) {
+              usedList.push(ord.couponApplied);
+              await prisma.user.update({
+                where: { id: ord.userId },
+                data: { usedCoupons: JSON.stringify(usedList) },
+              });
+            }
+          }
+        } catch (couponErr) {
+          console.warn('[Zappit] Could not update usedCoupons:', couponErr);
+        }
+      }
+    }
 
     // Notify store owners via Expo push
     for (const ord of matchedOrders) {
@@ -792,6 +825,11 @@ orders.patch('/orders/:id/status', async (c) => {
     const existing = await prisma.order.findUnique({ where: { id } });
     if (!existing) return c.json({ success: false, error: 'Order not found' }, 404);
 
+    // BOLA/IDOR protection: Store owners can only update orders for their own store
+    if (user.role === 'store_owner' && user.staff_store_id && existing.storeId !== user.staff_store_id) {
+      return c.json({ success: false, error: 'Forbidden: You can only update orders for your own store' }, 403);
+    }
+
     const meta = parseNoteMetadata(existing.additionalNote);
     const nowIso = new Date().toISOString();
 
@@ -851,33 +889,54 @@ orders.patch('/orders/:id/status', async (c) => {
   }
 });
 
-// GET /api/track/:orderIds (Public tracking)
+// GET /api/track/:orderIds (Public tracking - protected from OTP leakage)
 orders.get('/track/:orderIds', async (c) => {
   try {
-    const orderIds = c.req.param('orderIds').split(',');
-    const prisma = getPrisma(c.env.DB);
+    const clientIp = c.req.header('cf-connecting-ip') || 'anon';
+    if (isRateLimited(`track_${clientIp}`, 60, 60000)) {
+      return c.json({ success: false, error: 'Too many requests. Please slow down.' }, 429);
+    }
 
+    const orderIds = c.req.param('orderIds').split(',').map((s) => s.trim()).filter(Boolean);
+    if (orderIds.length === 0 || orderIds.length > 20) {
+      return c.json({ success: false, error: 'Invalid orderIds' }, 400);
+    }
+
+    const prisma = getPrisma(c.env.DB);
     const list = await prisma.order.findMany({
       where: { id: { in: orderIds } },
     });
 
-    const storeIds = [...new Set(list.map((o) => o.storeId))];
-    const activeStoreOrders = await prisma.order.findMany({
-      where: {
-        storeId: { in: storeIds },
-        orderStatus: { in: ['confirmed', 'preparing', 'ready'] },
-        paymentStatus: { in: ['paid', 'completed'] },
-      },
-      select: { storeId: true },
-    });
-
-    const storeActiveCounts: Record<string, number> = {};
-    for (const a of activeStoreOrders) {
-      storeActiveCounts[a.storeId] = (storeActiveCounts[a.storeId] || 0) + 1;
+    let storeActiveCounts: Record<string, number> = {};
+    const cachedCounts = getCached<Record<string, number>>('active_kitchen_counts');
+    if (cachedCounts) {
+      storeActiveCounts = cachedCounts;
+    } else {
+      const storeIds = [...new Set(list.map((o) => o.storeId))];
+      if (storeIds.length > 0) {
+        const activeStoreOrders = await prisma.order.findMany({
+          where: {
+            storeId: { in: storeIds },
+            orderStatus: { in: ['confirmed', 'preparing', 'ready'] },
+            paymentStatus: { in: ['paid', 'completed'] },
+          },
+          select: { storeId: true },
+        });
+        for (const a of activeStoreOrders) {
+          storeActiveCounts[a.storeId] = (storeActiveCounts[a.storeId] || 0) + 1;
+        }
+        setCached('active_kitchen_counts', storeActiveCounts, 12000);
+      }
     }
+
+    // Check optional auth for OTP exposure
+    const user = c.get('user');
 
     const mapped = list.map((o) => {
       const meta = parseNoteMetadata(o.additionalNote);
+      const isOwner = user && user.uid === o.userId;
+      const isStaff = user && ['admin', 'store_owner', 'delivery'].includes(user.role);
+
       return {
         id: o.id,
         _id: o.id,
@@ -892,7 +951,8 @@ orders.get('/track/:orderIds', async (c) => {
         items: JSON.parse(o.items || '[]'),
         address: o.address,
         delivery_address: o.address,
-        delivery_otp: o.deliveryOtp,
+        // Confidential OTP: only exposed to the verified buyer or delivery staff
+        delivery_otp: (isOwner || isStaff) ? o.deliveryOtp : undefined,
         additional_note: meta.note,
         prep_time_mins: meta.prep_time_mins,
         expected_ready_at: meta.expected_ready_at,

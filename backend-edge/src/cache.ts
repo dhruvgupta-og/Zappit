@@ -37,3 +37,28 @@ export function invalidateCache(prefix?: string): void {
     }
   }
 }
+
+// In-memory sliding window rate limiter
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+
+export function isRateLimited(key: string, maxRequests: number, windowMs: number): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+
+  // Periodically evict expired rate limit keys
+  if (rateLimitMap.size > 500) {
+    for (const [k, v] of rateLimitMap.entries()) {
+      if (now > v.resetAt) rateLimitMap.delete(k);
+    }
+  }
+
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
+    return false;
+  }
+
+  entry.count++;
+  return entry.count > maxRequests;
+}
+
+
